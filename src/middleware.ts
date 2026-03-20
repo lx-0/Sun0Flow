@@ -1,19 +1,19 @@
-import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
 export async function middleware(request: NextRequest) {
-  const session = await auth();
+  const token = await getToken({ req: request });
   const { pathname } = request.nextUrl;
 
   const publicPaths = ["/login", "/register", "/api/auth", "/api/register", "/s/"];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
-  if (!session && !isPublic) {
+  if (!token && !isPublic) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (session && (pathname === "/login" || pathname === "/register")) {
+  if (token && (pathname === "/login" || pathname === "/register")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
