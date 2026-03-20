@@ -6,9 +6,11 @@ import {
   PlayIcon,
   PauseIcon,
   MusicalNoteIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/solid";
 import type { SunoSong } from "@/lib/sunoapi";
 import { getRatings, type SongRating } from "@/lib/ratings";
+import { downloadSongFile } from "@/lib/download";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +91,10 @@ export function LibraryView({ songs }: { songs: SunoSong[] }) {
   const [minStars, setMinStars] = useState(0);
   const [ratings, setRatings] = useState<Record<string, SongRating>>({});
 
+  // per-song download state: progress 0–100, or null when idle
+  const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
+  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
+
   // Load ratings from localStorage on mount
   useEffect(() => {
     setRatings(getRatings());
@@ -151,6 +157,27 @@ export function LibraryView({ songs }: { songs: SunoSong[] }) {
     }
   }
 
+  async function handleDownload(song: SunoSong) {
+    if (!song.audioUrl || song.id in downloadProgress) return;
+    setDownloadErrors((e) => { const n = { ...e }; delete n[song.id]; return n; });
+    setDownloadProgress((p) => ({ ...p, [song.id]: 0 }));
+    try {
+      await downloadSongFile(song, (pct) =>
+        setDownloadProgress((p) => ({ ...p, [song.id]: pct }))
+      );
+    } catch (err) {
+      setDownloadErrors((e) => ({
+        ...e,
+        [song.id]: err instanceof Error ? err.message : "Download failed",
+      }));
+    } finally {
+      setTimeout(
+        () => setDownloadProgress((p) => { const n = { ...p }; delete n[song.id]; return n; }),
+        1500
+      );
+    }
+  }
+
   function handleSeek(pct: number) {
     const audio = audioRef.current;
     if (!audio || audioDuration <= 0) return;
@@ -206,6 +233,9 @@ export function LibraryView({ songs }: { songs: SunoSong[] }) {
             const isActive = currentSongId === song.id;
             const rating = ratings[song.id];
             const hasAudio = Boolean(song.audioUrl);
+            const dlProgress = downloadProgress[song.id] ?? null;
+            const dlError = downloadErrors[song.id] ?? null;
+            const isDownloading = dlProgress !== null;
 
             return (
               <li
@@ -256,6 +286,24 @@ export function LibraryView({ songs }: { songs: SunoSong[] }) {
                     )}
                   </div>
 
+                  {/* Download button */}
+                  <button
+                    onClick={() => handleDownload(song)}
+                    disabled={!hasAudio || isDownloading}
+                    aria-label={
+                      isDownloading
+                        ? `Downloading ${dlProgress}%`
+                        : "Download song"
+                    }
+                    className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+                      hasAudio && !isDownloading
+                        ? "bg-gray-800 hover:bg-gray-700 text-white"
+                        : "bg-gray-800 text-gray-600 cursor-not-allowed"
+                    }`}
+                  >
+                    <ArrowDownTrayIcon className="w-5 h-5" />
+                  </button>
+
                   {/* Play/Pause button */}
                   <button
                     onClick={() => handleTogglePlay(song)}
@@ -284,6 +332,25 @@ export function LibraryView({ songs }: { songs: SunoSong[] }) {
                       hasAudio={hasAudio}
                       onSeek={handleSeek}
                     />
+                  </div>
+                )}
+
+                {/* Download progress bar */}
+                {isDownloading && dlProgress !== null && dlProgress < 100 && (
+                  <div className="px-3 pb-2">
+                    <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-violet-500 rounded-full transition-all duration-300"
+                        style={{ width: `${dlProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Download error */}
+                {dlError && (
+                  <div className="px-3 pb-2">
+                    <p className="text-xs text-red-400">{dlError}</p>
                   </div>
                 )}
               </li>

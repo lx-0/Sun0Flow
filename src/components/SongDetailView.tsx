@@ -7,9 +7,11 @@ import {
   PauseIcon,
   ArrowLeftIcon,
   MusicalNoteIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/solid";
 import type { SunoSong } from "@/lib/sunoapi";
 import { getRating, setRating, type SongRating } from "@/lib/ratings";
+import { downloadSongFile } from "@/lib/download";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,6 +77,9 @@ export function SongDetailView({ song }: { song: SunoSong }) {
   const [saved, setSaved] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
 
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
   const hasAudio = Boolean(song.audioUrl);
 
   // Init audio element and load existing rating
@@ -134,6 +139,19 @@ export function SongDetailView({ song }: { song: SunoSong }) {
   function handleStarChange(stars: number) {
     setRatingState((r) => ({ ...r, stars }));
     setSaved(false);
+  }
+
+  async function handleDownload() {
+    if (!hasAudio || downloadProgress !== null) return;
+    setDownloadError(null);
+    try {
+      await downloadSongFile(song, setDownloadProgress);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      // Keep progress at 100 briefly so user sees completion, then reset
+      setTimeout(() => setDownloadProgress(null), 1500);
+    }
   }
 
   function handleSaveRating() {
@@ -242,6 +260,42 @@ export function SongDetailView({ song }: { song: SunoSong }) {
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(audioDuration)}</span>
           </div>
+        </div>
+
+        {/* Download */}
+        <div className="space-y-2">
+          <button
+            onClick={handleDownload}
+            disabled={!hasAudio || downloadProgress !== null}
+            aria-label="Download song"
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors min-h-[44px] ${
+              hasAudio && downloadProgress === null
+                ? "bg-gray-800 hover:bg-gray-700 text-white"
+                : "bg-gray-800 text-gray-600 cursor-not-allowed"
+            }`}
+          >
+            <ArrowDownTrayIcon className="w-4 h-4 flex-shrink-0" />
+            {downloadProgress === null
+              ? "Download"
+              : downloadProgress === 100
+              ? "Done ✓"
+              : `Downloading… ${downloadProgress}%`}
+          </button>
+
+          {/* Progress bar */}
+          {downloadProgress !== null && downloadProgress < 100 && (
+            <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-violet-500 rounded-full transition-all duration-300"
+                style={{ width: `${downloadProgress}%` }}
+              />
+            </div>
+          )}
+
+          {/* Error */}
+          {downloadError && (
+            <p className="text-xs text-red-400">{downloadError}</p>
+          )}
         </div>
       </div>
 
