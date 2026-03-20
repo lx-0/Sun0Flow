@@ -137,14 +137,14 @@ export function DashboardView({ userName }: { userName?: string | null }) {
 
       {/* Quick stats */}
       {loading && !stats ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
         </div>
       ) : stats ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard label="Songs" value={String(stats.totalSongs)} href="/library" />
           <StatCard label="Favorites" value={String(stats.totalFavorites)} href="/favorites" />
           <StatCard label="Playlists" value={String(stats.totalPlaylists)} href="/playlists" />
@@ -154,7 +154,7 @@ export function DashboardView({ userName }: { userName?: string | null }) {
 
       {/* Extended stats row */}
       {stats && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard label="This month" value={String(stats.songsThisMonth)} />
           <StatCard
             label="Avg rating"

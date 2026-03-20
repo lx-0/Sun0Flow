@@ -46,8 +46,8 @@ export function GlobalPlayer() {
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="fixed bottom-16 left-0 right-0 z-20 max-w-md mx-auto px-2">
-      <div className="bg-gray-900 dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 dark:border-gray-600 overflow-hidden">
+    <div className="fixed bottom-16 left-0 right-0 z-20 px-2 md:bottom-0 md:left-56">
+      <div className="bg-gray-900 dark:bg-gray-800 rounded-2xl md:rounded-none md:rounded-t-2xl shadow-2xl border border-gray-700 dark:border-gray-600 overflow-hidden max-w-3xl mx-auto md:mx-0">
         {/* Seek bar (top edge) */}
         <div className="relative h-1 bg-gray-700">
           <div
@@ -60,7 +60,7 @@ export function GlobalPlayer() {
             max={100}
             value={pct}
             onChange={(e) => seek(Number(e.target.value) / 100)}
-            className="absolute left-0 right-0 top-1/2 -translate-y-1/2 w-full opacity-0 cursor-pointer h-6"
+            className="absolute left-0 right-0 top-1/2 -translate-y-1/2 w-full opacity-0 cursor-pointer h-8"
             aria-label="Seek"
           />
         </div>
@@ -95,40 +95,40 @@ export function GlobalPlayer() {
             </div>
           </div>
 
-          {/* Controls */}
+          {/* Controls — touch-friendly 44x44 targets */}
           <div className="flex items-center gap-0.5">
             {/* Shuffle */}
             <button
               onClick={toggleShuffle}
               aria-label={shuffle ? "Shuffle on" : "Shuffle off"}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              className={`hidden sm:flex w-11 h-11 rounded-full items-center justify-center transition-colors ${
                 shuffle
                   ? "text-violet-400"
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <ArrowsRightLeftIcon className="w-4 h-4" />
+              <ArrowsRightLeftIcon className="w-5 h-5" />
             </button>
 
             {/* Skip prev */}
             <button
               onClick={skipPrev}
               aria-label="Previous"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:text-violet-400 transition-colors"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-white hover:text-violet-400 transition-colors"
             >
-              <BackwardIcon className="w-4 h-4" />
+              <BackwardIcon className="w-5 h-5" />
             </button>
 
             {/* Play/pause */}
             <button
               onClick={() => togglePlay()}
               aria-label={isPlaying ? "Pause" : "Play"}
-              className="w-10 h-10 rounded-full bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center transition-colors"
+              className="w-12 h-12 rounded-full bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center transition-colors"
             >
               {isPlaying ? (
-                <PauseIcon className="w-5 h-5" />
+                <PauseIcon className="w-6 h-6" />
               ) : (
-                <PlayIcon className="w-5 h-5 ml-0.5" />
+                <PlayIcon className="w-6 h-6 ml-0.5" />
               )}
             </button>
 
@@ -136,22 +136,22 @@ export function GlobalPlayer() {
             <button
               onClick={skipNext}
               aria-label="Next"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:text-violet-400 transition-colors"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-white hover:text-violet-400 transition-colors"
             >
-              <ForwardIcon className="w-4 h-4" />
+              <ForwardIcon className="w-5 h-5" />
             </button>
 
             {/* Repeat */}
             <button
               onClick={cycleRepeat}
               aria-label={`Repeat: ${repeat}`}
-              className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              className={`hidden sm:flex relative w-11 h-11 rounded-full items-center justify-center transition-colors ${
                 repeat !== "off"
                   ? "text-violet-400"
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <ArrowPathRoundedSquareIcon className="w-4 h-4" />
+              <ArrowPathRoundedSquareIcon className="w-5 h-5" />
               {repeat === "repeat-one" && (
                 <span className="absolute -top-0.5 -right-0.5 text-[8px] font-bold text-violet-400">
                   1
@@ -163,9 +163,9 @@ export function GlobalPlayer() {
             <button
               onClick={clearQueue}
               aria-label="Close player"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors"
             >
-              <XMarkIcon className="w-4 h-4" />
+              <XMarkIcon className="w-5 h-5" />
             </button>
           </div>
         </div>

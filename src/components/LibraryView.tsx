@@ -1177,8 +1177,8 @@ export function LibraryView({
 
       {/* Floating action bar */}
       {selectionMode && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-3 bg-gray-900 dark:bg-gray-800 text-white rounded-2xl shadow-2xl border border-gray-700 animate-slide-in">
-          <span className="text-sm font-medium mr-1">
+        <div className="fixed bottom-20 md:bottom-4 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-40 flex items-center gap-2 px-4 py-3 bg-gray-900 dark:bg-gray-800 text-white rounded-2xl shadow-2xl border border-gray-700 animate-slide-in overflow-x-auto">
+          <span className="text-sm font-medium mr-1 flex-shrink-0">
             {selectedSongIds.size} selected
           </span>
 
@@ -1186,36 +1186,36 @@ export function LibraryView({
             onClick={() => handleBatchAction("favorite")}
             disabled={batchLoading}
             aria-label="Add selected to favorites"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-pink-600 hover:bg-pink-500 disabled:opacity-50 transition-colors min-h-[44px]"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-pink-600 hover:bg-pink-500 disabled:opacity-50 transition-colors min-h-[44px]"
           >
             <HeartIcon className="w-4 h-4" />
-            Favorite
+            <span className="hidden sm:inline">Favorite</span>
           </button>
 
           <button
             onClick={() => handleBatchAction("unfavorite")}
             disabled={batchLoading}
             aria-label="Remove selected from favorites"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 disabled:opacity-50 transition-colors min-h-[44px]"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 disabled:opacity-50 transition-colors min-h-[44px]"
           >
             <HeartOutlineIcon className="w-4 h-4" />
-            Unfavorite
+            <span className="hidden sm:inline">Unfavorite</span>
           </button>
 
           <button
             onClick={() => handleBatchAction("delete")}
             disabled={batchLoading}
             aria-label="Delete selected songs"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors min-h-[44px]"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors min-h-[44px]"
           >
             <TrashIcon className="w-4 h-4" />
-            Delete
+            <span className="hidden sm:inline">Delete</span>
           </button>
 
           <button
             onClick={clearSelection}
             aria-label="Clear selection"
-            className="ml-1 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors min-h-[44px]"
+            className="flex-shrink-0 ml-1 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors min-h-[44px]"
           >
             <XMarkIcon className="w-5 h-5" />
           </button>
@@ -1224,8 +1224,8 @@ export function LibraryView({
 
       {/* Delete confirmation dialog */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 mx-4 max-w-sm w-full">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 w-full sm:rounded-2xl rounded-t-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 sm:mx-4 sm:max-w-sm">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Delete {selectedSongIds.size} song{selectedSongIds.size !== 1 ? "s" : ""}?
             </h3>
