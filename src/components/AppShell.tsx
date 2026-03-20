@@ -9,15 +9,16 @@ import {
   HeartIcon,
   Cog6ToothIcon,
   BookOpenIcon,
-  SparklesIcon,
+
   PlusCircleIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
 
 const navItems = [
   { label: "Home", href: "/", icon: HomeIcon },
   { label: "Library", href: "/library", icon: BookOpenIcon },
   { label: "Generate", href: "/generate", icon: PlusCircleIcon },
-  { label: "Inspire", href: "/inspire", icon: SparklesIcon },
+  { label: "History", href: "/history", icon: ClockIcon },
   { label: "Favorites", href: "/favorites", icon: HeartIcon },
 ];
 
