@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { logError } from "@/lib/error-logger";
 
-export default function GenerateError({
+export default function PlaylistsError({
   error,
   reset,
 }: {
@@ -13,14 +13,14 @@ export default function GenerateError({
   reset: () => void;
 }) {
   useEffect(() => {
-    logError("error-boundary:generate", error);
+    logError("error-boundary:playlists", error);
   }, [error]);
   return (
     <div className="px-4 py-12 flex flex-col items-center text-center space-y-4">
       <ExclamationTriangleIcon className="w-10 h-10 text-red-400" />
-      <h2 className="text-lg font-bold">Failed to load generator</h2>
+      <h2 className="text-lg font-bold">Failed to load playlists</h2>
       <p className="text-gray-500 dark:text-gray-400 text-sm">
-        Something went wrong loading the song generator. Please try again.
+        Something went wrong loading your playlists. Please try again.
       </p>
       <div className="flex gap-2">
         <button

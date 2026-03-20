@@ -1,14 +1,20 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { logError } from "@/lib/error-logger";
 
 export default function SongDetailError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    logError("error-boundary:library/[id]", error);
+  }, [error]);
   return (
     <div className="px-4 py-12 flex flex-col items-center text-center space-y-4">
       <ExclamationTriangleIcon className="w-10 h-10 text-red-400" />

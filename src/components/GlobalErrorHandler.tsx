@@ -2,18 +2,19 @@
 
 import { useEffect } from "react";
 import { useToast } from "./Toast";
+import { logError } from "@/lib/error-logger";
 
 export function GlobalErrorHandler() {
   const { toast } = useToast();
 
   useEffect(() => {
     function handleUnhandledRejection(event: PromiseRejectionEvent) {
-      console.error("Unhandled promise rejection:", event.reason);
+      logError("unhandled-rejection", event.reason);
       toast("Something went wrong. Please try again.", "error");
     }
 
     function handleError(event: ErrorEvent) {
-      console.error("Unhandled error:", event.error);
+      logError("unhandled-error", event.error);
       toast("An unexpected error occurred.", "error");
     }
 
