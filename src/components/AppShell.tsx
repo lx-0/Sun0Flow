@@ -9,14 +9,15 @@ import {
   Cog6ToothIcon,
   BookOpenIcon,
   SparklesIcon,
+  PlusCircleIcon,
 } from "@heroicons/react/24/outline";
 
 const navItems = [
   { label: "Home", href: "/", icon: HomeIcon },
   { label: "Library", href: "/library", icon: BookOpenIcon },
+  { label: "Generate", href: "/generate", icon: PlusCircleIcon },
   { label: "Inspire", href: "/inspire", icon: SparklesIcon },
   { label: "Favorites", href: "/favorites", icon: HeartIcon },
-  { label: "Settings", href: "/settings", icon: Cog6ToothIcon },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
