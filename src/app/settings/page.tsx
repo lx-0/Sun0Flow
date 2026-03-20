@@ -121,7 +121,7 @@ function AccountSection() {
             type="email"
             value={session?.user?.email ?? ""}
             readOnly
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-400 cursor-not-allowed"
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-base text-gray-400 cursor-not-allowed"
           />
         </div>
 
@@ -134,7 +134,7 @@ function AccountSection() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Your name"
-              className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-base text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
             />
             <button
               onClick={handleNameSave}
@@ -156,7 +156,7 @@ function AccountSection() {
               onChange={(e) => setCurrentPassword(e.target.value)}
               placeholder="Current password"
               autoComplete="current-password"
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-base text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
             />
             <input
               type="password"
@@ -164,7 +164,7 @@ function AccountSection() {
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="New password (min 8 chars)"
               autoComplete="new-password"
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-base text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
             />
             <input
               type="password"
@@ -172,7 +172,7 @@ function AccountSection() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm new password"
               autoComplete="new-password"
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-base text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
             />
             <button
               type="submit"
@@ -262,7 +262,7 @@ function RssFeedsSection() {
           }}
           onKeyDown={handleKeyDown}
           placeholder="https://example.com/feed.xml"
-          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-base text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
         />
         <button
           onClick={addFeed}
@@ -288,7 +288,7 @@ function RssFeedsSection() {
               <span className="flex-1 text-xs text-gray-300 truncate">{url}</span>
               <button
                 onClick={() => removeFeed(url)}
-                className="text-gray-600 hover:text-red-400 transition-colors flex-shrink-0"
+                className="text-gray-600 hover:text-red-400 transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 aria-label="Remove feed"
               >
                 <TrashIcon className="w-4 h-4" />

@@ -102,7 +102,7 @@ export function PublicSongView({
                 max={100}
                 value={pct}
                 onChange={(e) => handleSeek(Number(e.target.value) / 100)}
-                className="absolute inset-0 w-full opacity-0 cursor-pointer h-1.5"
+                className="absolute left-0 right-0 top-1/2 -translate-y-1/2 w-full opacity-0 cursor-pointer min-h-[44px]"
                 aria-label="Seek"
               />
             </div>

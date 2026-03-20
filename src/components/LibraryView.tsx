@@ -61,7 +61,7 @@ function PlayerBar({ currentTime, duration, hasAudio, onSeek }: PlayerBarProps) 
           value={pct}
           disabled={!hasAudio}
           onChange={(e) => onSeek(Number(e.target.value) / 100)}
-          className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-default h-1.5"
+          className="absolute left-0 right-0 top-1/2 -translate-y-1/2 w-full opacity-0 cursor-pointer disabled:cursor-default min-h-[44px]"
           aria-label="Seek"
         />
       </div>
@@ -250,7 +250,8 @@ function SongRow({
         isActive ? "border-violet-600" : "border-gray-800"
       } ${isPending ? "opacity-75" : ""}`}
     >
-      <div className="flex items-center gap-3 px-3 pt-3 pb-2">
+      {/* Top row: cover + title + play */}
+      <div className="flex items-center gap-3 px-3 pt-3 pb-1">
         {/* Cover art / placeholder */}
         <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gray-800 overflow-hidden flex items-center justify-center">
           {song.imageUrl ? (
@@ -290,6 +291,27 @@ function SongRow({
           )}
         </div>
 
+        {/* Play/Pause button */}
+        <button
+          onClick={() => onTogglePlay(song)}
+          disabled={!hasAudio}
+          aria-label={isActive && isPlaying ? "Pause" : "Play"}
+          className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+            hasAudio
+              ? "bg-violet-600 hover:bg-violet-500 text-white"
+              : "bg-gray-800 text-gray-600 cursor-not-allowed"
+          }`}
+        >
+          {isActive && isPlaying ? (
+            <PauseIcon className="w-5 h-5" />
+          ) : (
+            <PlayIcon className="w-5 h-5 ml-0.5" />
+          )}
+        </button>
+      </div>
+
+      {/* Action buttons row */}
+      <div className="flex items-center gap-2 px-3 pb-2">
         {/* Favorite button */}
         <button
           onClick={() => onToggleFavorite(song)}
@@ -338,24 +360,6 @@ function SongRow({
           }`}
         >
           <ArrowDownTrayIcon className="w-5 h-5" />
-        </button>
-
-        {/* Play/Pause button */}
-        <button
-          onClick={() => onTogglePlay(song)}
-          disabled={!hasAudio}
-          aria-label={isActive && isPlaying ? "Pause" : "Play"}
-          className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
-            hasAudio
-              ? "bg-violet-600 hover:bg-violet-500 text-white"
-              : "bg-gray-800 text-gray-600 cursor-not-allowed"
-          }`}
-        >
-          {isActive && isPlaying ? (
-            <PauseIcon className="w-5 h-5" />
-          ) : (
-            <PlayIcon className="w-5 h-5 ml-0.5" />
-          )}
         </button>
       </div>
 

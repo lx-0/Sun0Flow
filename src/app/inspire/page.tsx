@@ -211,9 +211,9 @@ function InspireContent() {
               )}
               <button
                 onClick={() => handleUseAsPrompt(item)}
-                className="mt-3 flex items-center gap-1.5 text-xs font-medium text-violet-400 hover:text-violet-300 transition-colors"
+                className="mt-3 flex items-center gap-1.5 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors min-h-[44px]"
               >
-                <SparklesIcon className="w-3.5 h-3.5" />
+                <SparklesIcon className="w-4 h-4" />
                 Use as prompt
               </button>
             </div>

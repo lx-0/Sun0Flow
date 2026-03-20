@@ -312,7 +312,7 @@ export function SongDetailView({ song, isFavorite: initialFavorite = false, suno
               value={pct}
               disabled={!hasAudio}
               onChange={(e) => handleSeek(Number(e.target.value) / 100)}
-              className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-default h-1.5"
+              className="absolute left-0 right-0 top-1/2 -translate-y-1/2 w-full opacity-0 cursor-pointer disabled:cursor-default min-h-[44px]"
               aria-label="Seek"
             />
           </div>
@@ -389,7 +389,7 @@ export function SongDetailView({ song, isFavorite: initialFavorite = false, suno
           }}
           placeholder="Add a note (optional)..."
           rows={3}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 resize-none focus:outline-none focus:border-violet-500 transition-colors"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-base text-white placeholder-gray-600 resize-none focus:outline-none focus:border-violet-500 transition-colors"
         />
 
         <div className="flex items-center gap-3">
