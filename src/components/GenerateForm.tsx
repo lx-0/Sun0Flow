@@ -1,9 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SparklesIcon } from "@heroicons/react/24/solid";
 import { useToast } from "./Toast";
+
+interface RateLimitStatus {
+  remaining: number;
+  limit: number;
+  resetAt: string;
+}
 
 export function GenerateForm() {
   const router = useRouter();
@@ -16,6 +22,26 @@ export function GenerateForm() {
   const [lyrics, setLyrics] = useState(searchParams.get("prompt") ?? "");
   const [instrumental, setInstrumental] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rateLimit, setRateLimit] = useState<RateLimitStatus | null>(null);
+
+  const fetchRateLimit = useCallback(async () => {
+    try {
+      const res = await fetch("/api/rate-limit");
+      if (res.ok) {
+        const data: RateLimitStatus = await res.json();
+        setRateLimit(data);
+        if (data.remaining <= 2 && data.remaining > 0) {
+          toast(`${data.remaining} generation${data.remaining === 1 ? "" : "s"} remaining this hour`, "info");
+        }
+      }
+    } catch {
+      // Silently fail — quota display is non-critical
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchRateLimit();
+  }, [fetchRateLimit]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,8 +66,23 @@ export function GenerateForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast(data.error ?? "Generation failed. Please try again.", "error");
+        if (res.status === 429 && data.resetAt) {
+          const resetTime = new Date(data.resetAt);
+          const minutesLeft = Math.ceil((resetTime.getTime() - Date.now()) / 60000);
+          toast(`Rate limit reached. Try again in ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}.`, "error");
+          if (data.rateLimit) setRateLimit(data.rateLimit);
+        } else {
+          toast(data.error ?? "Generation failed. Please try again.", "error");
+        }
         return;
+      }
+
+      // Update rate limit from response
+      if (data.rateLimit) {
+        setRateLimit(data.rateLimit);
+        if (data.rateLimit.remaining <= 2 && data.rateLimit.remaining > 0) {
+          toast(`${data.rateLimit.remaining} generation${data.rateLimit.remaining === 1 ? "" : "s"} remaining this hour`, "info");
+        }
       }
 
       toast("Song generation started! Redirecting to your library…", "success");
@@ -156,10 +197,24 @@ export function GenerateForm() {
           </button>
         </div>
 
+        {/* Generation quota */}
+        {rateLimit && (
+          <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-sm ${
+            rateLimit.remaining === 0
+              ? "bg-red-900/30 border border-red-800 text-red-300"
+              : rateLimit.remaining <= 2
+                ? "bg-yellow-900/30 border border-yellow-800 text-yellow-300"
+                : "bg-gray-800 border border-gray-700 text-gray-400"
+          }`}>
+            <span>Generations remaining</span>
+            <span className="font-semibold">{rateLimit.remaining} / {rateLimit.limit}</span>
+          </div>
+        )}
+
         {/* Submit */}
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || rateLimit?.remaining === 0}
           className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl px-4 py-3 transition-colors min-h-[52px]"
         >
           {isSubmitting ? (

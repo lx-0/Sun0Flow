@@ -46,9 +46,10 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
-  songs    Song[]
+  accounts         Account[]
+  sessions         Session[]
+  songs            Song[]
+  rateLimitEntries RateLimitEntry[]
 }
 
 model Song {
@@ -73,6 +74,17 @@ model Song {
   updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RateLimitEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   @default("generate")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, action, createdAt])
 }
 
 model VerificationToken {

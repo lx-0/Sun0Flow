@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { generateSong } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
@@ -11,6 +12,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const userId = session.user.id;
+
+    // Check rate limit before processing
+    const { allowed, status: rateLimitStatus } = await checkRateLimit(userId);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`,
+          resetAt: rateLimitStatus.resetAt,
+          rateLimit: rateLimitStatus,
+        },
+        { status: 429 }
+      );
+    }
 
     const { prompt, title, tags, makeInstrumental } = await request.json();
 
@@ -61,7 +75,16 @@ export async function POST(request: Request) {
       )
     );
 
-    return NextResponse.json({ songs: savedSongs }, { status: 201 });
+    // Record rate limit hit after successful generation
+    await recordRateLimitHit(userId);
+
+    // Return updated rate limit status
+    const { status: updatedRateLimit } = await checkRateLimit(userId);
+
+    return NextResponse.json(
+      { songs: savedSongs, rateLimit: updatedRateLimit },
+      { status: 201 }
+    );
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },
