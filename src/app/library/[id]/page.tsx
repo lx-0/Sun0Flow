@@ -16,17 +16,37 @@ async function fetchSong(id: string) {
   }
 }
 
-async function fetchDbMeta(songId: string): Promise<{ isFavorite: boolean; sunoJobId: string | null }> {
+async function fetchDbMeta(songId: string) {
   try {
     const session = await auth();
-    if (!session?.user?.id) return { isFavorite: false, sunoJobId: null };
+    if (!session?.user?.id) return { isFavorite: false, sunoJobId: null, isPublic: false, publicSlug: null };
     const dbSong = await prisma.song.findFirst({
       where: { id: songId, userId: session.user.id },
-      select: { isFavorite: true, sunoJobId: true },
+      select: { isFavorite: true, sunoJobId: true, isPublic: true, publicSlug: true },
     });
-    return { isFavorite: dbSong?.isFavorite ?? false, sunoJobId: dbSong?.sunoJobId ?? null };
+    return {
+      isFavorite: dbSong?.isFavorite ?? false,
+      sunoJobId: dbSong?.sunoJobId ?? null,
+      isPublic: dbSong?.isPublic ?? false,
+      publicSlug: dbSong?.publicSlug ?? null,
+    };
   } catch {
-    return { isFavorite: false, sunoJobId: null };
+    return { isFavorite: false, sunoJobId: null, isPublic: false, publicSlug: null };
+  }
+}
+
+async function fetchPlaylists() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return [];
+    const playlists = await prisma.playlist.findMany({
+      where: { userId: session.user.id },
+      include: { _count: { select: { songs: true } } },
+      orderBy: { updatedAt: "desc" },
+    });
+    return playlists.map((p) => ({ id: p.id, name: p.name, _count: p._count }));
+  } catch {
+    return [];
   }
 }
 
@@ -35,9 +55,10 @@ export default async function SongDetailPage({
 }: {
   params: { id: string };
 }) {
-  const [song, dbMeta] = await Promise.all([
+  const [song, dbMeta, playlists] = await Promise.all([
     fetchSong(params.id),
     fetchDbMeta(params.id),
+    fetchPlaylists(),
   ]);
 
   if (!song) {
@@ -47,7 +68,14 @@ export default async function SongDetailPage({
   return (
     <SessionProvider>
       <AppShell>
-        <SongDetailView song={song} isFavorite={dbMeta.isFavorite} sunoJobId={dbMeta.sunoJobId} />
+        <SongDetailView
+          song={song}
+          isFavorite={dbMeta.isFavorite}
+          sunoJobId={dbMeta.sunoJobId}
+          playlists={playlists}
+          isPublic={dbMeta.isPublic}
+          publicSlug={dbMeta.publicSlug}
+        />
       </AppShell>
     </SessionProvider>
   );

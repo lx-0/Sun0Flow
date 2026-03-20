@@ -4,19 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  PlayIcon,
-  PauseIcon,
   ArrowLeftIcon,
   MusicalNoteIcon,
   ArrowDownTrayIcon,
   HeartIcon,
   ArrowPathIcon,
+  ShareIcon,
+  ClipboardDocumentIcon,
+  PlusIcon,
+  ChevronDownIcon,
+  CalendarIcon,
+  ClockIcon,
+  TagIcon,
 } from "@heroicons/react/24/solid";
 import { HeartIcon as HeartOutlineIcon } from "@heroicons/react/24/outline";
 import type { SunoSong } from "@/lib/sunoapi";
 import { getRating, setRating, type SongRating } from "@/lib/ratings";
 import { downloadSongFile } from "@/lib/download";
 import { useToast } from "./Toast";
+import { WaveformPlayer } from "./WaveformPlayer";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,17 +75,37 @@ function StarPicker({ value, onChange }: StarPickerProps) {
   );
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface PlaylistOption {
+  id: string;
+  name: string;
+  _count: { songs: number };
+}
+
+interface SongDetailViewProps {
+  song: SunoSong;
+  isFavorite?: boolean;
+  sunoJobId?: string | null;
+  playlists?: PlaylistOption[];
+  isPublic?: boolean;
+  publicSlug?: string | null;
+}
+
 // ─── Main SongDetailView ──────────────────────────────────────────────────────
 
-export function SongDetailView({ song, isFavorite: initialFavorite = false, sunoJobId }: { song: SunoSong; isFavorite?: boolean; sunoJobId?: string | null }) {
+export function SongDetailView({
+  song,
+  isFavorite: initialFavorite = false,
+  sunoJobId,
+  playlists: initialPlaylists = [],
+  isPublic: initialIsPublic = false,
+  publicSlug: initialPublicSlug = null,
+}: SongDetailViewProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const [isPlaying, setIsPlaying] = useState(false);
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [audioDuration, setAudioDuration] = useState(song.duration ?? 0);
 
   const [rating, setRatingState] = useState<SongRating>({ stars: 0, note: "" });
   const [saved, setSaved] = useState(false);
@@ -88,61 +114,39 @@ export function SongDetailView({ song, isFavorite: initialFavorite = false, suno
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
+  // Playlist dropdown
+  const [playlistOpen, setPlaylistOpen] = useState(false);
+  const [addingToPlaylist, setAddingToPlaylist] = useState<string | null>(null);
+  const playlistRef = useRef<HTMLDivElement>(null);
+
+  // Share state
+  const [isPublic, setIsPublic] = useState(initialIsPublic);
+  const [publicSlug, setPublicSlug] = useState(initialPublicSlug);
+  const [sharing, setSharing] = useState(false);
+
   const hasAudio = Boolean(song.audioUrl);
 
-  // Init audio element and load existing rating
+  // Load existing rating
   useEffect(() => {
     const existing = getRating(song.id);
     if (existing) {
       setRatingState(existing);
       setNoteDraft(existing.note);
     }
+  }, [song.id]);
 
-    if (!hasAudio) return;
-
-    const audio = new Audio(song.audioUrl);
-    audioRef.current = audio;
-
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-    };
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const onDurationChange = () => setAudioDuration(audio.duration);
-
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("ended", onEnded);
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("durationchange", onDurationChange);
-
-    return () => {
-      audio.pause();
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("ended", onEnded);
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("durationchange", onDurationChange);
-    };
-  }, [song.id, song.audioUrl, hasAudio]);
-
-  function handleTogglePlay() {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      audio.play().catch(console.error);
+  // Close playlist dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (playlistRef.current && !playlistRef.current.contains(e.target as Node)) {
+        setPlaylistOpen(false);
+      }
     }
-  }
-
-  function handleSeek(pct: number) {
-    const audio = audioRef.current;
-    if (!audio || audioDuration <= 0) return;
-    audio.currentTime = pct * audioDuration;
-  }
+    if (playlistOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [playlistOpen]);
 
   function handleStarChange(stars: number) {
     setRatingState((r) => ({ ...r, stars }));
@@ -159,7 +163,6 @@ export function SongDetailView({ song, isFavorite: initialFavorite = false, suno
       setDownloadError(msg);
       toast(msg, "error");
     } finally {
-      // Keep progress at 100 briefly so user sees completion, then reset
       setTimeout(() => setDownloadProgress(null), 1500);
     }
   }
@@ -190,17 +193,70 @@ export function SongDetailView({ song, isFavorite: initialFavorite = false, suno
     }
   }
 
-  const pct = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0;
+  async function handleAddToPlaylist(playlistId: string) {
+    setAddingToPlaylist(playlistId);
+    try {
+      const res = await fetch(`/api/playlists/${playlistId}/songs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ songId: song.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast(data.error ?? "Failed to add to playlist", "error");
+      } else {
+        toast("Added to playlist", "success");
+        setPlaylistOpen(false);
+      }
+    } catch {
+      toast("Failed to add to playlist", "error");
+    } finally {
+      setAddingToPlaylist(null);
+    }
+  }
+
+  async function handleShare() {
+    setSharing(true);
+    try {
+      const res = await fetch(`/api/songs/${song.id}/share`, { method: "PATCH" });
+      if (!res.ok) {
+        toast("Failed to update sharing", "error");
+        return;
+      }
+      const data = await res.json();
+      setIsPublic(data.isPublic);
+      setPublicSlug(data.publicSlug);
+
+      if (data.isPublic && data.publicSlug) {
+        const url = `${window.location.origin}/s/${data.publicSlug}`;
+        await navigator.clipboard.writeText(url);
+        toast("Public link copied to clipboard", "success");
+      } else {
+        toast("Song is now private", "success");
+      }
+    } catch {
+      toast("Failed to update sharing", "error");
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  async function handleCopyLink() {
+    if (!publicSlug) return;
+    const url = `${window.location.origin}/s/${publicSlug}`;
+    await navigator.clipboard.writeText(url);
+    toast("Link copied to clipboard", "success");
+  }
 
   return (
-    <div className="px-4 py-4 space-y-5">
+    <div className="px-4 py-4 space-y-5 max-w-2xl mx-auto">
       {/* Back link */}
       <button
         onClick={() => router.back()}
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors min-h-[44px]"
       >
         <ArrowLeftIcon className="w-4 h-4" />
-        Library
+        Back
       </button>
 
       {/* Cover art */}
@@ -217,7 +273,7 @@ export function SongDetailView({ song, isFavorite: initialFavorite = false, suno
         )}
       </div>
 
-      {/* Title + meta */}
+      {/* Title + favorite */}
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex-1">{song.title}</h1>
@@ -235,129 +291,177 @@ export function SongDetailView({ song, isFavorite: initialFavorite = false, suno
             )}
           </button>
         </div>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+      </div>
+
+      {/* Full metadata grid */}
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+        <div className="grid grid-cols-2 gap-3 text-sm">
           {song.tags && (
-            <span className="text-sm text-violet-400">{song.tags}</span>
+            <div className="flex items-start gap-2">
+              <TagIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 text-xs block">Style</span>
+                <span className="text-gray-900 dark:text-white">{song.tags}</span>
+              </div>
+            </div>
           )}
-          {song.duration && (
-            <span className="text-sm text-gray-500">
-              {formatTime(song.duration)}
-            </span>
+          {song.duration != null && (
+            <div className="flex items-start gap-2">
+              <ClockIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 text-xs block">Duration</span>
+                <span className="text-gray-900 dark:text-white">{formatTime(song.duration)}</span>
+              </div>
+            </div>
           )}
+          <div className="flex items-start gap-2">
+            <CalendarIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <span className="text-gray-500 dark:text-gray-400 text-xs block">Created</span>
+              <span className="text-gray-900 dark:text-white">{formatDate(song.createdAt)}</span>
+            </div>
+          </div>
           {song.model && (
-            <span className="text-sm text-gray-400 dark:text-gray-600">{song.model}</span>
+            <div className="flex items-start gap-2">
+              <MusicalNoteIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 text-xs block">Model</span>
+                <span className="text-gray-900 dark:text-white">{song.model}</span>
+              </div>
+            </div>
           )}
-          <span className="text-sm text-gray-400 dark:text-gray-600">
-            {formatDate(song.createdAt)}
-          </span>
+          {rating.stars > 0 && (
+            <div className="flex items-start gap-2">
+              <span className="text-violet-400 mt-0.5 flex-shrink-0 text-sm">★</span>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 text-xs block">Rating</span>
+                <span className="text-yellow-400">{Array(rating.stars).fill("★").join("")}</span>
+              </div>
+            </div>
+          )}
           {sunoJobId && (
-            <span className="text-sm text-gray-400 dark:text-gray-600" title="Suno song ID">
-              ID: {sunoJobId}
-            </span>
+            <div className="flex items-start gap-2 col-span-2">
+              <span className="text-violet-400 mt-0.5 flex-shrink-0 text-xs font-mono">#</span>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 text-xs block">Suno ID</span>
+                <span className="text-gray-900 dark:text-white font-mono text-xs">{sunoJobId}</span>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Regenerate button */}
+      {/* Waveform player */}
+      {hasAudio ? (
+        <WaveformPlayer audioUrl={song.audioUrl} duration={song.duration} />
+      ) : (
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 text-center text-sm text-gray-400 dark:text-gray-600">
+          No audio available
+        </div>
+      )}
+
+      {/* Action buttons row */}
+      <div className="flex flex-wrap gap-2">
+        {/* Download */}
+        <button
+          onClick={handleDownload}
+          disabled={!hasAudio || downloadProgress !== null}
+          aria-label="Download song"
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors min-h-[44px] ${
+            hasAudio && downloadProgress === null
+              ? "bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
+              : "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
+          }`}
+        >
+          <ArrowDownTrayIcon className="w-4 h-4 flex-shrink-0" />
+          {downloadProgress === null
+            ? "Download"
+            : downloadProgress === 100
+            ? "Done"
+            : `${downloadProgress}%`}
+        </button>
+
+        {/* Share button */}
+        <button
+          onClick={isPublic ? handleCopyLink : handleShare}
+          disabled={sharing}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-colors min-h-[44px]"
+        >
+          {isPublic ? (
+            <>
+              <ClipboardDocumentIcon className="w-4 h-4 flex-shrink-0" />
+              Copy link
+            </>
+          ) : (
+            <>
+              <ShareIcon className="w-4 h-4 flex-shrink-0" />
+              {sharing ? "Sharing..." : "Share"}
+            </>
+          )}
+        </button>
+
+        {/* Add to playlist dropdown */}
+        <div className="relative" ref={playlistRef}>
+          <button
+            onClick={() => setPlaylistOpen(!playlistOpen)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-colors min-h-[44px]"
+          >
+            <PlusIcon className="w-4 h-4 flex-shrink-0" />
+            Add to playlist
+            <ChevronDownIcon className="w-3 h-3" />
+          </button>
+
+          {playlistOpen && (
+            <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-20 py-1 max-h-60 overflow-y-auto">
+              {initialPlaylists.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-gray-400 dark:text-gray-500">
+                  No playlists yet.{" "}
+                  <Link href="/playlists" className="text-violet-400 hover:text-violet-300">
+                    Create one
+                  </Link>
+                </div>
+              ) : (
+                initialPlaylists.map((pl) => (
+                  <button
+                    key={pl.id}
+                    onClick={() => handleAddToPlaylist(pl.id)}
+                    disabled={addingToPlaylist === pl.id}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-between"
+                  >
+                    <span className="truncate">{pl.name}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
+                      {pl._count.songs} songs
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Download progress/error */}
+      {downloadProgress !== null && downloadProgress < 100 && (
+        <div className="h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-violet-500 rounded-full transition-all duration-300"
+            style={{ width: `${downloadProgress}%` }}
+          />
+        </div>
+      )}
+      {downloadError && <p className="text-xs text-red-400">{downloadError}</p>}
+
+      {/* Create variation */}
       <Link
         href={`/generate?${new URLSearchParams({
           ...(song.prompt ? { prompt: song.prompt } : {}),
           ...(song.tags ? { tags: song.tags } : {}),
         }).toString()}`}
-        className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
+        className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
       >
         <ArrowPathIcon className="w-4 h-4" />
-        Regenerate with same prompt
+        Create variation
       </Link>
-
-      {/* Audio player */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleTogglePlay}
-            disabled={!hasAudio}
-            aria-label={isPlaying ? "Pause" : "Play"}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-              hasAudio
-                ? "bg-violet-600 hover:bg-violet-500 text-white"
-                : "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
-            }`}
-          >
-            {isPlaying ? (
-              <PauseIcon className="w-6 h-6" />
-            ) : (
-              <PlayIcon className="w-6 h-6 ml-0.5" />
-            )}
-          </button>
-          <div className="flex-1 text-sm text-gray-500 dark:text-gray-400">
-            {hasAudio ? (
-              <span>{isPlaying ? "Playing" : "Paused"}</span>
-            ) : (
-              <span className="text-gray-400 dark:text-gray-600">No audio available</span>
-            )}
-          </div>
-        </div>
-
-        {/* Seek bar */}
-        <div className="space-y-1">
-          <div className="relative h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full">
-            <div
-              className="absolute inset-y-0 left-0 bg-violet-500 rounded-full transition-all"
-              style={{ width: `${pct}%` }}
-            />
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={pct}
-              disabled={!hasAudio}
-              onChange={(e) => handleSeek(Number(e.target.value) / 100)}
-              className="absolute left-0 right-0 top-1/2 -translate-y-1/2 w-full opacity-0 cursor-pointer disabled:cursor-default min-h-[44px]"
-              aria-label="Seek"
-            />
-          </div>
-          <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(audioDuration)}</span>
-          </div>
-        </div>
-
-        {/* Download */}
-        <div className="space-y-2">
-          <button
-            onClick={handleDownload}
-            disabled={!hasAudio || downloadProgress !== null}
-            aria-label="Download song"
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors min-h-[44px] ${
-              hasAudio && downloadProgress === null
-                ? "bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
-                : "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
-            }`}
-          >
-            <ArrowDownTrayIcon className="w-4 h-4 flex-shrink-0" />
-            {downloadProgress === null
-              ? "Download"
-              : downloadProgress === 100
-              ? "Done ✓"
-              : `Downloading… ${downloadProgress}%`}
-          </button>
-
-          {/* Progress bar */}
-          {downloadProgress !== null && downloadProgress < 100 && (
-            <div className="h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-violet-500 rounded-full transition-all duration-300"
-                style={{ width: `${downloadProgress}%` }}
-              />
-            </div>
-          )}
-
-          {/* Error */}
-          {downloadError && (
-            <p className="text-xs text-red-400">{downloadError}</p>
-          )}
-        </div>
-      </div>
 
       {/* Lyrics */}
       {song.lyrics && (
@@ -401,7 +505,7 @@ export function SongDetailView({ song, isFavorite: initialFavorite = false, suno
             Save rating
           </button>
           {saved && (
-            <span className="text-sm text-green-400">Saved ✓</span>
+            <span className="text-sm text-green-400">Saved</span>
           )}
         </div>
       </div>
