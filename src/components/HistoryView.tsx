@@ -8,6 +8,7 @@ import {
   ArrowPathIcon,
   ClockIcon,
   SparklesIcon,
+  ChevronUpDownIcon,
 } from "@heroicons/react/24/solid";
 import { useToast } from "./Toast";
 import Image from "next/image";
@@ -93,6 +94,32 @@ function buildVariationUrl(song: Song): string {
   if (song.tags) params.set("tags", song.tags);
   if (song.prompt) params.set("prompt", song.prompt);
   return `/generate?${params.toString()}`;
+}
+
+// ─── Sort options ─────────────────────────────────────────────────────────────
+
+type SortKey = "newest" | "oldest" | "longest" | "shortest";
+
+const SORT_OPTIONS: { label: string; value: SortKey }[] = [
+  { label: "Newest first", value: "newest" },
+  { label: "Oldest first", value: "oldest" },
+  { label: "Longest first", value: "longest" },
+  { label: "Shortest first", value: "shortest" },
+];
+
+function sortSongs(songs: Song[], sortKey: SortKey): Song[] {
+  return [...songs].sort((a, b) => {
+    switch (sortKey) {
+      case "newest":
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case "oldest":
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case "longest":
+        return (b.duration ?? 0) - (a.duration ?? 0);
+      case "shortest":
+        return (a.duration ?? 0) - (b.duration ?? 0);
+    }
+  });
 }
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
@@ -214,6 +241,7 @@ function HistoryRow({ song, onRetry, retryingId }: { song: Song; onRetry: (song:
 
 export function HistoryView({ songs: initialSongs }: { songs: Song[] }) {
   const [activeFilter, setActiveFilter] = useState("all");
+  const [sortKey, setSortKey] = useState<SortKey>("newest");
   const [page, setPage] = useState(1);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const router = useRouter();
@@ -259,10 +287,12 @@ export function HistoryView({ songs: initialSongs }: { songs: Song[] }) {
     }
   }
 
-  // Filter
+  // Filter then sort
   const filteredSongs = (() => {
-    if (activeFilter === "all") return initialSongs;
-    return initialSongs.filter((s) => s.generationStatus === activeFilter);
+    const filtered = activeFilter === "all"
+      ? initialSongs
+      : initialSongs.filter((s) => s.generationStatus === activeFilter);
+    return sortSongs(filtered, sortKey);
   })();
 
   // Pagination
@@ -289,24 +319,41 @@ export function HistoryView({ songs: initialSongs }: { songs: Song[] }) {
         </p>
       </div>
 
-      {/* Filter chips */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {STATUS_FILTERS.map((opt) => {
-          const count = counts[opt.value];
-          return (
-            <button
-              key={opt.value}
-              onClick={() => { setActiveFilter(opt.value); setPage(1); }}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors min-h-[44px] ${
-                activeFilter === opt.value
-                  ? "bg-violet-600 text-white"
-                  : "bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-              }`}
-            >
-              {opt.label}{count > 0 ? ` (${count})` : ""}
-            </button>
-          );
-        })}
+      {/* Filter chips + sort */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex gap-2 overflow-x-auto pb-1 flex-1">
+          {STATUS_FILTERS.map((opt) => {
+            const count = counts[opt.value];
+            return (
+              <button
+                key={opt.value}
+                onClick={() => { setActiveFilter(opt.value); setPage(1); }}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors min-h-[44px] ${
+                  activeFilter === opt.value
+                    ? "bg-violet-600 text-white"
+                    : "bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                }`}
+              >
+                {opt.label}{count > 0 ? ` (${count})` : ""}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sort dropdown */}
+        <div className="relative flex-shrink-0">
+          <select
+            value={sortKey}
+            onChange={(e) => { setSortKey(e.target.value as SortKey); setPage(1); }}
+            className="appearance-none pl-3 pr-8 py-1.5 rounded-full text-sm font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-none cursor-pointer min-h-[44px] focus:ring-2 focus:ring-violet-500 focus:outline-none"
+            aria-label="Sort generations"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <ChevronUpDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        </div>
       </div>
 
       {/* Song list */}
