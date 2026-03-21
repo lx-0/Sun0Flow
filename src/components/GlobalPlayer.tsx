@@ -46,7 +46,7 @@ export function GlobalPlayer() {
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="fixed bottom-16 left-0 right-0 z-20 px-2 md:bottom-0 md:left-56">
+    <div role="region" aria-label="Audio player" className="fixed bottom-16 left-0 right-0 z-20 px-2 md:bottom-0 md:left-56">
       <div className="bg-gray-900 dark:bg-gray-800 rounded-2xl md:rounded-none md:rounded-t-2xl shadow-2xl border border-gray-700 dark:border-gray-600 overflow-hidden max-w-3xl mx-auto md:mx-0">
         {/* Seek bar (top edge) */}
         <div className="relative h-1 bg-gray-700">
@@ -76,7 +76,7 @@ export function GlobalPlayer() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <MusicalNoteIcon className="w-5 h-5 text-gray-500" />
+              <MusicalNoteIcon className="w-5 h-5 text-gray-500" aria-hidden="true" />
             )}
           </div>
 
@@ -107,7 +107,7 @@ export function GlobalPlayer() {
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <ArrowsRightLeftIcon className="w-5 h-5" />
+              <ArrowsRightLeftIcon className="w-5 h-5" aria-hidden="true" />
             </button>
 
             {/* Skip prev */}
@@ -116,7 +116,7 @@ export function GlobalPlayer() {
               aria-label="Previous"
               className="w-11 h-11 rounded-full flex items-center justify-center text-white hover:text-violet-400 transition-colors"
             >
-              <BackwardIcon className="w-5 h-5" />
+              <BackwardIcon className="w-5 h-5" aria-hidden="true" />
             </button>
 
             {/* Play/pause */}
@@ -138,7 +138,7 @@ export function GlobalPlayer() {
               aria-label="Next"
               className="w-11 h-11 rounded-full flex items-center justify-center text-white hover:text-violet-400 transition-colors"
             >
-              <ForwardIcon className="w-5 h-5" />
+              <ForwardIcon className="w-5 h-5" aria-hidden="true" />
             </button>
 
             {/* Repeat */}
@@ -151,7 +151,7 @@ export function GlobalPlayer() {
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <ArrowPathRoundedSquareIcon className="w-5 h-5" />
+              <ArrowPathRoundedSquareIcon className="w-5 h-5" aria-hidden="true" />
               {repeat === "repeat-one" && (
                 <span className="absolute -top-0.5 -right-0.5 text-[8px] font-bold text-violet-400">
                   1

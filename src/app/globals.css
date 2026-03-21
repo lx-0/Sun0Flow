@@ -18,8 +18,65 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* ─── Skip-to-content link ─────────────────────────────────────────────────── */
+
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 100;
+}
+
+.skip-to-content:focus {
+  position: fixed;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  height: auto;
+  overflow: visible;
+  padding: 0.75rem 1.5rem;
+  background: #7c3aed;
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+/* ─── Focus-visible ring for all interactive elements ──────────────────────── */
+
+*:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Range inputs need a different treatment */
+input[type="range"]:focus-visible {
+  outline-offset: 4px;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Screen-reader only text */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
   }
 }

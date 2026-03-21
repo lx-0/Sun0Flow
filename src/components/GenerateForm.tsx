@@ -267,6 +267,7 @@ export function GenerateForm() {
                       type="button"
                       onClick={() => deleteTemplate(t.id)}
                       className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                      aria-label="Delete template"
                       title="Delete template"
                     >
                       <TrashIcon className="h-4 w-4" />
@@ -291,6 +292,7 @@ export function GenerateForm() {
             value={templateName}
             onChange={(e) => setTemplateName(e.target.value)}
             placeholder="Template name"
+            aria-label="Template name"
             maxLength={50}
             className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
           />

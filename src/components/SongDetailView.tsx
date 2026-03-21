@@ -264,7 +264,7 @@ export function SongDetailView({
         onClick={() => router.back()}
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors min-h-[44px]"
       >
-        <ArrowLeftIcon className="w-4 h-4" />
+        <ArrowLeftIcon className="w-4 h-4" aria-hidden="true" />
         Back
       </button>
 
@@ -278,7 +278,7 @@ export function SongDetailView({
             className="w-full h-full object-cover"
           />
         ) : (
-          <MusicalNoteIcon className="w-20 h-20 text-gray-400 dark:text-gray-600" />
+          <MusicalNoteIcon className="w-20 h-20 text-gray-400 dark:text-gray-600" aria-hidden="true" />
         )}
       </div>
 
@@ -307,7 +307,7 @@ export function SongDetailView({
         <div className="grid grid-cols-2 gap-3 text-sm">
           {song.tags && (
             <div className="flex items-start gap-2">
-              <TagIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+              <TagIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
               <div>
                 <span className="text-gray-500 dark:text-gray-400 text-xs block">Style</span>
                 <span className="text-gray-900 dark:text-white">{song.tags}</span>
@@ -316,7 +316,7 @@ export function SongDetailView({
           )}
           {song.duration != null && (
             <div className="flex items-start gap-2">
-              <ClockIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+              <ClockIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
               <div>
                 <span className="text-gray-500 dark:text-gray-400 text-xs block">Duration</span>
                 <span className="text-gray-900 dark:text-white">{formatTime(song.duration)}</span>
@@ -324,7 +324,7 @@ export function SongDetailView({
             </div>
           )}
           <div className="flex items-start gap-2">
-            <CalendarIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+            <CalendarIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
             <div>
               <span className="text-gray-500 dark:text-gray-400 text-xs block">Created</span>
               <span className="text-gray-900 dark:text-white">{formatDate(song.createdAt)}</span>
@@ -332,7 +332,7 @@ export function SongDetailView({
           </div>
           {song.model && (
             <div className="flex items-start gap-2">
-              <MusicalNoteIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+              <MusicalNoteIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
               <div>
                 <span className="text-gray-500 dark:text-gray-400 text-xs block">Model</span>
                 <span className="text-gray-900 dark:text-white">{song.model}</span>
@@ -388,7 +388,7 @@ export function SongDetailView({
               : "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
           }`}
         >
-          <ArrowDownTrayIcon className="w-4 h-4 flex-shrink-0" />
+          <ArrowDownTrayIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           {downloadProgress === null
             ? "Download"
             : downloadProgress === 100
@@ -404,12 +404,12 @@ export function SongDetailView({
         >
           {isPublic ? (
             <>
-              <ClipboardDocumentIcon className="w-4 h-4 flex-shrink-0" />
+              <ClipboardDocumentIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               Copy link
             </>
           ) : (
             <>
-              <ShareIcon className="w-4 h-4 flex-shrink-0" />
+              <ShareIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
               {sharing ? "Sharing..." : "Share"}
             </>
           )}
@@ -421,9 +421,9 @@ export function SongDetailView({
             onClick={() => setPlaylistOpen(!playlistOpen)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-colors min-h-[44px]"
           >
-            <PlusIcon className="w-4 h-4 flex-shrink-0" />
+            <PlusIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             Add to playlist
-            <ChevronDownIcon className="w-3 h-3" />
+            <ChevronDownIcon className="w-3 h-3" aria-hidden="true" />
           </button>
 
           {playlistOpen && (
@@ -474,7 +474,7 @@ export function SongDetailView({
         }).toString()}`}
         className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
       >
-        <ArrowPathIcon className="w-4 h-4" />
+        <ArrowPathIcon className="w-4 h-4" aria-hidden="true" />
         Create variation
       </Link>
 
@@ -507,6 +507,7 @@ export function SongDetailView({
             setSaved(false);
           }}
           placeholder="Add a note (optional)..."
+          aria-label="Rating note"
           rows={3}
           className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-base text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:border-violet-500 transition-colors"
         />

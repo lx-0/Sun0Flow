@@ -49,7 +49,7 @@ function formatTime(seconds: number): string {
 
 function StarDisplay({ stars }: { stars: number }) {
   return (
-    <span className="text-yellow-400 text-xs">
+    <span className="text-yellow-400 text-xs" role="img" aria-label={`${stars} out of 5 stars`}>
       {"★".repeat(stars)}
       {"☆".repeat(5 - stars)}
     </span>
@@ -237,7 +237,7 @@ function AddToPlaylistButton({ songId }: { songId: string }) {
         aria-label="Add to playlist"
         className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-violet-400 transition-colors"
       >
-        <QueueListIcon className="w-5 h-5" />
+        <QueueListIcon className="w-5 h-5" aria-hidden="true" />
       </button>
 
       {open && (
@@ -344,6 +344,12 @@ function SongRow({
   const hasAudio = Boolean(song.audioUrl) && !isPending;
   const isDownloading = downloadProgress !== null;
 
+  // Build accessible label for song card
+  const songTitle = song.title ?? "Untitled";
+  const statusText = isPending ? ", generating" : isFailed ? ", failed" : "";
+  const ratingText = rating ? `, ${rating.stars} of 5 stars` : "";
+  const songAriaLabel = `${songTitle}${statusText}${ratingText}`;
+
   async function handleShare() {
     setShareLoading(true);
     try {
@@ -369,6 +375,7 @@ function SongRow({
 
   return (
     <li
+      aria-label={songAriaLabel}
       className={`bg-white dark:bg-gray-900 border rounded-xl overflow-hidden transition-colors ${
         isSelected
           ? "border-violet-500 bg-violet-50 dark:bg-violet-950/30"
@@ -398,7 +405,7 @@ function SongRow({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={song.imageUrl} alt={song.title ?? "Song"} className="w-full h-full object-cover" />
           ) : (
-            <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-600" />
+            <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-600" aria-hidden="true" />
           )}
         </div>
 
@@ -490,7 +497,7 @@ function SongRow({
                   : "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
           }`}
         >
-          <ShareIcon className="w-5 h-5" />
+          <ShareIcon className="w-5 h-5" aria-hidden="true" />
         </button>
 
         <button
@@ -503,7 +510,7 @@ function SongRow({
               : "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
           }`}
         >
-          <ArrowDownTrayIcon className="w-5 h-5" />
+          <ArrowDownTrayIcon className="w-5 h-5" aria-hidden="true" />
         </button>
 
         <AddToPlaylistButton songId={song.id} />
@@ -1057,12 +1064,13 @@ export function LibraryView({
         <div className="space-y-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
               <input
                 type="text"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 placeholder="Search by title or prompt\u2026"
+                aria-label="Search songs"
                 className="w-full pl-9 pr-9 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent min-h-[44px]"
               />
               {searchText && (
@@ -1098,6 +1106,7 @@ export function LibraryView({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
+                aria-label="Filter by status"
                 className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white min-h-[44px]"
               >
                 {STATUS_OPTIONS.map((opt) => (
@@ -1108,6 +1117,7 @@ export function LibraryView({
               <select
                 value={ratingFilter}
                 onChange={(e) => setRatingFilter(e.target.value)}
+                aria-label="Filter by rating"
                 className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white min-h-[44px]"
               >
                 {RATING_OPTIONS.map((opt) => (
@@ -1120,6 +1130,7 @@ export function LibraryView({
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
                 placeholder="From"
+                aria-label="Filter from date"
                 className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white min-h-[44px]"
               />
 
@@ -1128,12 +1139,14 @@ export function LibraryView({
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
                 placeholder="To"
+                aria-label="Filter to date"
                 className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white min-h-[44px]"
               />
 
               <select
                 value={tagFilter}
                 onChange={(e) => setTagFilter(e.target.value)}
+                aria-label="Filter by tag"
                 className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white min-h-[44px]"
               >
                 <option value="">All tags</option>
@@ -1177,7 +1190,7 @@ export function LibraryView({
       {/* Song list */}
       {songs.length === 0 ? (
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center">
-          <MusicalNoteIcon className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
+          <MusicalNoteIcon className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-700 mb-3" aria-hidden="true" />
           <p className="text-gray-500 text-sm">
             {hasAnyFilter
               ? "No songs match your filters."
@@ -1193,7 +1206,7 @@ export function LibraryView({
           )}
         </div>
       ) : (
-        <ul className={`space-y-2 ${selectionMode ? "pb-20" : ""}`}>
+        <ul aria-label="Song library" className={`space-y-2 ${selectionMode ? "pb-20" : ""}`}>
           {songs.map((song) => (
             <SongRow
               key={song.id}
