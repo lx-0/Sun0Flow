@@ -32,6 +32,8 @@ interface QueueState {
   duration: number;
   shuffle: boolean;
   repeat: RepeatMode;
+  volume: number;
+  muted: boolean;
 }
 
 interface QueueActions {
@@ -45,6 +47,8 @@ interface QueueActions {
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   clearQueue: () => void;
+  setVolume: (volume: number) => void;
+  toggleMute: () => void;
 }
 
 type QueueContextValue = QueueState & QueueActions;
@@ -85,6 +89,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const [duration, setDuration] = useState(0);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState<RepeatMode>("off");
+  const [volume, setVolumeState] = useState(1);
+  const [muted, setMuted] = useState(false);
 
   // Refs for event handlers (avoid stale closures)
   const queueRef = useRef(queue);
@@ -344,6 +350,23 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     originalQueueRef.current = [];
   }, []);
 
+  // ─── Volume ─────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = muted ? 0 : volume;
+  }, [volume, muted]);
+
+  const setVolume = useCallback((v: number) => {
+    setVolumeState(v);
+    if (v > 0 && muted) setMuted(false);
+  }, [muted]);
+
+  const toggleMute = useCallback(() => {
+    setMuted((m) => !m);
+  }, []);
+
   // ─── Current song helper ──────────────────────────────────────────────────
 
   const value: QueueContextValue = {
@@ -354,6 +377,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     duration,
     shuffle,
     repeat,
+    volume,
+    muted,
     playQueue,
     togglePlay,
     skipNext,
@@ -362,6 +387,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     toggleShuffle,
     cycleRepeat,
     clearQueue,
+    setVolume,
+    toggleMute,
   };
 
   return (

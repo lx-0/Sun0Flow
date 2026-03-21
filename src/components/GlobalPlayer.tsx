@@ -6,6 +6,8 @@ import {
   ForwardIcon,
   BackwardIcon,
   XMarkIcon,
+  SpeakerWaveIcon,
+  SpeakerXMarkIcon,
 } from "@heroicons/react/24/solid";
 import {
   ArrowPathRoundedSquareIcon,
@@ -30,6 +32,8 @@ export function GlobalPlayer() {
     duration,
     shuffle,
     repeat,
+    volume,
+    muted,
     togglePlay,
     skipNext,
     skipPrev,
@@ -37,6 +41,8 @@ export function GlobalPlayer() {
     toggleShuffle,
     cycleRepeat,
     clearQueue,
+    setVolume,
+    toggleMute,
   } = useQueue();
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
@@ -93,6 +99,30 @@ export function GlobalPlayer() {
                 {currentIndex + 1} of {queue.length}
               </span>
             </div>
+          </div>
+
+          {/* Volume — hidden on mobile */}
+          <div className="hidden sm:flex items-center gap-1 mr-1">
+            <button
+              onClick={toggleMute}
+              aria-label={muted ? "Unmute" : "Mute"}
+              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-200 transition-colors"
+            >
+              {muted || volume === 0 ? (
+                <SpeakerXMarkIcon className="w-4 h-4" />
+              ) : (
+                <SpeakerWaveIcon className="w-4 h-4" />
+              )}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={muted ? 0 : Math.round(volume * 100)}
+              onChange={(e) => setVolume(Number(e.target.value) / 100)}
+              aria-label="Volume"
+              className="w-16 h-1 accent-violet-500 cursor-pointer"
+            />
           </div>
 
           {/* Controls — touch-friendly 44x44 targets */}

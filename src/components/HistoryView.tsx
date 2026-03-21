@@ -9,8 +9,11 @@ import {
   ClockIcon,
   SparklesIcon,
   ChevronUpDownIcon,
+  PlayIcon,
+  PauseIcon,
 } from "@heroicons/react/24/solid";
 import { useToast } from "./Toast";
+import { useQueue, type QueueSong } from "./QueueContext";
 import Image from "next/image";
 import type { Song } from "@prisma/client";
 
@@ -128,20 +131,47 @@ const PAGE_SIZE = 20;
 
 // ─── History entry row ────────────────────────────────────────────────────────
 
+function toQueueSong(song: Song): QueueSong {
+  return {
+    id: song.id,
+    title: song.title,
+    audioUrl: song.audioUrl ?? "",
+    imageUrl: song.imageUrl,
+    duration: song.duration,
+  };
+}
+
 function HistoryRow({ song, onRetry, retryingId }: { song: Song; onRetry: (song: Song) => void; retryingId: string | null }) {
   const isReady = song.generationStatus === "ready";
   const isFailed = song.generationStatus === "failed";
   const isRetrying = retryingId === song.id;
+  const { togglePlay, queue, currentIndex, isPlaying } = useQueue();
+
+  const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
+  const isThisSongPlaying = isPlaying && currentSong?.id === song.id;
 
   return (
     <li className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
       <div className="flex items-start gap-3 px-3 py-3">
-        {/* Cover art / placeholder */}
-        <div className="relative flex-shrink-0 w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
+        {/* Cover art with play overlay */}
+        <div className="relative flex-shrink-0 w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center group">
           {song.imageUrl ? (
             <Image src={song.imageUrl} alt={song.title ?? "Song"} fill className="object-cover" sizes="48px" loading="lazy" />
           ) : (
             <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-600" />
+          )}
+          {isReady && song.audioUrl && (
+            <button
+              onClick={() => togglePlay(toQueueSong(song))}
+              aria-label={isThisSongPlaying ? "Pause" : "Play"}
+              className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              {isThisSongPlaying ? (
+                <PauseIcon className="w-5 h-5 text-white" />
+              ) : (
+                <PlayIcon className="w-5 h-5 text-white" />
+              )}
+            </button>
           )}
         </div>
 
