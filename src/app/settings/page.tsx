@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { SessionProvider } from "@/components/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { useTheme } from "@/components/ThemeProvider";
-import { PlusIcon, TrashIcon, SunIcon, MoonIcon, ComputerDesktopIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, TrashIcon, SunIcon, MoonIcon, ComputerDesktopIcon, PencilIcon, CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 const RSS_FEEDS_KEY = "sunoflow_rss_feeds";
 
@@ -337,6 +337,151 @@ function RssFeedsSection() {
   );
 }
 
+interface TagItem {
+  id: string;
+  name: string;
+  color: string;
+  _count: { songTags: number };
+}
+
+function TagManagementSection() {
+  const [tags, setTags] = useState<TagItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editColor, setEditColor] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  useEffect(() => {
+    fetch("/api/tags")
+      .then((r) => r.json())
+      .then((data) => { if (data.tags) setTags(data.tags); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  function startEdit(tag: TagItem) {
+    setEditingId(tag.id);
+    setEditName(tag.name);
+    setEditColor(tag.color);
+  }
+
+  async function saveEdit(tagId: string) {
+    try {
+      const res = await fetch(`/api/tags/${tagId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editName.trim(), color: editColor }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        showToast(data.error ?? "Failed to update tag", "error");
+        return;
+      }
+      const data = await res.json();
+      setTags((prev) => prev.map((t) => (t.id === tagId ? { ...t, name: data.tag.name, color: data.tag.color } : t)));
+      setEditingId(null);
+      showToast("Tag updated", "success");
+    } catch {
+      showToast("Network error", "error");
+    }
+  }
+
+  async function deleteTag(tagId: string) {
+    try {
+      const res = await fetch(`/api/tags/${tagId}`, { method: "DELETE" });
+      if (!res.ok) {
+        showToast("Failed to delete tag", "error");
+        return;
+      }
+      setTags((prev) => prev.filter((t) => t.id !== tagId));
+      setDeleteConfirm(null);
+      showToast("Tag deleted", "success");
+    } catch {
+      showToast("Network error", "error");
+    }
+  }
+
+  return (
+    <>
+      {toast && <Toast message={toast.message} type={toast.type} />}
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Tags</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Manage your song tags. Rename, recolor, or delete tags here.
+          </p>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-gray-400">Loading...</p>
+        ) : tags.length === 0 ? (
+          <p className="text-sm text-gray-400 dark:text-gray-600">No tags yet. Add tags from any song detail page.</p>
+        ) : (
+          <ul className="space-y-2">
+            {tags.map((tag) => (
+              <li
+                key={tag.id}
+                className="flex items-center gap-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-2"
+              >
+                {editingId === tag.id ? (
+                  <>
+                    <input
+                      type="color"
+                      value={editColor}
+                      onChange={(e) => setEditColor(e.target.value)}
+                      className="w-6 h-6 rounded border-0 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") saveEdit(tag.id); if (e.key === "Escape") setEditingId(null); }}
+                      className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      autoFocus
+                    />
+                    <button onClick={() => saveEdit(tag.id)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-green-500 hover:text-green-400" aria-label="Save">
+                      <CheckIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setEditingId(null)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-400 hover:text-gray-300" aria-label="Cancel">
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                    <span className="flex-1 text-sm text-gray-900 dark:text-white">{tag.name}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{tag._count.songTags} song{tag._count.songTags !== 1 ? "s" : ""}</span>
+                    <button onClick={() => startEdit(tag)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-400 hover:text-violet-400 transition-colors" aria-label="Edit tag">
+                      <PencilIcon className="w-4 h-4" />
+                    </button>
+                    {deleteConfirm === tag.id ? (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => deleteTag(tag.id)} className="text-xs text-red-500 hover:text-red-400 min-h-[36px] px-2">Delete</button>
+                        <button onClick={() => setDeleteConfirm(null)} className="text-xs text-gray-400 hover:text-gray-300 min-h-[36px] px-2">Cancel</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDeleteConfirm(tag.id)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-400 hover:text-red-400 transition-colors" aria-label="Delete tag">
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
+  );
+}
+
 function SettingsContent() {
   return (
     <div className="px-4 py-6 space-y-8">
@@ -344,6 +489,8 @@ function SettingsContent() {
       <ThemeSection />
       <div className="border-t border-gray-200 dark:border-gray-800" />
       <AccountSection />
+      <div className="border-t border-gray-200 dark:border-gray-800" />
+      <TagManagementSection />
       <div className="border-t border-gray-200 dark:border-gray-800" />
       <RssFeedsSection />
     </div>

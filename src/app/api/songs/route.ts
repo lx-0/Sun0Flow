@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     const sortDir = params.get("sortDir") || "";
     const dateFrom = params.get("dateFrom") || "";
     const dateTo = params.get("dateTo") || "";
+    const tagId = params.get("tagId") || "";
 
     // Build WHERE conditions
     const where: Prisma.SongWhereInput = { userId: session.user.id };
@@ -59,6 +60,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Tag filter
+    if (tagId) {
+      where.songTags = { some: { tagId } };
+    }
+
     // Build ORDER BY
     let orderBy: Prisma.SongOrderByWithRelationInput;
     switch (sortBy) {
@@ -77,7 +83,11 @@ export async function GET(request: NextRequest) {
         break;
     }
 
-    const songs = await prisma.song.findMany({ where, orderBy });
+    const songs = await prisma.song.findMany({
+      where,
+      orderBy,
+      include: { songTags: { include: { tag: true }, orderBy: { tag: { name: "asc" } } } },
+    });
 
     return NextResponse.json({ songs });
   } catch {

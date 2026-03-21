@@ -23,6 +23,7 @@ import { getRating, setRating, type SongRating } from "@/lib/ratings";
 import { downloadSongFile } from "@/lib/download";
 import { useToast } from "./Toast";
 import { WaveformPlayer } from "./WaveformPlayer";
+import { TagInput } from "./TagInput";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,12 @@ interface PlaylistOption {
   _count: { songs: number };
 }
 
+interface SongTag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 interface SongDetailViewProps {
   song: SunoSong;
   isFavorite?: boolean;
@@ -90,6 +97,7 @@ interface SongDetailViewProps {
   playlists?: PlaylistOption[];
   isPublic?: boolean;
   publicSlug?: string | null;
+  songTags?: SongTag[];
 }
 
 // ─── Main SongDetailView ──────────────────────────────────────────────────────
@@ -101,6 +109,7 @@ export function SongDetailView({
   playlists: initialPlaylists = [],
   isPublic: initialIsPublic = false,
   publicSlug: initialPublicSlug = null,
+  songTags: initialSongTags = [],
 }: SongDetailViewProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -349,6 +358,12 @@ export function SongDetailView({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Tags */}
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-2">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Tags</h2>
+        <TagInput songId={song.id} initialTags={initialSongTags} />
       </div>
 
       {/* Waveform player */}

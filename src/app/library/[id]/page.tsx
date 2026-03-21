@@ -35,6 +35,21 @@ async function fetchDbMeta(songId: string) {
   }
 }
 
+async function fetchSongTags(songId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return [];
+    const songTags = await prisma.songTag.findMany({
+      where: { songId, song: { userId: session.user.id } },
+      include: { tag: true },
+      orderBy: { tag: { name: "asc" } },
+    });
+    return songTags.map((st) => ({ id: st.tag.id, name: st.tag.name, color: st.tag.color }));
+  } catch {
+    return [];
+  }
+}
+
 async function fetchPlaylists() {
   try {
     const session = await auth();
@@ -55,10 +70,11 @@ export default async function SongDetailPage({
 }: {
   params: { id: string };
 }) {
-  const [song, dbMeta, playlists] = await Promise.all([
+  const [song, dbMeta, playlists, songTags] = await Promise.all([
     fetchSong(params.id),
     fetchDbMeta(params.id),
     fetchPlaylists(),
+    fetchSongTags(params.id),
   ]);
 
   if (!song) {
@@ -75,6 +91,7 @@ export default async function SongDetailPage({
           playlists={playlists}
           isPublic={dbMeta.isPublic}
           publicSlug={dbMeta.publicSlug}
+          songTags={songTags}
         />
       </AppShell>
     </SessionProvider>

@@ -28,6 +28,15 @@ import { downloadSongFile } from "@/lib/download";
 import { exportAsZip, exportAsM3U, type ExportableSong } from "@/lib/export";
 import { useToast } from "./Toast";
 import { useQueue, type QueueSong } from "./QueueContext";
+import { TagChip } from "./TagInput";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface SongTagRelation {
+  tag: { id: string; name: string; color: string };
+}
+
+type SongWithTags = Song & { songTags: SongTagRelation[] };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -403,7 +412,17 @@ function SongRow({
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {isPending && <GeneratingBadge />}
             {isFailed && <FailedBadge message={song.errorMessage} />}
-            {!isPending && !isFailed && song.tags && (
+            {!isPending && !isFailed && (song as SongWithTags).songTags?.length > 0 && (
+              <div className="flex gap-1 flex-wrap">
+                {(song as SongWithTags).songTags.slice(0, 3).map((st) => (
+                  <TagChip key={st.tag.id} tag={st.tag} size="xs" />
+                ))}
+                {(song as SongWithTags).songTags.length > 3 && (
+                  <span className="text-[10px] text-gray-400">+{(song as SongWithTags).songTags.length - 3}</span>
+                )}
+              </div>
+            )}
+            {!isPending && !isFailed && !((song as SongWithTags).songTags?.length > 0) && song.tags && (
               <span className="text-xs text-gray-500 truncate">
                 {song.tags.split(",")[0].trim()}
               </span>
@@ -603,7 +622,9 @@ export function LibraryView({
   const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") ?? "");
   const [dateTo, setDateTo] = useState(searchParams.get("dateTo") ?? "");
   const [sortBy, setSortBy] = useState(searchParams.get("sortBy") ?? "newest");
+  const [tagFilter, setTagFilter] = useState(searchParams.get("tagId") ?? "");
   const [showFilters, setShowFilters] = useState(false);
+  const [availableTags, setAvailableTags] = useState<{ id: string; name: string; color: string }[]>([]);
 
   const debouncedSearch = useDebounce(searchText, 300);
 
@@ -646,6 +667,14 @@ export function LibraryView({
     setRatings(getRatings());
   }, []);
 
+  // ─── Fetch user tags for filter ───────────────────────────────────────────
+  useEffect(() => {
+    fetch("/api/tags")
+      .then((r) => r.json())
+      .then((data) => { if (data.tags) setAvailableTags(data.tags); })
+      .catch(() => {});
+  }, []);
+
   // Reload ratings when returning to the page
   useEffect(() => {
     const handleFocus = () => setRatings(getRatings());
@@ -654,7 +683,7 @@ export function LibraryView({
   }, []);
 
   // ─── Sync filters → URL params ───────────────────────────────────────────
-  const hasAnyFilter = !!(debouncedSearch || statusFilter || ratingFilter || dateFrom || dateTo || sortBy !== "newest");
+  const hasAnyFilter = !!(debouncedSearch || statusFilter || ratingFilter || dateFrom || dateTo || tagFilter || sortBy !== "newest");
 
   useEffect(() => {
     if (!enableServerSearch) return;
@@ -666,12 +695,13 @@ export function LibraryView({
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
     if (sortBy && sortBy !== "newest") params.set("sortBy", sortBy);
+    if (tagFilter) params.set("tagId", tagFilter);
 
     const qs = params.toString();
     const newUrl = qs ? `${pathname}?${qs}` : pathname;
     router.replace(newUrl, { scroll: false });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, enableServerSearch]);
+  }, [debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, tagFilter, enableServerSearch]);
 
   // ─── Fetch songs from API when filters change ────────────────────────────
   useEffect(() => {
@@ -684,6 +714,7 @@ export function LibraryView({
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
     if (sortBy) params.set("sortBy", sortBy);
+    if (tagFilter) params.set("tagId", tagFilter);
 
     let cancelled = false;
     setLoading(true);
@@ -701,7 +732,7 @@ export function LibraryView({
       });
 
     return () => { cancelled = true; };
-  }, [debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, enableServerSearch]);
+  }, [debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, tagFilter, enableServerSearch]);
 
   // ─── Clear all filters ────────────────────────────────────────────────────
   function clearAllFilters() {
@@ -711,6 +742,7 @@ export function LibraryView({
     setDateFrom("");
     setDateTo("");
     setSortBy("newest");
+    setTagFilter("");
   }
 
   // ─── Song callbacks ───────────────────────────────────────────────────────
@@ -936,7 +968,7 @@ export function LibraryView({
   }
 
   const hasPlayableSongs = songs.some((s) => s.audioUrl && s.generationStatus === "ready");
-  const hasActiveFilters = !!(statusFilter || ratingFilter || dateFrom || dateTo);
+  const hasActiveFilters = !!(statusFilter || ratingFilter || dateFrom || dateTo || tagFilter);
 
   return (
     <div className="px-4 py-4 space-y-4">
@@ -1062,7 +1094,7 @@ export function LibraryView({
           </div>
 
           {showFilters && (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -1098,6 +1130,17 @@ export function LibraryView({
                 placeholder="To"
                 className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white min-h-[44px]"
               />
+
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white min-h-[44px]"
+              >
+                <option value="">All tags</option>
+                {availableTags.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
             </div>
           )}
 
