@@ -14,7 +14,7 @@ export async function GET() {
     await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
-        select: { createdAt: true },
+        select: { createdAt: true, lastLoginAt: true },
       }),
       prisma.song.count({ where: { userId } }),
       prisma.song.count({ where: { userId, isFavorite: true } }),
@@ -32,5 +32,6 @@ export async function GET() {
     totalPlaylists,
     totalTemplates,
     memberSince: user.createdAt,
+    lastLoginAt: user.lastLoginAt,
   });
 }

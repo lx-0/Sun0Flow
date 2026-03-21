@@ -14,6 +14,7 @@ import {
   CheckIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ interface ProfileStats {
   totalPlaylists: number;
   totalTemplates: number;
   memberSince: string;
+  lastLoginAt: string | null;
 }
 
 // ─── Stats Card ───────────────────────────────────────────────────────────────
@@ -200,9 +202,26 @@ function AccountStats() {
         <StatCard icon={QueueListIcon} label="Playlists" value={stats.totalPlaylists} />
         <StatCard icon={SparklesIcon} label="Templates" value={stats.totalTemplates} />
       </div>
-      <div className="flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-        <CalendarDaysIcon className="w-4 h-4" />
-        <span>Member since {memberDate}</span>
+      <div className="flex flex-col items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-2">
+          <CalendarDaysIcon className="w-4 h-4" />
+          <span>Member since {memberDate}</span>
+        </div>
+        {stats.lastLoginAt && (
+          <div className="flex items-center gap-2">
+            <ClockIcon className="w-4 h-4" />
+            <span>
+              Last login{" "}
+              {new Date(stats.lastLoginAt).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+        )}
       </div>
     </section>
   );

@@ -45,6 +45,7 @@ model User {
   passwordHash         String?
   sunoApiKey           String?
   onboardingCompleted  Boolean   @default(false)
+  lastLoginAt          DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
