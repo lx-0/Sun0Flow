@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { MusicalNoteIcon } from "@heroicons/react/24/solid";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -288,10 +289,9 @@ export function DashboardView({ userName }: { userName?: string | null }) {
                 href={`/library/${song.id}`}
                 className="flex items-center gap-3 px-3 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
               >
-                <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                <div className="relative w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
                   {song.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={song.imageUrl} alt={song.title ?? "Song"} className="w-full h-full object-cover" />
+                    <Image src={song.imageUrl} alt={song.title ?? "Song"} fill className="object-cover" sizes="40px" loading="lazy" />
                   ) : (
                     <MusicalNoteIcon className="w-5 h-5 text-gray-400 dark:text-gray-600" />
                   )}

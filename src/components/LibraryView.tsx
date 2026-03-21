@@ -22,6 +22,7 @@ import {
   QueueListIcon,
 } from "@heroicons/react/24/outline";
 import { PlayIcon as PlayOutlineIcon } from "@heroicons/react/24/outline";
+import Image from "next/image";
 import type { Song } from "@prisma/client";
 import { getRatings, type SongRating } from "@/lib/ratings";
 import { downloadSongFile } from "@/lib/download";
@@ -400,10 +401,9 @@ function SongRow({
           {isSelected && <CheckIcon className="w-4 h-4" />}
         </button>
 
-        <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
+        <div className="relative flex-shrink-0 w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
           {song.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={song.imageUrl} alt={song.title ?? "Song"} className="w-full h-full object-cover" />
+            <Image src={song.imageUrl} alt={song.title ?? "Song"} fill className="object-cover" sizes="48px" loading="lazy" />
           ) : (
             <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-600" aria-hidden="true" />
           )}

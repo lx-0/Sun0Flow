@@ -1,7 +1,7 @@
 /**
  * Client-side library export: ZIP (audio files) and M3U (playlist).
+ * JSZip is loaded lazily to avoid bloating the initial bundle.
  */
-import JSZip from "jszip";
 
 export interface ExportableSong {
   id: string;
@@ -37,6 +37,7 @@ export async function exportAsZip(
   const downloadable = songs.filter((s) => s.audioUrl);
   if (downloadable.length === 0) throw new Error("No songs with audio to export");
 
+  const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
   const usedNames = new Set<string>();
 

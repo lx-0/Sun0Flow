@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Image from "next/image";
 import { PlayIcon, PauseIcon, MusicalNoteIcon } from "@heroicons/react/24/solid";
 
 function formatTime(seconds: number): string {
@@ -51,10 +52,9 @@ export function PublicSongView({
   return (
     <div className="w-full max-w-sm space-y-6">
       {/* Cover art */}
-      <div className="aspect-square w-full rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 overflow-hidden flex items-center justify-center">
+      <div className="relative aspect-square w-full rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 overflow-hidden flex items-center justify-center">
         {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+          <Image src={imageUrl} alt={title} fill className="object-cover" sizes="(max-width: 384px) 100vw, 384px" priority />
         ) : (
           <MusicalNoteIcon className="w-20 h-20 text-gray-300 dark:text-gray-700" />
         )}

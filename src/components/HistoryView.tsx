@@ -10,6 +10,7 @@ import {
   SparklesIcon,
 } from "@heroicons/react/24/solid";
 import { useToast } from "./Toast";
+import Image from "next/image";
 import type { Song } from "@prisma/client";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -109,10 +110,9 @@ function HistoryRow({ song, onRetry, retryingId }: { song: Song; onRetry: (song:
     <li className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
       <div className="flex items-start gap-3 px-3 py-3">
         {/* Cover art / placeholder */}
-        <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
+        <div className="relative flex-shrink-0 w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
           {song.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={song.imageUrl} alt={song.title ?? "Song"} className="w-full h-full object-cover" />
+            <Image src={song.imageUrl} alt={song.title ?? "Song"} fill className="object-cover" sizes="48px" loading="lazy" />
           ) : (
             <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-600" />
           )}
