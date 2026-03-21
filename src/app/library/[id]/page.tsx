@@ -18,19 +18,26 @@ async function fetchSong(id: string) {
 async function fetchDbMeta(songId: string) {
   try {
     const session = await auth();
-    if (!session?.user?.id) return { isFavorite: false, sunoJobId: null, isPublic: false, publicSlug: null };
+    if (!session?.user?.id) return { isFavorite: false, favoriteCount: 0, sunoJobId: null, isPublic: false, publicSlug: null };
     const dbSong = await prisma.song.findFirst({
       where: { id: songId, userId: session.user.id },
-      select: { isFavorite: true, sunoJobId: true, isPublic: true, publicSlug: true },
+      select: {
+        sunoJobId: true,
+        isPublic: true,
+        publicSlug: true,
+        _count: { select: { favorites: true } },
+        favorites: { where: { userId: session.user.id }, select: { id: true } },
+      },
     });
     return {
-      isFavorite: dbSong?.isFavorite ?? false,
+      isFavorite: (dbSong?.favorites?.length ?? 0) > 0,
+      favoriteCount: dbSong?._count?.favorites ?? 0,
       sunoJobId: dbSong?.sunoJobId ?? null,
       isPublic: dbSong?.isPublic ?? false,
       publicSlug: dbSong?.publicSlug ?? null,
     };
   } catch {
-    return { isFavorite: false, sunoJobId: null, isPublic: false, publicSlug: null };
+    return { isFavorite: false, favoriteCount: 0, sunoJobId: null, isPublic: false, publicSlug: null };
   }
 }
 
@@ -85,6 +92,7 @@ export default async function SongDetailPage({
       <SongDetailView
         song={song}
         isFavorite={dbMeta.isFavorite}
+        favoriteCount={dbMeta.favoriteCount}
         sunoJobId={dbMeta.sunoJobId}
         playlists={playlists}
         isPublic={dbMeta.isPublic}

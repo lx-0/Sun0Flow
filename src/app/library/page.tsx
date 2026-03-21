@@ -3,15 +3,26 @@ import { AppShell } from "@/components/AppShell";
 import { LibraryView } from "@/components/LibraryView";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import type { Song } from "@prisma/client";
 
-async function fetchSongs(): Promise<Song[]> {
+async function fetchSongs() {
   try {
     const session = await auth();
     if (!session?.user?.id) return [];
-    return await prisma.song.findMany({
+    const songs = await prisma.song.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
+      include: {
+        favorites: { where: { userId: session.user.id }, select: { id: true } },
+        _count: { select: { favorites: true } },
+      },
+    });
+    return songs.map((s) => {
+      const { favorites, _count, ...rest } = s;
+      return {
+        ...rest,
+        isFavorite: favorites.length > 0,
+        favoriteCount: _count.favorites,
+      };
     });
   } catch {
     return [];

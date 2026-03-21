@@ -56,6 +56,7 @@ model User {
   rateLimitEntries RateLimitEntry[]
   promptTemplates  PromptTemplate[]
   userTags         Tag[]
+  favorites        Favorite[]
 }
 
 model Song {
@@ -85,6 +86,7 @@ model Song {
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   playlistSongs PlaylistSong[]
   songTags      SongTag[]
+  favorites     Favorite[]
 }
 
 model Playlist {
@@ -167,6 +169,20 @@ model SongTag {
   @@unique([songId, tagId])
   @@index([songId])
   @@index([tagId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  songId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, songId])
+  @@index([userId])
+  @@index([songId])
 }
 
 model VerificationToken {

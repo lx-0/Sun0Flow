@@ -93,6 +93,7 @@ interface SongTag {
 interface SongDetailViewProps {
   song: SunoSong;
   isFavorite?: boolean;
+  favoriteCount?: number;
   sunoJobId?: string | null;
   playlists?: PlaylistOption[];
   isPublic?: boolean;
@@ -105,6 +106,7 @@ interface SongDetailViewProps {
 export function SongDetailView({
   song,
   isFavorite: initialFavorite = false,
+  favoriteCount: initialFavoriteCount = 0,
   sunoJobId,
   playlists: initialPlaylists = [],
   isPublic: initialIsPublic = false,
@@ -115,6 +117,7 @@ export function SongDetailView({
   const { toast } = useToast();
 
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
+  const [favoriteCount, setFavoriteCount] = useState(initialFavoriteCount);
 
   const [rating, setRatingState] = useState<SongRating>({ stars: 0, note: "" });
   const [saved, setSaved] = useState(false);
@@ -186,18 +189,26 @@ export function SongDetailView({
 
   async function handleToggleFavorite() {
     const prev = isFavorite;
+    const prevCount = favoriteCount;
     const newFav = !prev;
     setIsFavorite(newFav);
+    setFavoriteCount(newFav ? prevCount + 1 : Math.max(0, prevCount - 1));
     try {
-      const res = await fetch(`/api/songs/${song.id}/favorite`, { method: "PATCH" });
+      const res = await fetch(`/api/songs/${song.id}/favorite`, {
+        method: newFav ? "POST" : "DELETE",
+      });
       if (!res.ok) {
         setIsFavorite(prev);
+        setFavoriteCount(prevCount);
         toast("Failed to update favorite", "error");
       } else {
+        const data = await res.json();
+        setFavoriteCount(data.favoriteCount);
         toast(newFav ? "Added to favorites" : "Removed from favorites", "success");
       }
     } catch {
       setIsFavorite(prev);
+      setFavoriteCount(prevCount);
       toast("Failed to update favorite", "error");
     }
   }
@@ -289,7 +300,7 @@ export function SongDetailView({
           <button
             onClick={handleToggleFavorite}
             aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+            className={`flex-shrink-0 flex items-center gap-1 px-2 h-11 rounded-full transition-colors ${
               isFavorite ? "text-pink-500" : "text-gray-400 dark:text-gray-500 hover:text-pink-400"
             }`}
           >
@@ -297,6 +308,9 @@ export function SongDetailView({
               <HeartIcon className="w-6 h-6" />
             ) : (
               <HeartOutlineIcon className="w-6 h-6" />
+            )}
+            {favoriteCount > 0 && (
+              <span className="text-sm font-medium">{favoriteCount}</span>
             )}
           </button>
         </div>

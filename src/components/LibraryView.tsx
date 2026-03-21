@@ -469,7 +469,7 @@ function SongRow({
         <button
           onClick={() => onToggleFavorite(song)}
           aria-label={song.isFavorite ? "Remove from favorites" : "Add to favorites"}
-          className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+          className={`flex-shrink-0 h-11 px-2 rounded-full flex items-center gap-1 transition-colors ${
             song.isFavorite
               ? "text-pink-500 hover:text-pink-400"
               : "text-gray-400 dark:text-gray-500 hover:text-pink-400"
@@ -479,6 +479,11 @@ function SongRow({
             <HeartIcon className="w-5 h-5" />
           ) : (
             <HeartOutlineIcon className="w-5 h-5" />
+          )}
+          {((song as Song & { favoriteCount?: number }).favoriteCount ?? 0) > 0 && (
+            <span className="text-xs font-medium">
+              {(song as Song & { favoriteCount?: number }).favoriteCount}
+            </span>
           )}
         </button>
 
@@ -801,15 +806,20 @@ export function LibraryView({
 
   async function handleToggleFavorite(song: Song) {
     const newFav = !song.isFavorite;
-    const optimistic = { ...song, isFavorite: newFav };
-    handleSongUpdate(optimistic);
+    const prevCount = (song as Song & { favoriteCount?: number }).favoriteCount ?? 0;
+    const optimistic = { ...song, isFavorite: newFav, favoriteCount: newFav ? prevCount + 1 : Math.max(0, prevCount - 1) };
+    handleSongUpdate(optimistic as Song);
 
     try {
-      const res = await fetch(`/api/songs/${song.id}/favorite`, { method: "PATCH" });
+      const res = await fetch(`/api/songs/${song.id}/favorite`, {
+        method: newFav ? "POST" : "DELETE",
+      });
       if (!res.ok) {
         handleSongUpdate(song);
         toast("Failed to update favorite", "error");
       } else {
+        const data = await res.json();
+        handleSongUpdate({ ...song, isFavorite: newFav, favoriteCount: data.favoriteCount } as Song);
         toast(newFav ? "Added to favorites" : "Removed from favorites", "success");
       }
     } catch {

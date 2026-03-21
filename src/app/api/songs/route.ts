@@ -86,10 +86,23 @@ export async function GET(request: NextRequest) {
     const songs = await prisma.song.findMany({
       where,
       orderBy,
-      include: { songTags: { include: { tag: true }, orderBy: { tag: { name: "asc" } } } },
+      include: {
+        songTags: { include: { tag: true }, orderBy: { tag: { name: "asc" } } },
+        favorites: { where: { userId: session.user.id }, select: { id: true } },
+        _count: { select: { favorites: true } },
+      },
     });
 
-    return NextResponse.json({ songs });
+    const enriched = songs.map((s) => {
+      const { favorites, _count, ...rest } = s;
+      return {
+        ...rest,
+        isFavorite: favorites.length > 0,
+        favoriteCount: _count.favorites,
+      };
+    });
+
+    return NextResponse.json({ songs: enriched });
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },
