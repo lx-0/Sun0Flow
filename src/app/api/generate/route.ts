@@ -32,13 +32,20 @@ export async function POST(request: Request) {
     // Check rate limit before processing
     const { allowed, status: rateLimitStatus } = await checkRateLimit(userId);
     if (!allowed) {
+      const retryAfterSec = Math.max(
+        1,
+        Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000)
+      );
       return NextResponse.json(
         {
           error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`,
           resetAt: rateLimitStatus.resetAt,
           rateLimit: rateLimitStatus,
         },
-        { status: 429 }
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfterSec) },
+        }
       );
     }
 
