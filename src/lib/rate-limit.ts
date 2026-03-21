@@ -3,13 +3,20 @@ import { prisma } from "./prisma";
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const DEFAULT_MAX_REQUESTS = 10;
 
-function getMaxRequests(): number {
-  const envVal = process.env.RATE_LIMIT_MAX_GENERATIONS;
-  if (envVal) {
-    const parsed = parseInt(envVal, 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
+const ACTION_LIMITS: Record<string, number> = {
+  generate: DEFAULT_MAX_REQUESTS,
+  download: 50,
+};
+
+function getMaxRequests(action = "generate"): number {
+  if (action === "generate") {
+    const envVal = process.env.RATE_LIMIT_MAX_GENERATIONS;
+    if (envVal) {
+      const parsed = parseInt(envVal, 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
   }
-  return DEFAULT_MAX_REQUESTS;
+  return ACTION_LIMITS[action] ?? DEFAULT_MAX_REQUESTS;
 }
 
 export interface RateLimitStatus {
@@ -22,7 +29,7 @@ export async function checkRateLimit(
   userId: string,
   action = "generate"
 ): Promise<{ allowed: boolean; status: RateLimitStatus }> {
-  const limit = getMaxRequests();
+  const limit = getMaxRequests(action);
   const windowStart = new Date(Date.now() - WINDOW_MS);
 
   const entries = await prisma.rateLimitEntry.findMany({

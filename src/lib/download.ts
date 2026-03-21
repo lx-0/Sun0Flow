@@ -9,23 +9,9 @@ export interface DownloadableSong {
   createdAt?: Date | string;
 }
 
-/** Build a safe filename: `{song-title}-{YYYY-MM-DD}.mp3` (or .wav) */
-function buildFilename(song: DownloadableSong): string {
-  const title = (song.title ?? "song")
-    .replace(/[^a-zA-Z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .toLowerCase() || "song";
-
-  const date = song.createdAt
-    ? new Date(song.createdAt).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
-  const ext = song.audioUrl.toLowerCase().includes(".wav") ? "wav" : "mp3";
-  return `${title}-${date}.${ext}`;
-}
-
 /**
- * Fetch `song.audioUrl` with streaming progress, then trigger a browser download.
+ * Download a song via the server-side proxy endpoint.
+ * The proxy handles auth, ownership, rate limiting, and hides external URLs.
  * `onProgress` is called with 0–100 (percent). When content-length is unknown,
  * it is called once with 50 while fetching and 100 when done.
  */
@@ -37,9 +23,14 @@ export async function downloadSongFile(
 
   onProgress(0);
 
-  const res = await fetch(song.audioUrl);
+  const res = await fetch(`/api/songs/${song.id}/download`);
+  if (res.status === 429) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "Download rate limit exceeded. Try again later.");
+  }
   if (!res.ok) {
-    throw new Error(`Download failed: ${res.statusText}`);
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? `Download failed: ${res.statusText}`);
   }
 
   const contentLength = res.headers.get("content-length");
@@ -51,7 +42,7 @@ export async function downloadSongFile(
     onProgress(50);
     const blob = await res.blob();
     onProgress(100);
-    triggerDownload(blob, buildFilename(song));
+    triggerDownload(blob, extractFilename(res) ?? buildFallbackFilename(song));
     return;
   }
 
@@ -71,12 +62,32 @@ export async function downloadSongFile(
     }
   }
 
-  const mimeType = song.audioUrl.toLowerCase().includes(".wav")
-    ? "audio/wav"
-    : "audio/mpeg";
+  const mimeType = res.headers.get("content-type") ?? "audio/mpeg";
   const blob = new Blob(chunks, { type: mimeType });
   onProgress(100);
-  triggerDownload(blob, buildFilename(song));
+  triggerDownload(blob, extractFilename(res) ?? buildFallbackFilename(song));
+}
+
+/** Extract filename from Content-Disposition header */
+function extractFilename(res: Response): string | null {
+  const cd = res.headers.get("content-disposition");
+  if (!cd) return null;
+  const match = cd.match(/filename="?([^";\n]+)"?/);
+  return match?.[1] ?? null;
+}
+
+/** Fallback filename when Content-Disposition is missing */
+function buildFallbackFilename(song: DownloadableSong): string {
+  const title = (song.title ?? "song")
+    .replace(/[^a-zA-Z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .toLowerCase() || "song";
+  const date = song.createdAt
+    ? new Date(song.createdAt).toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  const ext = song.audioUrl.toLowerCase().includes(".wav") ? "wav" : "mp3";
+  return `${title}-${date}.${ext}`;
 }
 
 function triggerDownload(blob: Blob, filename: string): void {

@@ -55,7 +55,7 @@ export async function exportAsZip(
     }
     usedNames.add(finalName);
 
-    const res = await fetch(song.audioUrl);
+    const res = await fetch(`/api/songs/${song.id}/download`);
     if (!res.ok) {
       // Skip failed downloads but continue
       onProgress(i + 1, downloadable.length);

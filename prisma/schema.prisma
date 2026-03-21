@@ -80,6 +80,7 @@ model Song {
   publicSlug       String?  @unique
   rating           Int?
   ratingNote       String?
+  downloadCount    Int      @default(0)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
