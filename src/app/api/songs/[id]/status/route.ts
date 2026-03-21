@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTaskStatus } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
+import { logServerError } from "@/lib/error-logger";
 
 const MAX_POLL_ATTEMPTS = 20;
 
@@ -57,7 +58,12 @@ export async function GET(
     let taskResult;
     try {
       taskResult = await getTaskStatus(song.sunoJobId, userApiKey);
-    } catch {
+    } catch (pollError) {
+      logServerError("status-poll", pollError, {
+        userId: session.user.id,
+        route: `/api/songs/${id}/status`,
+        params: { songId: id, sunoJobId: song.sunoJobId, pollCount: newPollCount },
+      });
       // Transient error — increment poll count but don't fail yet
       const updated = await prisma.song.update({
         where: { id },
@@ -133,7 +139,10 @@ export async function GET(
       data: { pollCount: newPollCount },
     });
     return NextResponse.json({ song: updated });
-  } catch {
+  } catch (error) {
+    logServerError("status-route", error, {
+      route: "/api/songs/status",
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
