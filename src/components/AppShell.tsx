@@ -20,6 +20,7 @@ import {
 import { GlobalPlayer } from "./GlobalPlayer";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
+import { NotificationBell } from "./NotificationBell";
 
 const navItems = [
   { label: "Home", href: "/", icon: HomeIcon, dataTour: undefined as string | undefined },
@@ -274,6 +275,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {session?.user && (
             <div className="flex items-center gap-3">
+              <NotificationBell />
               <Link
                 href="/profile"
                 aria-label="Profile"
