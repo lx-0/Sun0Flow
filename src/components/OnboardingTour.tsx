@@ -71,6 +71,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const router = useRouter();
 
   const [currentStep, setCurrentStep] = useState(-1); // -1 = inactive
+  const [completing, setCompleting] = useState(false);
   const [tooltipPos, setTooltipPos] = useState<{
     top: number;
     left: number;
@@ -83,10 +84,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   // Auto-start tour for new users
   useEffect(() => {
-    if (user && user.onboardingCompleted === false && currentStep === -1) {
+    if (user && user.onboardingCompleted === false && currentStep === -1 && !completing) {
       setCurrentStep(0);
     }
-  }, [user, currentStep]);
+  }, [user, currentStep, completing]);
 
   const step = currentStep >= 0 ? TOUR_STEPS[currentStep] : null;
 
@@ -114,8 +115,6 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
 
       const rect = el.getBoundingClientRect();
-      const scrollY = window.scrollY;
-      const scrollX = window.scrollX;
       const OFFSET = 12;
 
       let top = 0;
@@ -124,23 +123,23 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
       switch (step.position) {
         case "bottom":
-          top = rect.bottom + scrollY + OFFSET;
-          left = rect.left + scrollX + rect.width / 2;
+          top = rect.bottom + OFFSET;
+          left = rect.left + rect.width / 2;
           arrowSide = "top";
           break;
         case "top":
-          top = rect.top + scrollY - OFFSET;
-          left = rect.left + scrollX + rect.width / 2;
+          top = rect.top - OFFSET;
+          left = rect.left + rect.width / 2;
           arrowSide = "bottom";
           break;
         case "right":
-          top = rect.top + scrollY + rect.height / 2;
-          left = rect.right + scrollX + OFFSET;
+          top = rect.top + rect.height / 2;
+          left = rect.right + OFFSET;
           arrowSide = "left";
           break;
         case "left":
-          top = rect.top + scrollY + rect.height / 2;
-          left = rect.left + scrollX - OFFSET;
+          top = rect.top + rect.height / 2;
+          left = rect.left - OFFSET;
           arrowSide = "right";
           break;
       }
@@ -166,6 +165,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, [step, pathname]);
 
   const completeTour = useCallback(async () => {
+    setCompleting(true);
     setCurrentStep(-1);
     setTooltipPos(null);
     try {
@@ -206,6 +206,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     try {
       await fetch("/api/onboarding/reset", { method: "POST" });
       await updateSession();
+      setCompleting(false);
       setCurrentStep(0);
     } catch {
       // silent fail

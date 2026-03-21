@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { SessionProvider } from "@/components/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { useTheme } from "@/components/ThemeProvider";
 import { PlusIcon, TrashIcon, SunIcon, MoonIcon, ComputerDesktopIcon, PencilIcon, CheckIcon, XMarkIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
@@ -530,10 +529,8 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <SessionProvider>
-      <AppShell>
-        <SettingsContent />
-      </AppShell>
-    </SessionProvider>
+    <AppShell>
+      <SettingsContent />
+    </AppShell>
   );
 }

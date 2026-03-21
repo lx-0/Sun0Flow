@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { SessionProvider } from "@/components/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { PlaylistDetailView } from "@/components/PlaylistDetailView";
 import { auth } from "@/lib/auth";
@@ -36,12 +35,10 @@ export default async function PlaylistDetailPage({
   }
 
   return (
-    <SessionProvider>
-      <AppShell>
-        <PlaylistDetailView
-          playlist={JSON.parse(JSON.stringify(playlist))}
-        />
-      </AppShell>
-    </SessionProvider>
+    <AppShell>
+      <PlaylistDetailView
+        playlist={JSON.parse(JSON.stringify(playlist))}
+      />
+    </AppShell>
   );
 }

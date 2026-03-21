@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { SessionProvider } from "@/components/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { useToast } from "@/components/Toast";
 import {
@@ -434,10 +433,8 @@ function ProfileContent() {
 
 export default function ProfilePage() {
   return (
-    <SessionProvider>
-      <AppShell>
-        <ProfileContent />
-      </AppShell>
-    </SessionProvider>
+    <AppShell>
+      <ProfileContent />
+    </AppShell>
   );
 }

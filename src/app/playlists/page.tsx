@@ -1,4 +1,3 @@
-import { SessionProvider } from "@/components/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { PlaylistsView } from "@/components/PlaylistsView";
 import { auth } from "@/lib/auth";
@@ -22,10 +21,8 @@ export default async function PlaylistsPage() {
   const playlists = await fetchPlaylists();
 
   return (
-    <SessionProvider>
-      <AppShell>
-        <PlaylistsView playlists={JSON.parse(JSON.stringify(playlists))} />
-      </AppShell>
-    </SessionProvider>
+    <AppShell>
+      <PlaylistsView playlists={JSON.parse(JSON.stringify(playlists))} />
+    </AppShell>
   );
 }

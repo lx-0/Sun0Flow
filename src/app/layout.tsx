@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import { SessionProvider } from "@/components/SessionProvider";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -38,7 +39,9 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} antialiased bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white min-h-screen`}>
         <ServiceWorkerRegistrar />
-        {children}
+        <SessionProvider>
+          {children}
+        </SessionProvider>
       </body>
     </html>
   );

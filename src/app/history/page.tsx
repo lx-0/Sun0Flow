@@ -1,4 +1,3 @@
-import { SessionProvider } from "@/components/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { HistoryView } from "@/components/HistoryView";
 import { auth } from "@/lib/auth";
@@ -22,10 +21,8 @@ export default async function HistoryPage() {
   const songs = await fetchHistory();
 
   return (
-    <SessionProvider>
-      <AppShell>
-        <HistoryView songs={songs} />
-      </AppShell>
-    </SessionProvider>
+    <AppShell>
+      <HistoryView songs={songs} />
+    </AppShell>
   );
 }

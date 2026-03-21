@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { SessionProvider } from "@/components/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { LibraryView } from "@/components/LibraryView";
 import { auth } from "@/lib/auth";
@@ -23,12 +22,10 @@ export default async function FavoritesPage() {
   const songs = await fetchFavorites();
 
   return (
-    <SessionProvider>
-      <AppShell>
-        <Suspense>
-          <LibraryView initialSongs={songs} title="Favorites" enableServerSearch={false} />
-        </Suspense>
-      </AppShell>
-    </SessionProvider>
+    <AppShell>
+      <Suspense>
+        <LibraryView initialSongs={songs} title="Favorites" enableServerSearch={false} />
+      </Suspense>
+    </AppShell>
   );
 }

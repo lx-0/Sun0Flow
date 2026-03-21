@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { SessionProvider } from "@/components/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { ArrowPathIcon, SparklesIcon } from "@heroicons/react/24/outline";
 
@@ -226,10 +225,8 @@ function InspireContent() {
 
 export default function InspirePage() {
   return (
-    <SessionProvider>
-      <AppShell>
-        <InspireContent />
-      </AppShell>
-    </SessionProvider>
+    <AppShell>
+      <InspireContent />
+    </AppShell>
   );
 }

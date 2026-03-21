@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { SessionProvider } from "@/components/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { SongDetailView } from "@/components/SongDetailView";
 import { sunoApi } from "@/lib/sunoapi";
@@ -82,18 +81,16 @@ export default async function SongDetailPage({
   }
 
   return (
-    <SessionProvider>
-      <AppShell>
-        <SongDetailView
-          song={song}
-          isFavorite={dbMeta.isFavorite}
-          sunoJobId={dbMeta.sunoJobId}
-          playlists={playlists}
-          isPublic={dbMeta.isPublic}
-          publicSlug={dbMeta.publicSlug}
-          songTags={songTags}
-        />
-      </AppShell>
-    </SessionProvider>
+    <AppShell>
+      <SongDetailView
+        song={song}
+        isFavorite={dbMeta.isFavorite}
+        sunoJobId={dbMeta.sunoJobId}
+        playlists={playlists}
+        isPublic={dbMeta.isPublic}
+        publicSlug={dbMeta.publicSlug}
+        songTags={songTags}
+      />
+    </AppShell>
   );
 }
