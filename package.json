@@ -20,6 +20,7 @@
     "@rollup/rollup-linux-arm64-gnu": "^4.59.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.18.0",
+    "@types/swagger-ui-react": "^5.18.0",
     "bcryptjs": "^3.0.3",
     "jszip": "^3.10.1",
     "next": "14.2.35",
@@ -27,6 +28,7 @@
     "pg": "^8.20.0",
     "react": "^18",
     "react-dom": "^18",
+    "swagger-ui-react": "^5.32.1",
     "wavesurfer.js": "^7.12.4"
   },
   "devDependencies": {
