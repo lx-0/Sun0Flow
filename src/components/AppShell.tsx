@@ -21,6 +21,7 @@ import { GlobalPlayer } from "./GlobalPlayer";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
 import { NotificationBell } from "./NotificationBell";
+import { SearchBar } from "./SearchBar";
 
 const navItems = [
   { label: "Home", href: "/", icon: HomeIcon, dataTour: undefined as string | undefined },
@@ -270,8 +271,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <span className="text-violet-400 font-bold text-lg tracking-tight md:hidden">SunoFlow</span>
 
-          {/* Spacer for desktop (logo is in sidebar) */}
-          <div className="hidden md:block" />
+          {/* Search bar (visible when authenticated) */}
+          {session?.user && (
+            <div className="flex-1 max-w-md mx-2 sm:mx-4">
+              <SearchBar />
+            </div>
+          )}
 
           {session?.user && (
             <div className="flex items-center gap-3">

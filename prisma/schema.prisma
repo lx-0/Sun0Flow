@@ -87,6 +87,9 @@ model Song {
   playlistSongs PlaylistSong[]
   songTags      SongTag[]
   favorites     Favorite[]
+
+  @@index([userId, title])
+  @@index([userId, prompt])
 }
 
 model Playlist {
@@ -101,6 +104,7 @@ model Playlist {
   songs PlaylistSong[]
 
   @@index([userId])
+  @@index([userId, name])
 }
 
 model PlaylistSong {
