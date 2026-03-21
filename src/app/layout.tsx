@@ -14,6 +14,17 @@ export const metadata: Metadata = {
   title: "SunoFlow — Personal Music Manager",
   description: "Manage your Suno music, discover inspiration, and automate your creative workflow.",
   manifest: "/manifest.json",
+  openGraph: {
+    title: "SunoFlow — Personal Music Manager",
+    description: "Manage your Suno music, discover inspiration, and automate your creative workflow.",
+    type: "website",
+    siteName: "SunoFlow",
+  },
+  twitter: {
+    card: "summary",
+    title: "SunoFlow — Personal Music Manager",
+    description: "Manage your Suno music, discover inspiration, and automate your creative workflow.",
+  },
 };
 
 export const viewport: Viewport = {
