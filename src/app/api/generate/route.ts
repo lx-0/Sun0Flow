@@ -38,50 +38,52 @@ export async function POST(request: Request) {
 
     const userApiKey = await resolveUserApiKey(userId);
 
-    let sunoSongs;
-    let usedMock = false;
+    let savedSongs;
     try {
-      sunoSongs = await generateSong(
+      const result = await generateSong(
         prompt.trim(),
         {
           title: title?.trim() || undefined,
-          tags: tags?.trim() || undefined,
-          makeInstrumental: Boolean(makeInstrumental),
+          style: tags?.trim() || undefined,
+          instrumental: Boolean(makeInstrumental),
         },
         userApiKey
       );
-    } catch {
-      // Fall back to mock when no API key is available
-      sunoSongs = mockSongs.slice(0, 1);
-      usedMock = true;
-    }
 
-    // Persist each returned song to the DB
-    const savedSongs = await Promise.all(
-      sunoSongs.map((s) =>
-        prisma.song.create({
-          data: {
-            userId,
-            sunoJobId: usedMock ? null : s.id,
-            title: s.title || title?.trim() || null,
-            prompt: prompt.trim(),
-            tags: s.tags || tags?.trim() || null,
-            audioUrl: s.audioUrl || null,
-            imageUrl: s.imageUrl || null,
-            duration: s.duration ?? null,
-            lyrics: s.lyrics || null,
-            sunoModel: s.model || null,
-            isInstrumental: Boolean(makeInstrumental),
-            generationStatus:
-              usedMock || s.status === "complete"
-                ? "ready"
-                : s.status === "error"
-                  ? "failed"
-                  : "pending",
-          },
-        })
-      )
-    );
+      // Create a pending song record with the taskId
+      const song = await prisma.song.create({
+        data: {
+          userId,
+          sunoJobId: result.taskId,
+          title: title?.trim() || null,
+          prompt: prompt.trim(),
+          tags: tags?.trim() || null,
+          isInstrumental: Boolean(makeInstrumental),
+          generationStatus: "pending",
+        },
+      });
+
+      savedSongs = [song];
+    } catch {
+      // Fall back to mock when no API key or API call fails
+      const mock = mockSongs[0];
+      const song = await prisma.song.create({
+        data: {
+          userId,
+          title: mock.title || title?.trim() || null,
+          prompt: prompt.trim(),
+          tags: mock.tags || tags?.trim() || null,
+          audioUrl: mock.audioUrl || null,
+          imageUrl: mock.imageUrl || null,
+          duration: mock.duration ?? null,
+          lyrics: mock.lyrics || null,
+          sunoModel: mock.model || null,
+          isInstrumental: Boolean(makeInstrumental),
+          generationStatus: "ready",
+        },
+      });
+      savedSongs = [song];
+    }
 
     // Record rate limit hit after successful generation
     await recordRateLimitHit(userId);

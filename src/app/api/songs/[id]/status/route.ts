@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getSongById } from "@/lib/sunoapi";
+import { getTaskStatus } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 
 const MAX_POLL_ATTEMPTS = 20;
@@ -28,11 +28,11 @@ export async function GET(
       return NextResponse.json({ song });
     }
 
-    // No sunoJobId to poll — treat as failed after max attempts
+    // No sunoJobId (taskId) to poll — treat as failed
     if (!song.sunoJobId) {
       const updated = await prisma.song.update({
         where: { id },
-        data: { generationStatus: "failed", errorMessage: "No Suno job ID" },
+        data: { generationStatus: "failed", errorMessage: "No Suno task ID" },
       });
       return NextResponse.json({ song: updated });
     }
@@ -52,11 +52,11 @@ export async function GET(
       return NextResponse.json({ song: updated });
     }
 
-    // Check status with Suno API
+    // Check task status with Suno API
     const userApiKey = await resolveUserApiKey(session.user.id);
-    let sunoSong;
+    let taskResult;
     try {
-      sunoSong = await getSongById(song.sunoJobId, userApiKey);
+      taskResult = await getTaskStatus(song.sunoJobId, userApiKey);
     } catch {
       // Transient error — increment poll count but don't fail yet
       const updated = await prisma.song.update({
@@ -66,35 +66,68 @@ export async function GET(
       return NextResponse.json({ song: updated });
     }
 
-    if (sunoSong.status === "complete") {
+    const isComplete = taskResult.status === "SUCCESS";
+    const isFailed =
+      taskResult.status === "CREATE_TASK_FAILED" ||
+      taskResult.status === "GENERATE_AUDIO_FAILED" ||
+      taskResult.status === "CALLBACK_EXCEPTION" ||
+      taskResult.status === "SENSITIVE_WORD_ERROR";
+
+    if (isComplete && taskResult.songs.length > 0) {
+      const firstSong = taskResult.songs[0];
+      // Update the primary song record with the first result
       const updated = await prisma.song.update({
         where: { id },
         data: {
           generationStatus: "ready",
-          audioUrl: sunoSong.audioUrl || song.audioUrl,
-          imageUrl: sunoSong.imageUrl || song.imageUrl,
-          duration: sunoSong.duration ?? song.duration,
-          lyrics: sunoSong.lyrics || song.lyrics,
-          title: sunoSong.title || song.title,
+          audioUrl: firstSong.audioUrl || song.audioUrl,
+          imageUrl: firstSong.imageUrl || song.imageUrl,
+          duration: firstSong.duration ?? song.duration,
+          lyrics: firstSong.lyrics || song.lyrics,
+          title: firstSong.title || song.title,
+          tags: firstSong.tags || song.tags,
+          sunoModel: firstSong.model || song.sunoModel,
           pollCount: newPollCount,
         },
       });
+
+      // If the API returned additional songs, create them as new records
+      for (let i = 1; i < taskResult.songs.length; i++) {
+        const extra = taskResult.songs[i];
+        await prisma.song.create({
+          data: {
+            userId: song.userId,
+            sunoJobId: extra.id || null,
+            title: extra.title || song.title,
+            prompt: song.prompt,
+            tags: extra.tags || song.tags,
+            audioUrl: extra.audioUrl || null,
+            imageUrl: extra.imageUrl || null,
+            duration: extra.duration ?? null,
+            lyrics: extra.lyrics || null,
+            sunoModel: extra.model || null,
+            isInstrumental: song.isInstrumental,
+            generationStatus: "ready",
+          },
+        });
+      }
+
       return NextResponse.json({ song: updated });
     }
 
-    if (sunoSong.status === "error") {
+    if (isFailed) {
       const updated = await prisma.song.update({
         where: { id },
         data: {
           generationStatus: "failed",
           pollCount: newPollCount,
-          errorMessage: "Suno generation failed",
+          errorMessage: taskResult.errorMessage || `Generation failed: ${taskResult.status}`,
         },
       });
       return NextResponse.json({ song: updated });
     }
 
-    // Still pending/streaming — update poll count
+    // Still pending — update poll count
     const updated = await prisma.song.update({
       where: { id },
       data: { pollCount: newPollCount },

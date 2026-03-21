@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   generateSong,
+  getTaskStatus,
   listSongs,
   getSongById,
   downloadSong,
@@ -23,6 +24,37 @@ const MOCK_SONG = {
   createdAt: "2026-03-19T00:00:00.000Z",
 };
 
+const MOCK_TASK_RESPONSE = {
+  code: 200,
+  msg: "success",
+  data: { taskId: "task-abc123" },
+};
+
+const MOCK_TASK_STATUS_SUCCESS = {
+  code: 200,
+  msg: "success",
+  data: {
+    taskId: "task-abc123",
+    status: "SUCCESS",
+    errorMessage: null,
+    response: {
+      sunoData: [
+        {
+          id: "audio-1",
+          title: "Generated Song",
+          prompt: "upbeat pop",
+          tags: "pop",
+          audio_url: "https://cdn.sunoapi.org/audio/audio-1.mp3",
+          image_url: "https://cdn.sunoapi.org/images/audio-1.jpg",
+          duration: 180,
+          model_name: "V4",
+          createTime: "2026-03-19T00:00:00.000Z",
+        },
+      ],
+    },
+  },
+};
+
 // ─── fetch mock helpers ───────────────────────────────────────────────────────
 
 function mockFetchOnce(body: unknown, status = 200): void {
@@ -36,7 +68,7 @@ function mockFetchOnce(body: unknown, status = 200): void {
 
 function mockFetchError(status: number, message = "Server error"): void {
   vi.mocked(fetch).mockResolvedValueOnce(
-    new Response(JSON.stringify({ message }), {
+    new Response(JSON.stringify({ msg: message }), {
       status,
       headers: { "Content-Type": "application/json" },
     })
@@ -58,38 +90,45 @@ afterEach(() => {
 // ─── generateSong ─────────────────────────────────────────────────────────────
 
 describe("generateSong", () => {
-  it("returns array of songs on success (clips key)", async () => {
-    mockFetchOnce({ clips: [MOCK_SONG] });
+  it("returns taskId on success", async () => {
+    mockFetchOnce(MOCK_TASK_RESPONSE);
 
-    const result = await generateSong("A happy tune", { tags: "pop" });
+    const result = await generateSong("A happy tune", { style: "pop" });
 
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe("song-123");
+    expect(result.taskId).toBe("task-abc123");
     expect(fetch).toHaveBeenCalledWith(
       "https://api.sunoapi.org/api/v1/generate",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ prompt: "A happy tune", tags: "pop" }),
       })
     );
   });
 
-  it("returns array of songs on success (data key)", async () => {
-    mockFetchOnce({ data: [MOCK_SONG] });
+  it("sends required fields: instrumental, customMode, model, callBackUrl", async () => {
+    mockFetchOnce(MOCK_TASK_RESPONSE);
+    await generateSong("test", { title: "My Song", style: "rock" });
 
-    const result = await generateSong("A happy tune");
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe("song-123");
+    const callInit = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(callInit.body as string);
+    expect(body.instrumental).toBe(false);
+    expect(body.customMode).toBe(true);
+    expect(body.model).toBe("V4");
+    expect(body.callBackUrl).toBeDefined();
+    expect(body.title).toBe("My Song");
+    expect(body.style).toBe("rock");
   });
 
-  it("returns empty array when response has no known key", async () => {
-    mockFetchOnce({});
-    const result = await generateSong("A happy tune");
-    expect(result).toEqual([]);
+  it("sets customMode=false when no title or style", async () => {
+    mockFetchOnce(MOCK_TASK_RESPONSE);
+    await generateSong("upbeat electronic");
+
+    const callInit = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(callInit.body as string);
+    expect(body.customMode).toBe(false);
   });
 
   it("sends Authorization header with API key", async () => {
-    mockFetchOnce({ clips: [MOCK_SONG] });
+    mockFetchOnce(MOCK_TASK_RESPONSE);
     await generateSong("test");
 
     const callInit = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
@@ -109,6 +148,64 @@ describe("generateSong", () => {
     const err = await generateSong("test").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(SunoApiError);
     expect(err).toMatchObject({ status: 400, message: "Bad request" });
+  });
+
+  it("throws when response has no taskId", async () => {
+    mockFetchOnce({ code: 200, msg: "success", data: {} });
+    await expect(generateSong("test")).rejects.toThrow("No taskId returned");
+  });
+});
+
+// ─── getTaskStatus ────────────────────────────────────────────────────────────
+
+describe("getTaskStatus", () => {
+  it("returns status and songs on success", async () => {
+    mockFetchOnce(MOCK_TASK_STATUS_SUCCESS);
+
+    const result = await getTaskStatus("task-abc123");
+
+    expect(result.status).toBe("SUCCESS");
+    expect(result.songs).toHaveLength(1);
+    expect(result.songs[0].audioUrl).toBe("https://cdn.sunoapi.org/audio/audio-1.mp3");
+    expect(result.songs[0].status).toBe("complete");
+  });
+
+  it("returns pending status when task is still processing", async () => {
+    mockFetchOnce({
+      code: 200,
+      msg: "success",
+      data: { taskId: "task-abc123", status: "PENDING", response: {} },
+    });
+
+    const result = await getTaskStatus("task-abc123");
+    expect(result.status).toBe("PENDING");
+    expect(result.songs).toHaveLength(0);
+  });
+
+  it("returns error status for failed tasks", async () => {
+    mockFetchOnce({
+      code: 200,
+      msg: "success",
+      data: {
+        taskId: "task-abc123",
+        status: "GENERATE_AUDIO_FAILED",
+        errorMessage: "Content policy violation",
+        response: {},
+      },
+    });
+
+    const result = await getTaskStatus("task-abc123");
+    expect(result.status).toBe("GENERATE_AUDIO_FAILED");
+    expect(result.errorMessage).toBe("Content policy violation");
+  });
+
+  it("maps snake_case fields from API response", async () => {
+    mockFetchOnce(MOCK_TASK_STATUS_SUCCESS);
+    const result = await getTaskStatus("task-abc123");
+    const song = result.songs[0];
+    expect(song.audioUrl).toBe("https://cdn.sunoapi.org/audio/audio-1.mp3");
+    expect(song.imageUrl).toBe("https://cdn.sunoapi.org/images/audio-1.jpg");
+    expect(song.model).toBe("V4");
   });
 });
 
@@ -289,8 +386,9 @@ describe("non-retryable error propagation", () => {
 // ─── sunoApi convenience export ───────────────────────────────────────────────
 
 describe("sunoApi singleton", () => {
-  it("exposes all four methods", () => {
+  it("exposes all five methods", () => {
     expect(typeof sunoApi.generateSong).toBe("function");
+    expect(typeof sunoApi.getTaskStatus).toBe("function");
     expect(typeof sunoApi.listSongs).toBe("function");
     expect(typeof sunoApi.getSongById).toBe("function");
     expect(typeof sunoApi.downloadSong).toBe("function");
