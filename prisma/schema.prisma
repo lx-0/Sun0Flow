@@ -69,6 +69,7 @@ model User {
   adminLogs        AdminLog[] @relation("adminLogs")
   reports          Report[]
   notifications    Notification[]
+  rssFeeds         RssFeedSubscription[]
 }
 
 model Song {
@@ -259,6 +260,19 @@ model Notification {
 
   @@index([userId, read, createdAt])
   @@index([userId, createdAt])
+}
+
+model RssFeedSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  url       String
+  title     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, url])
+  @@index([userId])
 }
 
 model VerificationToken {

@@ -13,6 +13,8 @@ interface FeedItem {
   link?: string;
   source?: string;
   pubDate?: string;
+  mood?: string;
+  topics?: string[];
 }
 
 interface FeedResult {
@@ -35,12 +37,10 @@ interface InstagramPost {
   error?: string;
 }
 
-// ─── Storage keys ───
+// ─── Storage keys (Instagram still uses localStorage) ───
 
-const RSS_FEEDS_KEY = "sunoflow_rss_feeds";
 const IG_POSTS_KEY = "sunoflow_ig_posts";
 const IG_CACHE_KEY = "sunoflow_ig_cache";
-const RSS_CACHE_KEY = "sunoflow_rss_cache";
 
 type InspireTab = "all" | "rss" | "instagram";
 
@@ -57,6 +57,22 @@ function useStoredUrls(key: string) {
     }
   }, [key]);
   return urls;
+}
+
+function useDbFeedUrls() {
+  const [urls, setUrls] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    fetch("/api/rss/feeds")
+      .then((r) => r.json())
+      .then((data) => {
+        const feedUrls = (data.feeds ?? []).map((f: { url: string }) => f.url);
+        setUrls(feedUrls);
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+  return { urls, loaded };
 }
 
 // ─── Mood badge colors ───
@@ -230,7 +246,16 @@ function RssFeedList({
             key={i}
             className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4"
           >
-            <p className="text-xs text-violet-400 font-medium mb-1">{item.source}</p>
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-xs text-violet-400 font-medium">{item.source}</p>
+              {item.mood && item.mood !== "neutral" && (
+                <span
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${MOOD_COLORS[item.mood] ?? MOOD_COLORS.neutral}`}
+                >
+                  {item.mood}
+                </span>
+              )}
+            </div>
             <p className="text-sm font-semibold text-gray-900 dark:text-white leading-snug">
               {item.title}
             </p>
@@ -239,12 +264,24 @@ function RssFeedList({
                 {item.description}
               </p>
             )}
+            {item.topics && item.topics.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {item.topics.map((topic) => (
+                  <span
+                    key={topic}
+                    className="text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded"
+                  >
+                    {topic}
+                  </span>
+                ))}
+              </div>
+            )}
             <button
               onClick={() => onUseAsPrompt(item)}
               className="mt-3 flex items-center gap-1.5 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors min-h-[44px]"
             >
               <SparklesIcon className="w-4 h-4" />
-              Use as prompt
+              Generate from this
             </button>
           </div>
         );
@@ -257,7 +294,7 @@ function RssFeedList({
 
 function InspireContent() {
   const router = useRouter();
-  const feedUrls = useStoredUrls(RSS_FEEDS_KEY);
+  const { urls: feedUrls, loaded: feedsLoaded } = useDbFeedUrls();
   const igUrls = useStoredUrls(IG_POSTS_KEY);
 
   const [feeds, setFeeds] = useState<FeedResult[]>([]);
@@ -276,21 +313,6 @@ function InspireContent() {
 
   // ── RSS fetching ──
 
-  const loadRssCache = useCallback(() => {
-    try {
-      const cached = localStorage.getItem(RSS_CACHE_KEY);
-      if (cached) {
-        const { feeds: cachedFeeds, timestamp } = JSON.parse(cached);
-        setFeeds(cachedFeeds);
-        setRssRefreshed(new Date(timestamp));
-        return true;
-      }
-    } catch {
-      // ignore
-    }
-    return false;
-  }, []);
-
   const fetchRssFeeds = useCallback(async (urls: string[]) => {
     if (urls.length === 0) return;
     setRssLoading(true);
@@ -303,16 +325,7 @@ function InspireContent() {
       if (!res.ok) throw new Error("Fetch failed");
       const data = await res.json();
       setFeeds(data.feeds);
-      const now = new Date();
-      setRssRefreshed(now);
-      try {
-        localStorage.setItem(
-          RSS_CACHE_KEY,
-          JSON.stringify({ feeds: data.feeds, timestamp: now.toISOString() })
-        );
-      } catch {
-        // storage quota — ignore
-      }
+      setRssRefreshed(new Date());
     } catch {
       // keep existing feeds
     } finally {
@@ -369,10 +382,9 @@ function InspireContent() {
   // ── Load on mount ──
 
   useEffect(() => {
-    if (feedUrls.length === 0) return;
-    loadRssCache();
+    if (!feedsLoaded || feedUrls.length === 0) return;
     fetchRssFeeds(feedUrls);
-  }, [feedUrls, loadRssCache, fetchRssFeeds]);
+  }, [feedUrls, feedsLoaded, fetchRssFeeds]);
 
   useEffect(() => {
     if (igUrls.length === 0) return;
@@ -389,9 +401,12 @@ function InspireContent() {
   );
 
   const handleRssPrompt = (item: FeedItem) => {
-    const prompt = item.title
-      ? item.title + (item.description ? ". " + item.description.slice(0, 100) : "")
-      : item.description;
+    const parts: string[] = [];
+    if (item.title) parts.push(item.title);
+    if (item.description) parts.push(item.description.slice(0, 100));
+    if (item.topics && item.topics.length > 0) parts.push(item.topics.join(", "));
+    if (item.mood && item.mood !== "neutral") parts.push(`${item.mood} mood`);
+    const prompt = parts.join(". ");
     router.push(`/?prompt=${encodeURIComponent(prompt)}`);
   };
 
@@ -408,7 +423,7 @@ function InspireContent() {
     }
   };
 
-  const isLoading = rssLoading || igLoading;
+  const isLoading = rssLoading || igLoading || !feedsLoaded;
 
   const lastRefreshed = (() => {
     const times = [rssRefreshed, igRefreshed].filter(Boolean) as Date[];
@@ -418,7 +433,7 @@ function InspireContent() {
 
   // ── Empty state ──
 
-  if (!hasAnySources) {
+  if (feedsLoaded && !hasAnySources) {
     return (
       <div className="px-4 py-6 space-y-4">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white">Inspire</h2>

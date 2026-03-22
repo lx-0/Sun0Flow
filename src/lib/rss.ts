@@ -4,6 +4,8 @@ export interface RssItem {
   link?: string;
   source?: string;
   pubDate?: string;
+  mood?: string;
+  topics?: string[];
 }
 
 export interface FeedResult {
@@ -42,6 +44,56 @@ function extractAtomLink(itemXml: string): string {
     /<link[^>]+href=["']([^"']+)["'][^>]*\/?>/i
   );
   return match ? match[1] : "";
+}
+
+// ─── Mood / Topic Extraction ───
+
+const MOOD_KEYWORDS: Record<string, string[]> = {
+  energetic: ["energy", "upbeat", "dance", "party", "fast", "hype", "pump", "power", "fire"],
+  chill: ["chill", "relax", "calm", "peaceful", "mellow", "easy", "smooth", "laid-back"],
+  melancholic: ["sad", "melanchol", "lonely", "heartbreak", "loss", "grief", "sorrow", "cry"],
+  romantic: ["love", "romance", "romantic", "heart", "passion", "kiss", "tender"],
+  uplifting: ["hope", "inspir", "uplift", "joy", "happy", "bright", "sunshine", "positive"],
+  dark: ["dark", "shadow", "night", "doom", "heavy", "grim", "sinister"],
+  dreamy: ["dream", "ethereal", "float", "ambient", "space", "cosmic", "haze"],
+  intense: ["intense", "rage", "fury", "epic", "battle", "storm", "chaos"],
+};
+
+const TOPIC_KEYWORDS = [
+  "rock", "pop", "jazz", "blues", "classical", "electronic", "hip-hop", "rap",
+  "country", "folk", "metal", "punk", "r&b", "soul", "reggae", "latin",
+  "ambient", "lo-fi", "cinematic", "orchestral", "acoustic", "vocal",
+  "guitar", "piano", "synth", "drums", "bass", "violin",
+  "summer", "winter", "night", "morning", "rain", "ocean", "city", "nature",
+  "love", "freedom", "adventure", "nostalgia", "rebellion", "peace",
+];
+
+function detectMood(text: string): string {
+  const lower = text.toLowerCase();
+  let best = "neutral";
+  let bestScore = 0;
+  for (const [mood, keywords] of Object.entries(MOOD_KEYWORDS)) {
+    const score = keywords.filter((kw) => lower.includes(kw)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      best = mood;
+    }
+  }
+  return best;
+}
+
+function extractTopics(text: string): string[] {
+  const lower = text.toLowerCase();
+  return TOPIC_KEYWORDS.filter((t) => lower.includes(t)).slice(0, 5);
+}
+
+function enrichItem(item: RssItem): RssItem {
+  const text = `${item.title} ${item.description}`;
+  return {
+    ...item,
+    mood: detectMood(text),
+    topics: extractTopics(text),
+  };
 }
 
 export async function fetchFeed(url: string): Promise<FeedResult> {
@@ -110,8 +162,8 @@ export async function fetchFeed(url: string): Promise<FeedResult> {
       });
     }
 
-    // Drop items with no title
-    items = items.filter((i) => i.title.length > 0);
+    // Drop items with no title, then enrich with mood/topics
+    items = items.filter((i) => i.title.length > 0).map(enrichItem);
 
     return { url, feedTitle, items };
   } catch (err) {

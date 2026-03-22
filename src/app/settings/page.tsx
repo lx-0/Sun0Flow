@@ -7,7 +7,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { PlusIcon, TrashIcon, SunIcon, MoonIcon, ComputerDesktopIcon, PencilIcon, CheckIcon, XMarkIcon, ArrowPathIcon, KeyIcon, ArrowDownTrayIcon, UserCircleIcon, Cog6ToothIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { useOnboarding } from "@/components/OnboardingTour";
 
-const RSS_FEEDS_KEY = "sunoflow_rss_feeds";
+// RSS feeds are now stored in the database via /api/rss/feeds
 
 const AVAILABLE_STYLES = ["pop", "rock", "electronic", "hip-hop", "jazz", "classical", "r&b", "country", "folk", "ambient", "metal", "latin", "instrumental", "lo-fi", "cinematic"];
 
@@ -526,53 +526,55 @@ function PasswordSection() {
 }
 
 function RssFeedsSection() {
-  const [feedUrls, setFeedUrls] = useState<string[]>([]);
+  const [feeds, setFeeds] = useState<{ id: string; url: string; title: string | null }[]>([]);
   const [newUrl, setNewUrl] = useState("");
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(RSS_FEEDS_KEY);
-      setFeedUrls(stored ? JSON.parse(stored) : []);
-    } catch {
-      setFeedUrls([]);
-    }
+    fetch("/api/rss/feeds")
+      .then((r) => r.json())
+      .then((data) => setFeeds(data.feeds ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  const persist = (urls: string[]) => {
-    setFeedUrls(urls);
-    try {
-      localStorage.setItem(RSS_FEEDS_KEY, JSON.stringify(urls));
-    } catch {
-      // quota exceeded — ignore
-    }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  const addFeed = () => {
+  const addFeed = async () => {
     const url = newUrl.trim();
     if (!url) return;
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       setError("URL must start with http:// or https://");
       return;
     }
-    if (feedUrls.includes(url)) {
-      setError("Feed already added");
-      return;
-    }
     setError("");
-    setNewUrl("");
-    persist([...feedUrls, url]);
+    setAdding(true);
+    try {
+      const res = await fetch("/api/rss/feeds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Failed to add feed");
+        return;
+      }
+      setFeeds((prev) => [...prev, data.feed]);
+      setNewUrl("");
+    } catch {
+      setError("Network error");
+    } finally {
+      setAdding(false);
+    }
   };
 
-  const removeFeed = (url: string) => {
-    persist(feedUrls.filter((u) => u !== url));
+  const removeFeed = async (id: string) => {
+    setFeeds((prev) => prev.filter((f) => f.id !== id));
     try {
-      localStorage.removeItem("sunoflow_rss_cache");
+      await fetch(`/api/rss/feeds?id=${id}`, { method: "DELETE" });
     } catch {
-      // ignore
+      // ignore — optimistic removal
     }
   };
 
@@ -605,28 +607,30 @@ function RssFeedsSection() {
         />
         <button
           onClick={addFeed}
-          className="flex items-center gap-1 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
+          disabled={adding}
+          className="flex items-center gap-1 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
           <PlusIcon className="w-4 h-4" />
-          Add
+          {adding ? "Adding..." : "Add"}
         </button>
       </div>
 
       <FieldError error={error} />
-      {saved && <p className="text-xs text-green-400">Saved!</p>}
 
-      {feedUrls.length === 0 ? (
+      {loading ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading feeds...</p>
+      ) : feeds.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">No feeds added yet.</p>
       ) : (
         <ul className="space-y-2">
-          {feedUrls.map((url) => (
+          {feeds.map((feed) => (
             <li
-              key={url}
+              key={feed.id}
               className="flex items-center gap-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-2"
             >
-              <span className="flex-1 text-xs text-gray-700 dark:text-gray-300 truncate">{url}</span>
+              <span className="flex-1 text-xs text-gray-700 dark:text-gray-300 truncate">{feed.url}</span>
               <button
-                onClick={() => removeFeed(url)}
+                onClick={() => removeFeed(feed.id)}
                 className="text-gray-400 dark:text-gray-500 hover:text-red-400 transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 aria-label="Remove feed"
               >
