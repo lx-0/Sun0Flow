@@ -21,6 +21,7 @@ import {
   MicrophoneIcon,
   SpeakerWaveIcon,
   XMarkIcon,
+  ScissorsIcon,
 } from "@heroicons/react/24/solid";
 import { HeartIcon as HeartOutlineIcon } from "@heroicons/react/24/outline";
 import type { SunoSong } from "@/lib/sunoapi";
@@ -213,6 +214,139 @@ function RemixModal({ action, songTitle, songTags, songDuration, onClose, onSubm
   );
 }
 
+// ─── Separate Vocals Modal ───────────────────────────────────────────────────
+
+interface SeparateVocalsModalProps {
+  onClose: () => void;
+  onSubmit: (type: "separate_vocal" | "split_stem") => void;
+  submitting: boolean;
+}
+
+function SeparateVocalsModal({ onClose, onSubmit, submitting }: SeparateVocalsModalProps) {
+  const [mode, setMode] = useState<"separate_vocal" | "split_stem">("separate_vocal");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Separate Vocals</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1">
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Split this track into separate vocal and instrumental stems.
+        </p>
+
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Quality mode</label>
+          <button
+            onClick={() => setMode("separate_vocal")}
+            className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+              mode === "separate_vocal"
+                ? "border-violet-500 bg-violet-50 dark:bg-violet-900/20"
+                : "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600"
+            }`}
+          >
+            <span className="text-sm font-medium text-gray-900 dark:text-white block">Standard</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">Vocals + Instrumental &middot; 10 credits</span>
+          </button>
+          <button
+            onClick={() => setMode("split_stem")}
+            className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+              mode === "split_stem"
+                ? "border-violet-500 bg-violet-50 dark:bg-violet-900/20"
+                : "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600"
+            }`}
+          >
+            <span className="text-sm font-medium text-gray-900 dark:text-white block">High Quality</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">Full stem separation &middot; 50 credits</span>
+          </button>
+        </div>
+
+        <button
+          onClick={() => onSubmit(mode)}
+          disabled={submitting}
+          className="w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
+        >
+          {submitting ? "Separating..." : `Separate (${mode === "split_stem" ? "50" : "10"} credits)`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stem Viewer ────────────────────────────────────────────────────────────
+
+interface StemViewerProps {
+  stems: StemTrack[];
+  onDownload: (stem: StemTrack) => void;
+}
+
+interface StemTrack {
+  id: string;
+  title: string | null;
+  audioUrl: string | null;
+  generationStatus: string;
+  duration: number | null;
+}
+
+function StemViewer({ stems, onDownload }: StemViewerProps) {
+  return (
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3">
+      <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+        <ScissorsIcon className="w-4 h-4 text-violet-400" aria-hidden="true" />
+        Separated Stems
+      </h2>
+      <div className="space-y-2">
+        {stems.map((stem) => (
+          <div
+            key={stem.id}
+            className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700"
+          >
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-medium text-gray-900 dark:text-white block truncate">
+                {stem.title || "Stem"}
+              </span>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  stem.generationStatus === "ready"
+                    ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                    : stem.generationStatus === "failed"
+                    ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                    : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
+                }`}>
+                  {stem.generationStatus === "ready" ? "ready" : stem.generationStatus === "failed" ? "failed" : "processing"}
+                </span>
+                {stem.duration != null && (
+                  <span className="text-xs text-gray-400">{formatTime(stem.duration)}</span>
+                )}
+              </div>
+            </div>
+            {stem.generationStatus === "ready" && stem.audioUrl && (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <audio src={stem.audioUrl} controls preload="none" className="h-8 w-36" />
+                <button
+                  onClick={() => onDownload(stem)}
+                  aria-label={`Download ${stem.title || "stem"}`}
+                  className="p-2 text-gray-500 hover:text-violet-500 dark:text-gray-400 dark:hover:text-violet-400 transition-colors"
+                >
+                  <ArrowDownTrayIcon className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            {stem.generationStatus === "pending" && (
+              <div className="flex-shrink-0">
+                <div className="w-5 h-5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PlaylistOption {
@@ -307,6 +441,12 @@ export function SongDetailView({
 
   // Report modal
   const [reportOpen, setReportOpen] = useState(false);
+
+  // Vocal separation state
+  const [separateModalOpen, setSeparateModalOpen] = useState(false);
+  const [separateSubmitting, setSeparateSubmitting] = useState(false);
+  const [stems, setStems] = useState<StemTrack[]>([]);
+  const stemPollRef = useRef<NodeJS.Timeout | null>(null);
 
   const hasAudio = Boolean(song.audioUrl);
 
@@ -438,6 +578,89 @@ export function SongDetailView({
     const url = `${window.location.origin}/s/${publicSlug}`;
     await navigator.clipboard.writeText(url);
     toast("Link copied to clipboard", "success");
+  }
+
+  // Poll a stem song for status updates until terminal
+  function pollStemStatus(stemId: string) {
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/songs/${stemId}/status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const updated = data.song;
+        setStems((prev) =>
+          prev.map((s) =>
+            s.id === stemId
+              ? { ...s, generationStatus: updated.generationStatus, audioUrl: updated.audioUrl, duration: updated.duration }
+              : s
+          )
+        );
+        if (updated.generationStatus === "ready" || updated.generationStatus === "failed") {
+          return; // stop polling
+        }
+        stemPollRef.current = setTimeout(poll, 5000);
+      } catch {
+        // retry on network error
+        stemPollRef.current = setTimeout(poll, 10000);
+      }
+    };
+    stemPollRef.current = setTimeout(poll, 3000);
+  }
+
+  // Clean up stem polling on unmount
+  useEffect(() => {
+    return () => {
+      if (stemPollRef.current) clearTimeout(stemPollRef.current);
+    };
+  }, []);
+
+  async function handleSeparateVocals(type: "separate_vocal" | "split_stem") {
+    if (separateSubmitting) return;
+    setSeparateSubmitting(true);
+    try {
+      const res = await fetch(`/api/songs/${song.id}/separate-vocals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        toast(result.error ?? "Vocal separation failed", "error");
+        return;
+      }
+      toast("Vocal separation started!", "success");
+      setSeparateModalOpen(false);
+      const newStem: StemTrack = {
+        id: result.song.id,
+        title: result.song.title,
+        audioUrl: result.song.audioUrl,
+        generationStatus: result.song.generationStatus,
+        duration: result.song.duration,
+      };
+      setStems((prev) => [...prev, newStem]);
+      if (newStem.generationStatus === "pending") {
+        pollStemStatus(newStem.id);
+      }
+    } catch {
+      toast("Vocal separation failed", "error");
+    } finally {
+      setSeparateSubmitting(false);
+    }
+  }
+
+  async function handleDownloadStem(stem: StemTrack) {
+    if (!stem.audioUrl) return;
+    try {
+      const a = document.createElement("a");
+      a.href = stem.audioUrl;
+      a.download = `${stem.title || "stem"}.mp3`;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch {
+      toast("Download failed", "error");
+    }
   }
 
   async function handleCreateVariation() {
@@ -771,7 +994,7 @@ export function SongDetailView({
             <button
               onClick={() => setRemixAction("add-vocals")}
               disabled={initialVariationCount >= maxVariations}
-              className="flex items-center justify-center gap-2 px-3 py-2.5 bg-pink-600 hover:bg-pink-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px] col-span-2"
+              className="flex items-center justify-center gap-2 px-3 py-2.5 bg-pink-600 hover:bg-pink-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
             >
               <MicrophoneIcon className="w-4 h-4" aria-hidden="true" />
               Add Vocals
@@ -780,12 +1003,20 @@ export function SongDetailView({
             <button
               onClick={() => setRemixAction("add-instrumental")}
               disabled={initialVariationCount >= maxVariations}
-              className="flex items-center justify-center gap-2 px-3 py-2.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px] col-span-2"
+              className="flex items-center justify-center gap-2 px-3 py-2.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
             >
               <SpeakerWaveIcon className="w-4 h-4" aria-hidden="true" />
               Add Instrumental
             </button>
           )}
+          <button
+            onClick={() => setSeparateModalOpen(true)}
+            disabled={!hasAudio}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
+          >
+            <ScissorsIcon className="w-4 h-4" aria-hidden="true" />
+            Separate Vocals
+          </button>
         </div>
       </div>
 
@@ -800,6 +1031,20 @@ export function SongDetailView({
           onSubmit={handleRemixSubmit}
           submitting={remixSubmitting}
         />
+      )}
+
+      {/* Separate Vocals modal */}
+      {separateModalOpen && (
+        <SeparateVocalsModal
+          onClose={() => setSeparateModalOpen(false)}
+          onSubmit={handleSeparateVocals}
+          submitting={separateSubmitting}
+        />
+      )}
+
+      {/* Stem viewer */}
+      {stems.length > 0 && (
+        <StemViewer stems={stems} onDownload={handleDownloadStem} />
       )}
 
       {/* Parent link */}
