@@ -30,7 +30,7 @@ export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request, secret: process.env.AUTH_SECRET });
   const { pathname } = request.nextUrl;
 
-  const publicPaths = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/api/auth", "/api/register", "/api/health", "/s/"];
+  const publicPaths = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/api/auth", "/api/register", "/api/health", "/api/agent-skill", "/s/"];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   // Rate limit public share pages

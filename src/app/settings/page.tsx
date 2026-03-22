@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { AppShell } from "@/components/AppShell";
 import { useTheme } from "@/components/ThemeProvider";
-import { PlusIcon, TrashIcon, SunIcon, MoonIcon, ComputerDesktopIcon, PencilIcon, CheckIcon, XMarkIcon, ArrowPathIcon, KeyIcon, ArrowDownTrayIcon, UserCircleIcon, Cog6ToothIcon, ShieldCheckIcon, BellIcon, SpeakerWaveIcon, ChartBarIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, TrashIcon, SunIcon, MoonIcon, ComputerDesktopIcon, PencilIcon, CheckIcon, XMarkIcon, ArrowPathIcon, KeyIcon, ArrowDownTrayIcon, UserCircleIcon, Cog6ToothIcon, ShieldCheckIcon, BellIcon, SpeakerWaveIcon, ChartBarIcon, ExclamationTriangleIcon, CommandLineIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { useOnboarding } from "@/components/OnboardingTour";
 
 // RSS feeds are now stored in the database via /api/rss/feeds
@@ -379,6 +379,8 @@ function AccountTab() {
       <ApiKeySection />
       <div className="border-t border-gray-200 dark:border-gray-800" />
       <PersonalApiKeysSection />
+      <div className="border-t border-gray-200 dark:border-gray-800" />
+      <AgentSkillSection />
       <div className="border-t border-gray-200 dark:border-gray-800" />
       <RateLimitSection />
       <div className="border-t border-gray-200 dark:border-gray-800" />
@@ -946,6 +948,91 @@ function PlaybackDefaultsSection() {
             </button>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function AgentSkillSection() {
+  const [copied, setCopied] = useState(false);
+
+  const installCommand = "claude skill add --url /api/agent-skill";
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(installCommand);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback: do nothing
+    }
+  };
+
+  const handleDownload = () => {
+    window.location.href = "/api/agent-skill";
+  };
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+          <CommandLineIcon className="w-5 h-5 text-violet-500" />
+          Connect Your Agent
+        </h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          Let AI agents (like Claude Code) manage your music library, generate songs, and organize playlists using the SunoFlow API.
+        </p>
+      </div>
+
+      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-3 border border-gray-200 dark:border-gray-700">
+        <div>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">1. Download the Claude Code skill file</p>
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 transition-colors min-h-[44px]"
+          >
+            <ArrowDownTrayIcon className="w-4 h-4" />
+            Download Claude Skill
+          </button>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">2. Or install directly via CLI</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-gray-900 dark:bg-gray-950 text-green-400 text-xs px-3 py-2.5 rounded-lg font-mono overflow-x-auto">
+              {installCommand}
+            </code>
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1 px-3 py-2.5 rounded-lg text-sm font-medium border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-h-[44px]"
+            >
+              {copied ? (
+                <>
+                  <CheckIcon className="w-4 h-4 text-green-500" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <ClipboardDocumentIcon className="w-4 h-4" />
+                  Copy
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Make sure you have an API key created above. See the{" "}
+          <a
+            href="https://docs.anthropic.com/en/docs/claude-code"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-600 dark:text-violet-400 hover:underline"
+          >
+            Claude Code docs
+          </a>{" "}
+          for setup help.
+        </p>
       </div>
     </section>
   );
