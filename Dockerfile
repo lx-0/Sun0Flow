@@ -12,6 +12,10 @@ COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma/
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec prisma generate
+# Prepare a flat prisma CLI directory for the production image
+RUN mkdir -p /prisma-cli/node_modules && \
+    cp -rL node_modules/.pnpm/prisma@*/node_modules/prisma /prisma-cli/node_modules/prisma && \
+    cp -rL node_modules/.pnpm/prisma@*/node_modules/@prisma /prisma-cli/node_modules/@prisma
 
 # --- Build ---
 FROM base AS build
@@ -33,7 +37,10 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=deps /app/node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=deps /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma ./node_modules/.prisma
+COPY --from=deps /prisma-cli/node_modules/prisma ./node_modules/prisma
+COPY --from=deps /prisma-cli/node_modules/@prisma/engines ./node_modules/@prisma/engines
 COPY prisma ./prisma/
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 USER nextjs
 
@@ -41,4 +48,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["sh", "./docker-entrypoint.sh"]
