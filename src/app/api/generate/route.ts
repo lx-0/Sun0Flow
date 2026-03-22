@@ -7,6 +7,7 @@ import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
+import { SUNOAPI_KEY } from "@/lib/env";
 
 /** Map API errors to user-friendly messages without exposing internals */
 function userFriendlyError(error: unknown): string {
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
     const userApiKey = await resolveUserApiKey(userId);
 
     // If no API key at all (env or user), fall back to mock for demo mode
-    const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
+    const hasApiKey = !!(userApiKey || SUNOAPI_KEY);
 
     let savedSongs;
     if (!hasApiKey) {

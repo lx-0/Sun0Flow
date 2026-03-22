@@ -1,4 +1,5 @@
 import type { SunoModel, StyleTuningOptions, SunoSong, SongStatus, TaskStatus } from "./types";
+import { SUNO_API_TIMEOUT_MS, SUNOAPI_KEY } from "@/lib/env";
 
 export class SunoApiError extends Error {
   constructor(
@@ -23,12 +24,7 @@ export const DEFAULT_MODEL: SunoModel = "V4_5";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 function getTimeoutMs(): number {
-  const env = process.env.SUNO_API_TIMEOUT_MS;
-  if (env) {
-    const parsed = Number(env);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return DEFAULT_TIMEOUT_MS;
+  return SUNO_API_TIMEOUT_MS;
 }
 
 function isRetryable(status: number): boolean {
@@ -81,7 +77,7 @@ export async function fetchWithRetry(
 }
 
 export function buildHeaders(apiKey?: string): HeadersInit {
-  const key = apiKey || process.env.SUNOAPI_KEY;
+  const key = apiKey || SUNOAPI_KEY;
   if (!key) {
     throw new SunoApiError(0, "SUNOAPI_KEY environment variable is not set");
   }

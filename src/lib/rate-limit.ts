@@ -1,10 +1,10 @@
 import { prisma } from "./prisma";
+import { RATE_LIMIT_MAX_GENERATIONS } from "@/lib/env";
 
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const DEFAULT_MAX_REQUESTS = 10;
 
 const ACTION_LIMITS: Record<string, number> = {
-  generate: DEFAULT_MAX_REQUESTS,
+  generate: RATE_LIMIT_MAX_GENERATIONS,
   download: 50,
   report: 10,
   password_reset: 3,
@@ -12,14 +12,7 @@ const ACTION_LIMITS: Record<string, number> = {
 };
 
 function getMaxRequests(action = "generate"): number {
-  if (action === "generate") {
-    const envVal = process.env.RATE_LIMIT_MAX_GENERATIONS;
-    if (envVal) {
-      const parsed = parseInt(envVal, 10);
-      if (!isNaN(parsed) && parsed > 0) return parsed;
-    }
-  }
-  return ACTION_LIMITS[action] ?? DEFAULT_MAX_REQUESTS;
+  return ACTION_LIMITS[action] ?? RATE_LIMIT_MAX_GENERATIONS;
 }
 
 export interface RateLimitStatus {
