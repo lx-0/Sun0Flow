@@ -85,6 +85,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   // Auto-start tour for new users
   useEffect(() => {
     if (user && user.onboardingCompleted === false && currentStep === -1 && !completing) {
+      // Check localStorage fallback — skip may have been persisted even if API call failed
+      try {
+        if (localStorage.getItem("sunoflow-tour-completed") === "true") return;
+      } catch {
+        // localStorage unavailable
+      }
       setCurrentStep(0);
     }
   }, [user, currentStep, completing]);
@@ -168,11 +174,17 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     setCompleting(true);
     setCurrentStep(-1);
     setTooltipPos(null);
+    // Persist skip immediately in localStorage as a fallback
+    try {
+      localStorage.setItem("sunoflow-tour-completed", "true");
+    } catch {
+      // localStorage unavailable
+    }
     try {
       await fetch("/api/onboarding/complete", { method: "POST" });
       await updateSession();
     } catch {
-      // silent fail
+      // API call failed — localStorage fallback ensures tour stays dismissed
     }
   }, [updateSession]);
 
@@ -203,6 +215,11 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, [step, completeTour]);
 
   const restartTour = useCallback(async () => {
+    try {
+      localStorage.removeItem("sunoflow-tour-completed");
+    } catch {
+      // localStorage unavailable
+    }
     try {
       await fetch("/api/onboarding/reset", { method: "POST" });
       await updateSession();
