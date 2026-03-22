@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 export default function NotFound() {
   return (
@@ -14,12 +15,21 @@ export default function NotFound() {
           <p className="text-gray-500 dark:text-gray-400 text-sm">
             The page you&apos;re looking for doesn&apos;t exist or has been moved.
           </p>
-          <Link
-            href="/"
-            className="inline-block px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Go Home
-          </Link>
+          <div className="flex flex-col gap-2">
+            <Link
+              href="/library"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <MagnifyingGlassIcon className="w-4 h-4" />
+              Search Your Library
+            </Link>
+            <Link
+              href="/"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-white text-sm font-medium rounded-lg transition-colors text-center"
+            >
+              Go Home
+            </Link>
+          </div>
         </div>
       </main>
     </div>
