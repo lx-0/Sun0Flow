@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
 
 const DOWNLOAD_RATE_LIMIT = 50; // per hour
 
@@ -31,11 +31,11 @@ export async function GET(
     }
 
     // Rate limit: 50 downloads per hour per user
-    const { allowed, status } = await checkRateLimit(
+    const { acquired, status } = await acquireRateLimitSlot(
       session.user.id,
       "download"
     );
-    if (!allowed) {
+    if (!acquired) {
       return NextResponse.json(
         {
           error: "Download rate limit exceeded. Try again later.",
@@ -64,14 +64,11 @@ export async function GET(
       );
     }
 
-    // Record rate limit hit and increment download count
-    await Promise.all([
-      recordRateLimitHit(session.user.id, "download"),
-      prisma.song.update({
-        where: { id: song.id },
-        data: { downloadCount: { increment: 1 } },
-      }),
-    ]);
+    // Increment download count
+    await prisma.song.update({
+      where: { id: song.id },
+      data: { downloadCount: { increment: 1 } },
+    });
 
     // Build safe filename
     const title = (song.title ?? "song")

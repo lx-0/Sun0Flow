@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { checkRateLimit, recordRateLimitHit } from "./rate-limit";
+import { checkRateLimit, recordRateLimitHit, acquireRateLimitSlot } from "./rate-limit";
 
 // ─── Mock Prisma ────────────────────────────────────────────────────────────
 
@@ -12,6 +12,13 @@ vi.mock("./prisma", () => ({
       findMany: (...args: unknown[]) => mockFindMany(...args),
       create: (...args: unknown[]) => mockCreate(...args),
     },
+    $transaction: (fn: (tx: unknown) => Promise<unknown>, _opts?: unknown) =>
+      fn({
+        rateLimitEntry: {
+          findMany: (...args: unknown[]) => mockFindMany(...args),
+          create: (...args: unknown[]) => mockCreate(...args),
+        },
+      }),
   },
 }));
 
@@ -189,6 +196,73 @@ describe("rate-limit", () => {
 
       expect(mockCreate).toHaveBeenCalledWith({
         data: { userId: "user-1", action: "custom_action" },
+      });
+    });
+  });
+
+  describe("acquireRateLimitSlot", () => {
+    it("acquires a slot and inserts entry when under the limit", async () => {
+      mockFindMany.mockResolvedValue([makeEntry(30), makeEntry(15)]);
+      mockCreate.mockResolvedValue({ id: "entry-new" });
+
+      const result = await acquireRateLimitSlot("user-1");
+
+      expect(result.acquired).toBe(true);
+      expect(result.status.remaining).toBe(7); // 10 - 2 existing - 1 just claimed
+      expect(result.status.limit).toBe(10);
+      expect(mockCreate).toHaveBeenCalledWith({
+        data: { userId: "user-1", action: "generate" },
+      });
+    });
+
+    it("refuses when at the limit and does not insert", async () => {
+      const entries = Array.from({ length: 10 }, (_, i) =>
+        makeEntry(50 - i * 5)
+      );
+      mockFindMany.mockResolvedValue(entries);
+
+      const result = await acquireRateLimitSlot("user-1");
+
+      expect(result.acquired).toBe(false);
+      expect(result.status.remaining).toBe(0);
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it("acquires last slot when exactly one remains", async () => {
+      const entries = Array.from({ length: 9 }, (_, i) =>
+        makeEntry(50 - i * 5)
+      );
+      mockFindMany.mockResolvedValue(entries);
+      mockCreate.mockResolvedValue({ id: "entry-last" });
+
+      const result = await acquireRateLimitSlot("user-1");
+
+      expect(result.acquired).toBe(true);
+      expect(result.status.remaining).toBe(0); // 10 - 9 - 1 = 0
+      expect(mockCreate).toHaveBeenCalled();
+    });
+
+    it("acquires a slot with no prior entries", async () => {
+      mockFindMany.mockResolvedValue([]);
+      mockCreate.mockResolvedValue({ id: "entry-first" });
+
+      const result = await acquireRateLimitSlot("user-1");
+
+      expect(result.acquired).toBe(true);
+      expect(result.status.remaining).toBe(9); // 10 - 0 - 1
+      expect(result.status.limit).toBe(10);
+    });
+
+    it("supports custom action parameter", async () => {
+      mockFindMany.mockResolvedValue([]);
+      mockCreate.mockResolvedValue({ id: "entry-dl" });
+
+      const result = await acquireRateLimitSlot("user-1", "download");
+
+      expect(result.acquired).toBe(true);
+      expect(result.status.limit).toBe(50);
+      expect(mockCreate).toHaveBeenCalledWith({
+        data: { userId: "user-1", action: "download" },
       });
     });
   });

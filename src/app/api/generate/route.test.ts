@@ -42,8 +42,7 @@ vi.mock("@/lib/sunoapi/mock", () => ({
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
-  checkRateLimit: vi.fn(),
-  recordRateLimitHit: vi.fn(),
+  acquireRateLimitSlot: vi.fn(),
 }));
 
 vi.mock("@/lib/sunoapi/resolve-key", () => ({
@@ -57,7 +56,7 @@ vi.mock("@/lib/error-logger", () => ({
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateSong, SunoApiError } from "@/lib/sunoapi";
-import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 
@@ -77,11 +76,10 @@ const DEFAULT_BODY = { prompt: "upbeat pop song", title: "Test", tags: "pop", ma
 
 beforeEach(() => {
   vi.mocked(auth).mockResolvedValue({ user: { id: "user-1" } } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
-  vi.mocked(checkRateLimit).mockResolvedValue({
-    allowed: true,
+  vi.mocked(acquireRateLimitSlot).mockResolvedValue({
+    acquired: true,
     status: { remaining: 5, limit: 10, resetAt: new Date().toISOString() },
   });
-  vi.mocked(recordRateLimitHit).mockResolvedValue(undefined);
   vi.mocked(resolveUserApiKey).mockResolvedValue(undefined);
   process.env.SUNOAPI_KEY = "test-key";
   vi.mocked(prisma.song.create).mockResolvedValue({ id: "song-1" } as never);
@@ -102,8 +100,8 @@ describe("POST /api/generate", () => {
   });
 
   it("returns 429 when rate limited", async () => {
-    vi.mocked(checkRateLimit).mockResolvedValue({
-      allowed: false,
+    vi.mocked(acquireRateLimitSlot).mockResolvedValue({
+      acquired: false,
       status: { remaining: 0, limit: 10, resetAt: new Date().toISOString() },
     });
     const res = await POST(makeRequest(DEFAULT_BODY));

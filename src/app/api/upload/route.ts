@@ -8,7 +8,7 @@ import {
   SunoApiError,
 } from "@/lib/sunoapi";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
@@ -45,8 +45,8 @@ export async function POST(request: Request) {
     const userId = session.user.id;
 
     // Check rate limit
-    const { allowed, status: rateLimitStatus } = await checkRateLimit(userId);
-    if (!allowed) {
+    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
+    if (!acquired) {
       const retryAfterSec = Math.max(
         1,
         Math.ceil(
@@ -183,13 +183,10 @@ export async function POST(request: Request) {
         },
       });
 
-      // Record rate limit hit
-      await recordRateLimitHit(userId);
       invalidateByPrefix(`dashboard-stats:${userId}`);
-      const { status: updatedRateLimit } = await checkRateLimit(userId);
 
       return NextResponse.json(
-        { songs: [song], rateLimit: updatedRateLimit },
+        { songs: [song], rateLimit: rateLimitStatus },
         { status: 201 }
       );
     } catch (apiError) {
@@ -212,11 +209,8 @@ export async function POST(request: Request) {
         },
       });
 
-      await recordRateLimitHit(userId);
-      const { status: updatedRateLimit } = await checkRateLimit(userId);
-
       return NextResponse.json(
-        { songs: [song], error: errorMsg, rateLimit: updatedRateLimit },
+        { songs: [song], error: errorMsg, rateLimit: rateLimitStatus },
         { status: 201 }
       );
     }

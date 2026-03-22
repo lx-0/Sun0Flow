@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { separateVocals, SunoApiError } from "@/lib/sunoapi";
 import type { SeparationType } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 
@@ -40,8 +40,8 @@ export async function POST(
       return NextResponse.json({ error: "Song must be fully generated before separating vocals." }, { status: 400 });
     }
 
-    const { allowed, status: rateLimitStatus } = await checkRateLimit(userId);
-    if (!allowed) {
+    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
+    if (!acquired) {
       const retryAfterSec = Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000));
       return NextResponse.json(
         { error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
@@ -117,15 +117,11 @@ export async function POST(
           },
         });
 
-        await recordRateLimitHit(userId);
-        const { status: updatedRateLimit } = await checkRateLimit(userId);
-        return NextResponse.json({ song: savedSong, error: errorMsg, rateLimit: updatedRateLimit }, { status: 201 });
+        return NextResponse.json({ song: savedSong, error: errorMsg, rateLimit: rateLimitStatus }, { status: 201 });
       }
     }
 
-    await recordRateLimitHit(userId);
-    const { status: updatedRateLimit } = await checkRateLimit(userId);
-    return NextResponse.json({ song: savedSong, rateLimit: updatedRateLimit }, { status: 201 });
+    return NextResponse.json({ song: savedSong, rateLimit: rateLimitStatus }, { status: 201 });
   } catch (error) {
     logServerError("separate-vocals-route", error, { route: "/api/songs/separate-vocals" });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

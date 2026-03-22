@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
 
 const VALID_REASONS = ["offensive", "copyright", "spam", "other"];
 
@@ -13,8 +13,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Rate limit: 10 reports per hour
-    const { allowed, status } = await checkRateLimit(session.user.id, "report");
-    if (!allowed) {
+    const { acquired, status } = await acquireRateLimitSlot(session.user.id, "report");
+    if (!acquired) {
       return NextResponse.json(
         { error: "Too many reports. Please try again later.", status },
         { status: 429 }
@@ -58,9 +58,6 @@ export async function POST(request: NextRequest) {
         description: description?.trim()?.slice(0, 1000) || null,
       },
     });
-
-    // Record rate limit hit
-    await recordRateLimitHit(session.user.id, "report");
 
     // Console log placeholder for admin notification
     console.log(`[MODERATION] New report filed: ${report.id} for song ${songId} by user ${session.user.id} (reason: ${reason})`);

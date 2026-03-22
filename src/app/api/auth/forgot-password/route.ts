@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { sendPasswordResetEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
@@ -26,8 +26,8 @@ export async function POST(request: Request) {
     }
 
     // Rate limit: max 3 reset emails per hour per user
-    const { allowed } = await checkRateLimit(user.id, "password_reset");
-    if (!allowed) {
+    const { acquired } = await acquireRateLimitSlot(user.id, "password_reset");
+    if (!acquired) {
       // Still return success to prevent enumeration
       return successResponse;
     }
@@ -40,7 +40,6 @@ export async function POST(request: Request) {
       data: { resetToken, resetTokenExpiry },
     });
 
-    await recordRateLimitHit(user.id, "password_reset");
     await sendPasswordResetEmail(email, resetToken);
 
     return successResponse;

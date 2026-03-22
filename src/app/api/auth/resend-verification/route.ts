@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST() {
@@ -26,8 +26,8 @@ export async function POST() {
     }
 
     // Rate limit: max 3 verification emails per hour
-    const { allowed } = await checkRateLimit(user.id, "verification_email");
-    if (!allowed) {
+    const { acquired } = await acquireRateLimitSlot(user.id, "verification_email");
+    if (!acquired) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },
         { status: 429 }
@@ -41,7 +41,6 @@ export async function POST() {
       data: { verificationToken },
     });
 
-    await recordRateLimitHit(user.id, "verification_email");
     await sendVerificationEmail(user.email, verificationToken);
 
     return NextResponse.json({ message: "Verification email sent" });

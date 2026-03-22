@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
@@ -30,9 +30,9 @@ export async function POST(request: Request) {
     }
     const userId = session.user.id;
 
-    // Check rate limit before processing
-    const { allowed, status: rateLimitStatus } = await checkRateLimit(userId);
-    if (!allowed) {
+    // Atomically check and claim a rate limit slot
+    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
+    if (!acquired) {
       const retryAfterSec = Math.max(
         1,
         Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000)
@@ -139,26 +139,19 @@ export async function POST(request: Request) {
 
         savedSongs = [song];
 
-        // Still record rate limit hit (the attempt was made)
-        await recordRateLimitHit(userId);
-        const { status: updatedRateLimit } = await checkRateLimit(userId);
-
+        // Rate limit slot already claimed above — just return current status
         return NextResponse.json(
-          { songs: savedSongs, error: errorMsg, rateLimit: updatedRateLimit },
+          { songs: savedSongs, error: errorMsg, rateLimit: rateLimitStatus },
           { status: 201 }
         );
       }
     }
 
-    // Record rate limit hit after successful generation
-    await recordRateLimitHit(userId);
+    // Rate limit slot already claimed above
     invalidateByPrefix(`dashboard-stats:${userId}`);
 
-    // Return updated rate limit status
-    const { status: updatedRateLimit } = await checkRateLimit(userId);
-
     return NextResponse.json(
-      { songs: savedSongs, rateLimit: updatedRateLimit },
+      { songs: savedSongs, rateLimit: rateLimitStatus },
       { status: 201 }
     );
   } catch (error) {
