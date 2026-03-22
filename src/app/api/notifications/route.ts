@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
+import { broadcast } from "@/lib/event-bus";
 
 // GET /api/notifications — list notifications for current user
 export async function GET(request: NextRequest) {
@@ -73,6 +74,11 @@ export async function POST(request: NextRequest) {
         href: href || null,
         songId: songId || null,
       },
+    });
+
+    broadcast(userId, {
+      type: "notification",
+      data: { id: notification.id, type, title, message, href: href || null, songId: songId || null },
     });
 
     return NextResponse.json({ notification }, { status: 201 });

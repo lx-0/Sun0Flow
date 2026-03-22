@@ -5,6 +5,7 @@ import { getTaskStatus } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
+import { broadcast } from "@/lib/event-bus";
 
 const MAX_POLL_ATTEMPTS = 20;
 
@@ -35,6 +36,10 @@ export async function GET(
         where: { id },
         data: { generationStatus: "failed", errorMessage: "No Suno task ID" },
       });
+      broadcast(song.userId, {
+        type: "generation_update",
+        data: { songId: id, status: "failed", errorMessage: updated.errorMessage },
+      });
       return NextResponse.json({ song: updated });
     }
 
@@ -49,6 +54,10 @@ export async function GET(
           pollCount: newPollCount,
           errorMessage: "Generation timed out",
         },
+      });
+      broadcast(song.userId, {
+        type: "generation_update",
+        data: { songId: id, status: "failed", errorMessage: "Generation timed out" },
       });
       return NextResponse.json({ song: updated });
     }
@@ -119,6 +128,10 @@ export async function GET(
       }
 
       invalidateByPrefix(`dashboard-stats:${song.userId}`);
+      broadcast(song.userId, {
+        type: "generation_update",
+        data: { songId: id, status: "ready", title: updated.title, audioUrl: updated.audioUrl, imageUrl: updated.imageUrl },
+      });
       return NextResponse.json({ song: updated });
     }
 
@@ -130,6 +143,10 @@ export async function GET(
           pollCount: newPollCount,
           errorMessage: taskResult.errorMessage || `Generation failed: ${taskResult.status}`,
         },
+      });
+      broadcast(song.userId, {
+        type: "generation_update",
+        data: { songId: id, status: "failed", errorMessage: updated.errorMessage },
       });
       return NextResponse.json({ song: updated });
     }
