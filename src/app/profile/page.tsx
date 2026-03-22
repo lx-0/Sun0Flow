@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { AppShell } from "@/components/AppShell";
 import { useToast } from "@/components/Toast";
@@ -227,6 +228,104 @@ function AccountStats() {
   );
 }
 
+// ─── My Playlists ────────────────────────────────────────────────────────────
+
+interface PlaylistPreview {
+  id: string;
+  name: string;
+  _count: { songs: number };
+}
+
+function MyPlaylistsSection() {
+  const [playlists, setPlaylists] = useState<PlaylistPreview[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/playlists")
+      .then((res) => res.json())
+      .then((data) => setPlaylists(data.playlists ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="space-y-3">
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+          My Playlists
+        </h3>
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <div
+              key={i}
+              className="h-14 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse"
+            />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+          My Playlists
+        </h3>
+        <Link
+          href="/playlists"
+          className="text-xs text-violet-500 hover:text-violet-400 transition-colors"
+        >
+          View all
+        </Link>
+      </div>
+      {playlists.length === 0 ? (
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 text-center">
+          <QueueListIcon className="w-8 h-8 mx-auto text-gray-300 dark:text-gray-600 mb-2" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No playlists yet.
+          </p>
+          <Link
+            href="/playlists"
+            className="inline-block mt-2 text-sm text-violet-500 hover:text-violet-400 transition-colors"
+          >
+            Create one
+          </Link>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {playlists.slice(0, 5).map((pl) => (
+            <li key={pl.id}>
+              <Link
+                href={`/playlists/${pl.id}`}
+                className="flex items-center gap-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 hover:border-violet-400 dark:hover:border-violet-600 transition-colors"
+              >
+                <QueueListIcon className="w-5 h-5 text-violet-400 flex-shrink-0" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white truncate flex-1">
+                  {pl.name}
+                </span>
+                <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
+                  {pl._count.songs} song{pl._count.songs !== 1 ? "s" : ""}
+                </span>
+              </Link>
+            </li>
+          ))}
+          {playlists.length > 5 && (
+            <li className="text-center">
+              <Link
+                href="/playlists"
+                className="text-xs text-violet-500 hover:text-violet-400 transition-colors"
+              >
+                +{playlists.length - 5} more
+              </Link>
+            </li>
+          )}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 // ─── Change Password ──────────────────────────────────────────────────────────
 
 function ChangePasswordSection() {
@@ -440,6 +539,8 @@ function ProfileContent() {
       <ProfileHeader />
       <div className="border-t border-gray-200 dark:border-gray-800" />
       <AccountStats />
+      <div className="border-t border-gray-200 dark:border-gray-800" />
+      <MyPlaylistsSection />
       <div className="border-t border-gray-200 dark:border-gray-800" />
       <ChangePasswordSection />
       <div className="border-t border-gray-200 dark:border-gray-800" />

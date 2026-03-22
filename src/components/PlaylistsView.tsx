@@ -31,6 +31,7 @@ export function PlaylistsView({
   const [newDesc, setNewDesc] = useState("");
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -67,6 +68,7 @@ export function PlaylistsView({
   }
 
   async function handleDelete(id: string) {
+    setConfirmDeleteId(null);
     setDeletingId(id);
     try {
       const res = await fetch(`/api/playlists/${id}`, { method: "DELETE" });
@@ -184,15 +186,33 @@ export function PlaylistsView({
                   </p>
                 </Link>
 
-                {/* Delete button */}
-                <button
-                  onClick={() => handleDelete(pl.id)}
-                  disabled={deletingId === pl.id}
-                  aria-label="Delete playlist"
-                  className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors disabled:opacity-50"
-                >
-                  <TrashIcon className="w-5 h-5" />
-                </button>
+                {/* Delete button with confirmation */}
+                {confirmDeleteId === pl.id ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleDelete(pl.id)}
+                      disabled={deletingId === pl.id}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
+                    >
+                      {deletingId === pl.id ? "…" : "Delete"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(pl.id)}
+                    disabled={deletingId === pl.id}
+                    aria-label="Delete playlist"
+                    className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors disabled:opacity-50"
+                  >
+                    <TrashIcon className="w-5 h-5" />
+                  </button>
+                )}
               </div>
             </li>
           ))}

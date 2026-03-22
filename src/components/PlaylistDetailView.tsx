@@ -73,6 +73,7 @@ export function PlaylistDetailView({
   const [editName, setEditName] = useState(initialPlaylist.name);
   const [editDesc, setEditDesc] = useState(initialPlaylist.description || "");
   const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Drag state
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -204,6 +205,7 @@ export function PlaylistDetailView({
   }
 
   async function handleDelete() {
+    setShowDeleteConfirm(false);
     try {
       const res = await fetch(`/api/playlists/${playlist.id}`, {
         method: "DELETE",
@@ -299,7 +301,7 @@ export function PlaylistDetailView({
               <PencilIcon className="w-5 h-5" />
             </button>
             <button
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               aria-label="Delete playlist"
               className="w-11 h-11 rounded-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors"
             >
@@ -320,7 +322,28 @@ export function PlaylistDetailView({
         </button>
       )}
 
-      {/* Now playing indicator (global player handles controls) */}
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-xl p-4 space-y-3">
+          <p className="text-sm text-red-700 dark:text-red-300">
+            Delete &ldquo;{playlist.name}&rdquo;? This cannot be undone.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleDelete}
+              className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 text-white transition-colors min-h-[44px]"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors min-h-[44px]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Song list */}
       {songs.length === 0 ? (
