@@ -12,10 +12,15 @@ COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma/
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec prisma generate
-# Prepare a flat prisma CLI directory for the production image
-RUN mkdir -p /prisma-cli/node_modules && \
-    cp -rL node_modules/.pnpm/prisma@*/node_modules/prisma /prisma-cli/node_modules/prisma && \
-    cp -rL node_modules/.pnpm/prisma@*/node_modules/@prisma /prisma-cli/node_modules/@prisma
+# Flatten Prisma client + CLI into known paths for the production image.
+# pnpm stores packages under version-hashed dirs that contain glob-unfriendly
+# characters; Docker COPY cannot resolve them reliably, so we dereference the
+# symlinks into flat directories here.
+RUN mkdir -p /prisma-flat/node_modules/@prisma /prisma-flat/node_modules/.prisma && \
+    cp -rL node_modules/.prisma/client /prisma-flat/node_modules/.prisma/client && \
+    cp -rL node_modules/@prisma/client /prisma-flat/node_modules/@prisma/client && \
+    cp -rL node_modules/prisma /prisma-flat/node_modules/prisma && \
+    cp -rL node_modules/.pnpm/@prisma+engines@*/node_modules/@prisma/engines /prisma-flat/node_modules/@prisma/engines
 
 # --- Build ---
 FROM base AS build
@@ -35,10 +40,10 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=build /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=deps /app/node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client ./node_modules/@prisma/client
-COPY --from=deps /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma ./node_modules/.prisma
-COPY --from=deps /prisma-cli/node_modules/prisma ./node_modules/prisma
-COPY --from=deps /prisma-cli/node_modules/@prisma/engines ./node_modules/@prisma/engines
+COPY --from=deps /prisma-flat/node_modules/.prisma ./node_modules/.prisma
+COPY --from=deps /prisma-flat/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=deps /prisma-flat/node_modules/prisma ./node_modules/prisma
+COPY --from=deps /prisma-flat/node_modules/@prisma/engines ./node_modules/@prisma/engines
 COPY prisma ./prisma/
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
