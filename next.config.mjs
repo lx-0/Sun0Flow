@@ -10,6 +10,18 @@ const nextConfig = {
         protocol: "https",
         hostname: "cdn.sunoapi.org",
       },
+      {
+        protocol: "https",
+        hostname: "**.removeai.ai",
+      },
+      {
+        protocol: "https",
+        hostname: "**.redpandaai.co",
+      },
+      {
+        protocol: "https",
+        hostname: "**.sunoapi.org",
+      },
     ],
   },
 };

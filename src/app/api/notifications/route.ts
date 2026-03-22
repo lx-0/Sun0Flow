@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logServerError } from "@/lib/error-logger";
 
 // GET /api/notifications — list notifications for current user
 export async function GET(request: NextRequest) {
@@ -34,7 +35,8 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ notifications: sliced, nextCursor, unreadCount });
-  } catch {
+  } catch (error) {
+    logServerError("notifications-list", error, { route: "/api/notifications" });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

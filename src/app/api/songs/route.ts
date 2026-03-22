@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { logServerError } from "@/lib/error-logger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -117,7 +118,8 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ songs: enriched, nextCursor, total });
-  } catch {
+  } catch (error) {
+    logServerError("songs-list", error, { route: "/api/songs" });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
