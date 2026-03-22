@@ -71,6 +71,7 @@ model User {
   notifications    Notification[]
   rssFeeds         RssFeedSubscription[]
   personas         Persona[]
+  apiKeys          ApiKey[]
 }
 
 model Song {
@@ -289,6 +290,22 @@ model Persona {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, personaId])
+  @@index([userId])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  keyHash    String
+  prefix     String    @db.VarChar(12)
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([keyHash])
   @@index([userId])
 }
 
