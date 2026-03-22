@@ -45,6 +45,47 @@ async function fetchDbMeta(songId: string) {
   }
 }
 
+async function fetchVariations(songId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { variations: [], variationCount: 0, maxVariations: 5, parentSongId: null };
+    const dbSong = await prisma.song.findFirst({
+      where: { id: songId, userId: session.user.id },
+      select: { parentSongId: true },
+    });
+
+    // Find the root song ID
+    const rootId = dbSong?.parentSongId ?? songId;
+
+    const variations = await prisma.song.findMany({
+      where: { parentSongId: rootId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        title: true,
+        prompt: true,
+        tags: true,
+        audioUrl: true,
+        imageUrl: true,
+        duration: true,
+        lyrics: true,
+        generationStatus: true,
+        isInstrumental: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      variations,
+      variationCount: variations.length,
+      maxVariations: 5,
+      parentSongId: dbSong?.parentSongId ?? null,
+    };
+  } catch {
+    return { variations: [], variationCount: 0, maxVariations: 5, parentSongId: null };
+  }
+}
+
 async function fetchSongTags(songId: string) {
   try {
     const session = await auth();
@@ -76,11 +117,12 @@ async function fetchPlaylists() {
 }
 
 async function SongDetailContent({ id }: { id: string }) {
-  const [song, dbMeta, playlists, songTags] = await Promise.all([
+  const [song, dbMeta, playlists, songTags, variationData] = await Promise.all([
     fetchSong(id),
     fetchDbMeta(id),
     fetchPlaylists(),
     fetchSongTags(id),
+    fetchVariations(id),
   ]);
 
   if (!song) notFound();
@@ -96,6 +138,10 @@ async function SongDetailContent({ id }: { id: string }) {
       publicSlug={dbMeta.publicSlug}
       isHidden={dbMeta.isHidden}
       songTags={songTags}
+      variations={variationData.variations}
+      variationCount={variationData.variationCount}
+      maxVariations={variationData.maxVariations}
+      parentSongId={variationData.parentSongId}
     />
   );
 }

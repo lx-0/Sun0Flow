@@ -94,10 +94,13 @@ model Song {
   rating           Int?
   ratingNote       String?
   downloadCount    Int      @default(0)
+  parentSongId     String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentSong    Song?          @relation("SongVariations", fields: [parentSongId], references: [id], onDelete: SetNull)
+  variations    Song[]         @relation("SongVariations")
   playlistSongs PlaylistSong[]
   songTags      SongTag[]
   favorites     Favorite[]
@@ -105,6 +108,7 @@ model Song {
 
   @@index([userId, title])
   @@index([userId, prompt])
+  @@index([parentSongId])
 }
 
 model Playlist {

@@ -92,6 +92,20 @@ interface SongTag {
   color: string;
 }
 
+interface VariationSummary {
+  id: string;
+  title: string | null;
+  prompt: string | null;
+  tags: string | null;
+  audioUrl: string | null;
+  imageUrl: string | null;
+  duration: number | null;
+  lyrics: string | null;
+  generationStatus: string;
+  isInstrumental: boolean;
+  createdAt: string | Date;
+}
+
 interface SongDetailViewProps {
   song: SunoSong;
   isFavorite?: boolean;
@@ -102,6 +116,10 @@ interface SongDetailViewProps {
   publicSlug?: string | null;
   isHidden?: boolean;
   songTags?: SongTag[];
+  variations?: VariationSummary[];
+  variationCount?: number;
+  maxVariations?: number;
+  parentSongId?: string | null;
 }
 
 // ─── Main SongDetailView ──────────────────────────────────────────────────────
@@ -116,12 +134,20 @@ export function SongDetailView({
   publicSlug: initialPublicSlug = null,
   isHidden = false,
   songTags: initialSongTags = [],
+  variations: initialVariations = [],
+  variationCount: initialVariationCount = 0,
+  maxVariations = 5,
+  parentSongId = null,
 }: SongDetailViewProps) {
   const router = useRouter();
   const { toast } = useToast();
 
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
   const [favoriteCount, setFavoriteCount] = useState(initialFavoriteCount);
+
+  // Variation state
+  const [creatingVariation, setCreatingVariation] = useState(false);
+  const [compareVariation, setCompareVariation] = useState<VariationSummary | null>(null);
 
   const [rating, setRatingState] = useState<SongRating>({ stars: 0, note: "" });
   const [saved, setSaved] = useState(false);
@@ -273,6 +299,33 @@ export function SongDetailView({
     const url = `${window.location.origin}/s/${publicSlug}`;
     await navigator.clipboard.writeText(url);
     toast("Link copied to clipboard", "success");
+  }
+
+  async function handleCreateVariation() {
+    if (creatingVariation) return;
+    if (initialVariationCount >= maxVariations) {
+      toast(`Maximum ${maxVariations} variations reached`, "error");
+      return;
+    }
+    setCreatingVariation(true);
+    try {
+      const res = await fetch(`/api/songs/${song.id}/variations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast(data.error ?? "Failed to create variation", "error");
+        return;
+      }
+      toast("Variation generation started!", "success");
+      router.push(`/library/${data.song.id}`);
+    } catch {
+      toast("Failed to create variation", "error");
+    } finally {
+      setCreatingVariation(false);
+    }
   }
 
   return (
@@ -525,16 +578,127 @@ export function SongDetailView({
       {downloadError && <p className="text-xs text-red-400">{downloadError}</p>}
 
       {/* Create variation */}
-      <Link
-        href={`/generate?${new URLSearchParams({
-          ...(song.prompt ? { prompt: song.prompt } : {}),
-          ...(song.tags ? { tags: song.tags } : {}),
-        }).toString()}`}
-        className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
+      <button
+        onClick={handleCreateVariation}
+        disabled={creatingVariation || initialVariationCount >= maxVariations}
+        className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
       >
         <ArrowPathIcon className="w-4 h-4" aria-hidden="true" />
-        Create variation
-      </Link>
+        {creatingVariation ? "Creating variation..." : `Create variation (${initialVariationCount}/${maxVariations})`}
+      </button>
+
+      {/* Parent link */}
+      {parentSongId && (
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          This is a variation of{" "}
+          <Link href={`/library/${parentSongId}`} className="text-violet-500 hover:text-violet-400 underline">
+            the original song
+          </Link>
+        </div>
+      )}
+
+      {/* Variation tree */}
+      {initialVariations.length > 0 && (
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Variations ({initialVariations.length}/{maxVariations})
+          </h2>
+          <div className="space-y-2">
+            {initialVariations.map((v) => (
+              <div
+                key={v.id}
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
+                  v.id === song.id
+                    ? "border-violet-400 bg-violet-50 dark:bg-violet-900/20"
+                    : "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600"
+                }`}
+              >
+                <Link href={`/library/${v.id}`} className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white block truncate">
+                    {v.title || "Untitled variation"}
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 block truncate">
+                    {v.tags || v.prompt || "No description"}
+                  </span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      v.generationStatus === "ready"
+                        ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                        : v.generationStatus === "failed"
+                        ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                        : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
+                    }`}>
+                      {v.generationStatus}
+                    </span>
+                    {v.duration != null && (
+                      <span className="text-xs text-gray-400">{formatTime(v.duration)}</span>
+                    )}
+                  </div>
+                </Link>
+                {v.id !== song.id && v.generationStatus === "ready" && (
+                  <button
+                    onClick={() => setCompareVariation(compareVariation?.id === v.id ? null : v)}
+                    className={`flex-shrink-0 px-2 py-1 text-xs font-medium rounded-lg transition-colors ${
+                      compareVariation?.id === v.id
+                        ? "bg-violet-600 text-white"
+                        : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-violet-100 dark:hover:bg-violet-900/30"
+                    }`}
+                  >
+                    Compare
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Side-by-side comparison */}
+      {compareVariation && (
+        <div className="bg-white dark:bg-gray-900 border border-violet-300 dark:border-violet-700 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Comparison</h2>
+            <button
+              onClick={() => setCompareVariation(null)}
+              className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            >
+              Close
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Current song */}
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-violet-500 uppercase tracking-wide">Current</span>
+              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{song.title || "Untitled"}</p>
+              {song.tags && <p className="text-xs text-gray-500 dark:text-gray-400">{song.tags}</p>}
+              {song.duration != null && <p className="text-xs text-gray-400">{formatTime(song.duration)}</p>}
+              {song.audioUrl && (
+                <audio src={song.audioUrl} controls className="w-full h-8" preload="none" />
+              )}
+              {song.lyrics && (
+                <div className="max-h-40 overflow-y-auto">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-line">{song.lyrics}</p>
+                </div>
+              )}
+            </div>
+            {/* Comparison variation */}
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-violet-500 uppercase tracking-wide">Variation</span>
+              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{compareVariation.title || "Untitled"}</p>
+              {compareVariation.tags && <p className="text-xs text-gray-500 dark:text-gray-400">{compareVariation.tags}</p>}
+              {compareVariation.duration != null && <p className="text-xs text-gray-400">{formatTime(compareVariation.duration)}</p>}
+              {compareVariation.audioUrl && (
+                <audio src={compareVariation.audioUrl} controls className="w-full h-8" preload="none" />
+              )}
+              {compareVariation.lyrics && (
+                <div className="max-h-40 overflow-y-auto">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-line">{compareVariation.lyrics}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lyrics */}
       {song.lyrics && (
