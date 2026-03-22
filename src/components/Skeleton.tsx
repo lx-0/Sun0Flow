@@ -386,3 +386,40 @@ export function GenerateFormSkeleton() {
     </div>
   );
 }
+
+/** Skeleton for the songs gallery page — header, search bar, album art grid. */
+export function SongsGallerySkeleton() {
+  return (
+    <div className="px-4 py-4 space-y-4">
+      {/* Header */}
+      <div>
+        <Skeleton className="h-6 w-16 rounded" />
+        <Skeleton className="h-4 w-20 rounded mt-1" />
+      </div>
+      {/* Search + filter bar */}
+      <div className="flex gap-2">
+        <Skeleton className="h-11 flex-1 rounded-xl" />
+        <Skeleton className="h-11 w-11 rounded-xl" />
+      </div>
+      {/* Gallery grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+            <Skeleton className="aspect-square w-full" />
+            <div className="p-3 space-y-2">
+              <Skeleton className="h-4 w-3/4 rounded" />
+              <Skeleton className="h-3 w-1/2 rounded" />
+              <div className="flex justify-between items-center">
+                <Skeleton className="h-3 w-16 rounded" />
+                <div className="flex gap-1">
+                  <Skeleton className="w-8 h-8 rounded-full" />
+                  <Skeleton className="w-8 h-8 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
