@@ -128,14 +128,14 @@ function UsageChart({ dailyCounts, limit }: { dailyCounts: { date: string; count
                   }`}
                   style={{ height: `${Math.max(heightPct, 4)}%` }}
                 />
-                <span className={`text-xs ${isToday ? "text-violet-600 dark:text-violet-400 font-semibold" : "text-gray-400 dark:text-gray-500"}`}>
+                <span className={`text-xs ${isToday ? "text-violet-600 dark:text-violet-400 font-semibold" : "text-gray-500 dark:text-gray-400"}`}>
                   {dayName}
                 </span>
               </div>
             );
           })}
         </div>
-        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-400 dark:text-gray-500">
+        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
           <span>Hourly limit: {limit}/hr</span>
           <span>Total: {dailyCounts.reduce((s, d) => s + d.count, 0)} generations</span>
         </div>
@@ -305,7 +305,7 @@ export function DashboardView({ userName }: { userName?: string | null }) {
                     {song.duration && <span>{formatTime(song.duration)}</span>}
                   </div>
                 </div>
-                <span className="text-xs text-gray-400 dark:text-gray-600 flex-shrink-0">
+                <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                   {timeAgo(song.createdAt)}
                 </span>
               </Link>

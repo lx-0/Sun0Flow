@@ -402,7 +402,7 @@ export function GenerateForm() {
               Cancel
             </button>
           </div>
-          <p className="text-xs text-gray-400 dark:text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             {userTemplates.length} / 20 templates used
           </p>
         </div>
@@ -412,7 +412,7 @@ export function GenerateForm() {
         {/* Title */}
         <div className="space-y-1">
           <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Song title <span className="text-gray-400 dark:text-gray-500">(optional)</span>
+            Song title <span className="text-gray-500 dark:text-gray-400">(optional)</span>
           </label>
           <input
             id="title"

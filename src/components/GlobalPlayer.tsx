@@ -89,7 +89,7 @@ export function GlobalPlayer() {
 
           {/* Song info */}
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">
+            <p className="text-sm font-medium text-white truncate" aria-live="polite">
               {currentSong.title ?? "Untitled"}
             </p>
             <div className="flex items-center gap-2 text-xs text-gray-400">

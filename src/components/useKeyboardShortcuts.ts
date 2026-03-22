@@ -18,6 +18,8 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["g", "f"], label: "Go to Favorites", category: "navigation" },
   { keys: ["g", "h"], label: "Go to Home", category: "navigation" },
   { keys: [" "], label: "Play / Pause", category: "playback" },
+  { keys: ["Enter"], label: "Play / Pause", category: "playback" },
+  { keys: ["N"], label: "New generation", category: "app" },
   { keys: ["?"], label: "Show shortcuts help", category: "app" },
 ];
 
@@ -88,6 +90,21 @@ export function useKeyboardShortcuts(onShowHelp: () => void) {
           e.preventDefault();
           togglePlay();
         }
+        return;
+      }
+
+      if (key === "Enter") {
+        // Play/pause with Enter when queue has content
+        if (queue.length > 0 && currentIndex >= 0) {
+          e.preventDefault();
+          togglePlay();
+        }
+        return;
+      }
+
+      if (key === "N") {
+        e.preventDefault();
+        router.push("/generate");
         return;
       }
 

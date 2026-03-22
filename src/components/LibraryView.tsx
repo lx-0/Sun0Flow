@@ -255,7 +255,7 @@ function AddToPlaylistButton({ songId }: { songId: string }) {
                 className="w-full text-left px-4 py-3 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-b last:border-b-0 border-gray-200 dark:border-gray-800"
               >
                 {pl.name}
-                <span className="text-xs text-gray-400 ml-1">
+                <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
                   ({pl._count.songs})
                 </span>
               </button>
@@ -376,6 +376,9 @@ function SongRow({
 
   return (
     <li
+      role="option"
+      tabIndex={0}
+      aria-selected={isActive}
       aria-label={songAriaLabel}
       className={`bg-white dark:bg-gray-900 border rounded-xl overflow-hidden transition-colors ${
         isSelected
@@ -425,7 +428,7 @@ function SongRow({
                   <TagChip key={st.tag.id} tag={st.tag} size="xs" />
                 ))}
                 {(song as SongWithTags).songTags.length > 3 && (
-                  <span className="text-[10px] text-gray-400">+{(song as SongWithTags).songTags.length - 3}</span>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">+{(song as SongWithTags).songTags.length - 3}</span>
                 )}
               </div>
             )}
@@ -660,6 +663,37 @@ export function LibraryView({
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ completed: number; total: number } | null>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Arrow-key navigation for song list
+  const songListRef = useRef<HTMLUListElement>(null);
+  const handleSongListKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLUListElement>) => {
+      const list = songListRef.current;
+      if (!list) return;
+      const items = Array.from(list.querySelectorAll<HTMLElement>(":scope > li"));
+      if (items.length === 0) return;
+      const currentIdx = items.findIndex((li) => li.contains(document.activeElement) || li === document.activeElement);
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = currentIdx < items.length - 1 ? currentIdx + 1 : 0;
+        items[next].focus();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const prev = currentIdx > 0 ? currentIdx - 1 : items.length - 1;
+        items[prev].focus();
+      } else if (e.key === "Enter" && currentIdx >= 0) {
+        // Play the focused song
+        const song = songs[currentIdx];
+        if (song) {
+          e.preventDefault();
+          handleTogglePlay(song);
+        }
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [songs]
+  );
 
   // Close export menu on outside click
   useEffect(() => {
@@ -1216,7 +1250,7 @@ export function LibraryView({
           )}
         </div>
       ) : (
-        <ul aria-label="Song library" className={`space-y-2 ${selectionMode ? "pb-20" : ""}`}>
+        <ul ref={songListRef} aria-label="Song library" role="listbox" aria-orientation="vertical" onKeyDown={handleSongListKeyDown} className={`space-y-2 ${selectionMode ? "pb-20" : ""}`}>
           {songs.map((song) => (
             <SongRow
               key={song.id}
