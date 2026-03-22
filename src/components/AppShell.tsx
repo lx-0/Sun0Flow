@@ -18,6 +18,7 @@ import {
   ClockIcon,
   ShieldCheckIcon,
   ChartBarIcon,
+  LightBulbIcon,
 } from "@heroicons/react/24/outline";
 import { GlobalPlayer } from "./GlobalPlayer";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
@@ -29,6 +30,7 @@ import { EmailVerificationBanner } from "./EmailVerificationBanner";
 const navItems = [
   { label: "Home", href: "/", icon: HomeIcon, dataTour: undefined as string | undefined },
   { label: "Library", href: "/library", icon: BookOpenIcon, dataTour: undefined as string | undefined },
+  { label: "Inspire", href: "/inspire", icon: LightBulbIcon, dataTour: undefined as string | undefined },
   { label: "Generate", href: "/generate", icon: PlusCircleIcon, dataTour: undefined as string | undefined },
   { label: "Playlists", href: "/playlists", icon: QueueListIcon, dataTour: "explore" as string | undefined },
   { label: "Favorites", href: "/favorites", icon: HeartIcon, dataTour: undefined as string | undefined },

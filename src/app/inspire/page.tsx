@@ -8,6 +8,7 @@ import {
   SparklesIcon,
   BoltIcon,
   MusicalNoteIcon,
+  FunnelIcon,
 } from "@heroicons/react/24/outline";
 
 // ─── Types ───
@@ -444,6 +445,8 @@ function InspireContent() {
   const [dailyStale, setDailyStale] = useState(false);
 
   const [activeTab, setActiveTab] = useState<InspireTab>("all");
+  const [moodFilter, setMoodFilter] = useState<string | null>(null);
+  const [dateSortDesc, setDateSortDesc] = useState(true);
 
   const hasRss = feedUrls.length > 0;
   const hasIg = igUrls.length > 0;
@@ -578,6 +581,31 @@ function InspireContent() {
       : f.items
   );
 
+  // Collect all unique moods across RSS items and Instagram posts
+  const allMoods = Array.from(
+    new Set([
+      ...allRssItems.map((i) => i.mood).filter((m): m is string => !!m && m !== "neutral"),
+      ...igPosts.filter((p) => !p.error).map((p) => p.mood).filter((m) => m !== "neutral"),
+    ])
+  ).sort();
+
+  // Apply mood filter to RSS items
+  const filteredRssItems = moodFilter
+    ? allRssItems.filter((i) => i.feedError || i.mood === moodFilter)
+    : allRssItems;
+
+  // Apply date sort to RSS items
+  const sortedRssItems = [...filteredRssItems].sort((a, b) => {
+    if (!a.pubDate || !b.pubDate) return 0;
+    const diff = new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime();
+    return dateSortDesc ? diff : -diff;
+  });
+
+  // Apply mood filter to Instagram posts
+  const filteredIgPosts = moodFilter
+    ? igPosts.filter((p) => p.error || p.mood === moodFilter)
+    : igPosts;
+
   const handleRssPrompt = (item: FeedItem) => {
     const parts: string[] = [];
     if (item.title) parts.push(item.title);
@@ -585,15 +613,15 @@ function InspireContent() {
     if (item.topics && item.topics.length > 0) parts.push(item.topics.join(", "));
     if (item.mood && item.mood !== "neutral") parts.push(`${item.mood} mood`);
     const prompt = parts.join(". ");
-    router.push(`/?prompt=${encodeURIComponent(prompt)}`);
+    router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
   };
 
   const handleIgPrompt = (prompt: string) => {
-    router.push(`/?prompt=${encodeURIComponent(prompt)}`);
+    router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
   };
 
   const handleDailyPrompt = (prompt: string) => {
-    router.push(`/?prompt=${encodeURIComponent(prompt)}`);
+    router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
   };
 
   const handleRefresh = () => {
@@ -686,6 +714,48 @@ function InspireContent() {
         </div>
       )}
 
+      {/* Filters */}
+      {(allMoods.length > 0 || allRssItems.some((i) => i.pubDate)) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {allMoods.length > 0 && (
+            <>
+              <FunnelIcon className="w-3.5 h-3.5 text-gray-400" />
+              <button
+                onClick={() => setMoodFilter(null)}
+                className={`text-[11px] font-medium px-2 py-1 rounded-full transition-colors ${
+                  moodFilter === null
+                    ? "bg-violet-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                }`}
+              >
+                All moods
+              </button>
+              {allMoods.map((mood) => (
+                <button
+                  key={mood}
+                  onClick={() => setMoodFilter(moodFilter === mood ? null : mood)}
+                  className={`text-[11px] font-medium px-2 py-1 rounded-full transition-colors ${
+                    moodFilter === mood
+                      ? MOOD_COLORS[mood] ?? MOOD_COLORS.neutral
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
+                >
+                  {mood}
+                </button>
+              ))}
+            </>
+          )}
+          {allRssItems.some((i) => i.pubDate) && (
+            <button
+              onClick={() => setDateSortDesc((v) => !v)}
+              className="ml-auto text-[11px] font-medium px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+            >
+              Date: {dateSortDesc ? "Newest" : "Oldest"} first
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Daily auto-generated prompts */}
       {(activeTab === "all") && (
         <DailyPrompts
@@ -705,7 +775,7 @@ function InspireContent() {
             <h3 className="text-sm font-semibold text-pink-400">Instagram Mood Board</h3>
           )}
           <InstagramMoodBoard
-            posts={igPosts}
+            posts={filteredIgPosts}
             loading={igLoading}
             onUseAsPrompt={handleIgPrompt}
           />
@@ -719,7 +789,7 @@ function InspireContent() {
             <h3 className="text-sm font-semibold text-violet-400">RSS Feeds</h3>
           )}
           <RssFeedList
-            items={allRssItems}
+            items={sortedRssItems}
             loading={rssLoading}
             onUseAsPrompt={handleRssPrompt}
           />
@@ -727,12 +797,12 @@ function InspireContent() {
       )}
 
       {/* No items in current tab */}
-      {!isLoading && activeTab === "rss" && allRssItems.length === 0 && (
+      {!isLoading && activeTab === "rss" && sortedRssItems.length === 0 && (
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 text-center">
           <p className="text-gray-500 dark:text-gray-400 text-sm">No items found in your RSS feeds.</p>
         </div>
       )}
-      {!isLoading && activeTab === "instagram" && igPosts.length === 0 && (
+      {!isLoading && activeTab === "instagram" && filteredIgPosts.length === 0 && (
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 text-center">
           <p className="text-gray-500 dark:text-gray-400 text-sm">No Instagram posts loaded yet.</p>
         </div>
