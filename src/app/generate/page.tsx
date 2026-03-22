@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 import { AppShell } from "@/components/AppShell";
-import { GenerateForm } from "@/components/GenerateForm";
+import { GenerateTabs } from "@/components/GenerateTabs";
 
 export default function GeneratePage() {
   return (
     <AppShell>
       <Suspense>
-        <GenerateForm />
+        <GenerateTabs />
       </Suspense>
     </AppShell>
   );

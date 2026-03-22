@@ -1,0 +1,230 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import {
+  uploadFileBase64,
+  uploadFileFromUrl,
+  uploadAndCover,
+  uploadAndExtend,
+  SunoApiError,
+} from "@/lib/sunoapi";
+import { prisma } from "@/lib/prisma";
+import { checkRateLimit, recordRateLimitHit } from "@/lib/rate-limit";
+import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
+import { logServerError } from "@/lib/error-logger";
+import { invalidateByPrefix } from "@/lib/cache";
+
+/** Map API errors to user-friendly messages */
+function userFriendlyError(error: unknown): string {
+  if (error instanceof SunoApiError) {
+    if (error.status === 429)
+      return "The music generation service is busy. Please try again in a few minutes.";
+    if (error.status === 400)
+      return "Invalid upload or generation parameters. Please check your file and settings.";
+    if (error.status === 401 || error.status === 403)
+      return "API authentication failed. Please check your API key in settings.";
+    if (error.status >= 500)
+      return "The music generation service is temporarily unavailable. Please try again later.";
+  }
+  if (
+    error instanceof TypeError &&
+    (error.message.includes("fetch") || error.message.includes("network"))
+  ) {
+    return "Could not reach the music generation service. Please check your connection and try again.";
+  }
+  return "Upload and generation failed. Please try again.";
+}
+
+const MAX_BASE64_SIZE = 10 * 1024 * 1024; // 10MB
+
+export async function POST(request: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = session.user.id;
+
+    // Check rate limit
+    const { allowed, status: rateLimitStatus } = await checkRateLimit(userId);
+    if (!allowed) {
+      const retryAfterSec = Math.max(
+        1,
+        Math.ceil(
+          (new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000
+        )
+      );
+      return NextResponse.json(
+        {
+          error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`,
+          resetAt: rateLimitStatus.resetAt,
+          rateLimit: rateLimitStatus,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfterSec) },
+        }
+      );
+    }
+
+    const body = await request.json();
+    const {
+      mode, // "cover" | "extend"
+      // Upload source — exactly one required
+      base64Data, // base64-encoded file (<=10MB)
+      fileUrl, // remote URL (<=100MB)
+      // Generation params
+      title,
+      prompt,
+      style,
+      instrumental,
+      continueAt, // extend only — seconds
+    } = body;
+
+    if (mode !== "cover" && mode !== "extend") {
+      return NextResponse.json(
+        { error: 'Mode must be "cover" or "extend"' },
+        { status: 400 }
+      );
+    }
+
+    if (!base64Data && !fileUrl) {
+      return NextResponse.json(
+        {
+          error:
+            "Either a base64-encoded file or a file URL is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (base64Data && fileUrl) {
+      return NextResponse.json(
+        { error: "Provide either base64Data or fileUrl, not both" },
+        { status: 400 }
+      );
+    }
+
+    // Validate base64 size
+    if (base64Data) {
+      const sizeBytes = Math.ceil((base64Data.length * 3) / 4);
+      if (sizeBytes > MAX_BASE64_SIZE) {
+        return NextResponse.json(
+          {
+            error:
+              "File too large for base64 upload (max 10MB). Use a URL-based upload for larger files.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const userApiKey = await resolveUserApiKey(userId);
+    const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
+
+    if (!hasApiKey) {
+      return NextResponse.json(
+        {
+          error:
+            "No API key configured. Set your API key in Settings or contact an admin.",
+        },
+        { status: 400 }
+      );
+    }
+
+    try {
+      // Step 1: Upload the file to get an uploadUrl
+      const uploadResult = base64Data
+        ? await uploadFileBase64(base64Data, userApiKey)
+        : await uploadFileFromUrl(fileUrl, userApiKey);
+
+      const uploadUrl = uploadResult.fileUrl;
+
+      // Step 2: Trigger cover or extend generation
+      let result: { taskId: string };
+
+      if (mode === "cover") {
+        result = await uploadAndCover(
+          {
+            uploadUrl,
+            customMode: !!(prompt || style),
+            instrumental: Boolean(instrumental),
+            prompt: prompt?.trim() || undefined,
+            style: style?.trim() || undefined,
+            title: title?.trim() || undefined,
+          },
+          userApiKey
+        );
+      } else {
+        result = await uploadAndExtend(
+          {
+            uploadUrl,
+            instrumental:
+              instrumental != null ? Boolean(instrumental) : undefined,
+            prompt: prompt?.trim() || undefined,
+            style: style?.trim() || undefined,
+            title: title?.trim() || undefined,
+            continueAt:
+              continueAt != null ? Number(continueAt) : undefined,
+          },
+          userApiKey
+        );
+      }
+
+      // Step 3: Create Song record
+      const song = await prisma.song.create({
+        data: {
+          userId,
+          sunoJobId: result.taskId,
+          title: title?.trim() || null,
+          prompt: prompt?.trim() || `Upload ${mode}`,
+          tags: style?.trim() || null,
+          isInstrumental: Boolean(instrumental),
+          generationStatus: "pending",
+        },
+      });
+
+      // Record rate limit hit
+      await recordRateLimitHit(userId);
+      invalidateByPrefix(`dashboard-stats:${userId}`);
+      const { status: updatedRateLimit } = await checkRateLimit(userId);
+
+      return NextResponse.json(
+        { songs: [song], rateLimit: updatedRateLimit },
+        { status: 201 }
+      );
+    } catch (apiError) {
+      logServerError("upload-api", apiError, {
+        userId,
+        route: "/api/upload",
+        params: { mode, hasBase64: !!base64Data, hasUrl: !!fileUrl },
+      });
+
+      const errorMsg = userFriendlyError(apiError);
+      const song = await prisma.song.create({
+        data: {
+          userId,
+          title: title?.trim() || null,
+          prompt: prompt?.trim() || `Upload ${mode}`,
+          tags: style?.trim() || null,
+          isInstrumental: Boolean(instrumental),
+          generationStatus: "failed",
+          errorMessage: errorMsg,
+        },
+      });
+
+      await recordRateLimitHit(userId);
+      const { status: updatedRateLimit } = await checkRateLimit(userId);
+
+      return NextResponse.json(
+        { songs: [song], error: errorMsg, rateLimit: updatedRateLimit },
+        { status: 201 }
+      );
+    }
+  } catch (error) {
+    logServerError("upload-route", error, { route: "/api/upload" });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
