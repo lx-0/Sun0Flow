@@ -23,7 +23,7 @@ vi.mock("./prisma", () => ({
       findMany: (...args: unknown[]) => mockFindMany(...args),
       create: (...args: unknown[]) => mockCreate(...args),
     },
-    $transaction: (fn: (tx: unknown) => Promise<unknown>, _opts?: unknown) =>
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         rateLimitEntry: {
           findMany: (...args: unknown[]) => mockFindMany(...args),

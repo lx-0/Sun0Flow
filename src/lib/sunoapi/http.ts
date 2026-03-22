@@ -20,9 +20,6 @@ export const NOOP_CALLBACK_URL = "https://localhost/noop";
 
 export const DEFAULT_MODEL: SunoModel = "V5";
 
-/** Default request timeout in milliseconds (30 seconds) */
-const DEFAULT_TIMEOUT_MS = 30_000;
-
 function getTimeoutMs(): number {
   return SUNO_API_TIMEOUT_MS;
 }
