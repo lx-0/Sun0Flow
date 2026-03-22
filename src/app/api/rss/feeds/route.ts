@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const { userId, error: authError } = await resolveUser(request);
+
+  if (authError) return authError;
 
   const feeds = await prisma.rssFeedSubscription.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     orderBy: { createdAt: "asc" },
     select: { id: true, url: true, title: true, createdAt: true },
   });
@@ -18,10 +17,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { userId, error: authError } = await resolveUser(req);
+
+  if (authError) return authError;
 
   let body: unknown;
   try {
@@ -41,21 +39,21 @@ export async function POST(req: NextRequest) {
   }
 
   const existing = await prisma.rssFeedSubscription.findUnique({
-    where: { userId_url: { userId: session.user.id, url: trimmed } },
+    where: { userId_url: { userId: userId, url: trimmed } },
   });
   if (existing) {
     return NextResponse.json({ error: "Feed already added" }, { status: 409 });
   }
 
   const count = await prisma.rssFeedSubscription.count({
-    where: { userId: session.user.id },
+    where: { userId: userId },
   });
   if (count >= 20) {
     return NextResponse.json({ error: "Maximum 20 feeds allowed" }, { status: 400 });
   }
 
   const feed = await prisma.rssFeedSubscription.create({
-    data: { userId: session.user.id, url: trimmed },
+    data: { userId: userId, url: trimmed },
     select: { id: true, url: true, title: true, createdAt: true },
   });
 
@@ -63,10 +61,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { userId, error: authError } = await resolveUser(req);
+
+  if (authError) return authError;
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
@@ -75,7 +72,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   const feed = await prisma.rssFeedSubscription.findUnique({ where: { id } });
-  if (!feed || feed.userId !== session.user.id) {
+  if (!feed || feed.userId !== userId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

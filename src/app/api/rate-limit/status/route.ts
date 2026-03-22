@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
 
-    const userId = session.user.id;
+    if (authError) return authError;
     const { status } = await checkRateLimit(userId);
 
     // Usage history: daily generation count for the last 7 days

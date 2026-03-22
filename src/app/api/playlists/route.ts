@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 const MAX_PLAYLISTS = 50;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const playlists = await prisma.playlist.findMany({
-      where: { userId: session.user.id },
+      where: { userId: userId },
       include: { _count: { select: { songs: true } } },
       orderBy: { updatedAt: "desc" },
     });
@@ -28,10 +27,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const body = await request.json();
     const { name, description } = body;
@@ -51,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     const count = await prisma.playlist.count({
-      where: { userId: session.user.id },
+      where: { userId: userId },
     });
 
     if (count >= MAX_PLAYLISTS) {
@@ -65,7 +63,7 @@ export async function POST(request: Request) {
       data: {
         name: name.trim(),
         description: description?.trim() || null,
-        userId: session.user.id,
+        userId: userId,
       },
       include: { _count: { select: { songs: true } } },
     });

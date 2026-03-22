@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
@@ -7,13 +7,12 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const tag = await prisma.tag.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
     if (!tag) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -30,7 +29,7 @@ export async function PATCH(
     // Check duplicate name if renaming
     if (name && name !== tag.name) {
       const existing = await prisma.tag.findUnique({
-        where: { userId_name: { userId: session.user.id, name } },
+        where: { userId_name: { userId: userId, name } },
       });
       if (existing) {
         return NextResponse.json({ error: "A tag with that name already exists" }, { status: 409 });
@@ -52,17 +51,16 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const tag = await prisma.tag.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
     if (!tag) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });

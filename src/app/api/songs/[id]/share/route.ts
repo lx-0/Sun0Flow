@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { invalidateKey, cacheKey } from "@/lib/cache";
 
 export async function PATCH(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const song = await prisma.song.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
 
     if (!song) {

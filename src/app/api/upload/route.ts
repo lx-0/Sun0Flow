@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import {
   uploadFileBase64,
   uploadFileFromUrl,
@@ -38,11 +38,9 @@ const MAX_BASE64_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     // Check rate limit
     const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);

@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { boostStyle, SunoApiError } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const { content } = await request.json();
 
@@ -27,7 +26,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const userApiKey = await resolveUserApiKey(session.user.id);
+    const userApiKey = await resolveUserApiKey(userId);
     const result = await boostStyle(content.trim(), userApiKey);
 
     return NextResponse.json({

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 const MAX_SONGS_PER_PLAYLIST = 500;
@@ -9,13 +9,12 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const playlist = await prisma.playlist.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
       include: { _count: { select: { songs: true } } },
     });
 
@@ -35,7 +34,7 @@ export async function POST(
 
     // Verify user owns the song
     const song = await prisma.song.findFirst({
-      where: { id: songId, userId: session.user.id },
+      where: { id: songId, userId: userId },
     });
 
     if (!song) {

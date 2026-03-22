@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
@@ -21,19 +21,18 @@ function userFriendlyError(error: unknown): string {
 
 /** GET /api/songs/[id]/variations — list variations for a song */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const { id } = await params;
 
     const song = await prisma.song.findUnique({ where: { id } });
-    if (!song || song.userId !== session.user.id) {
+    if (!song || song.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -100,11 +99,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
     const { id: parentId } = await params;
 
     // Verify parent song exists and belongs to user

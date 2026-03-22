@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 
@@ -7,13 +7,12 @@ const VALID_REASONS = ["offensive", "copyright", "spam", "other"];
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     // Rate limit: 10 reports per hour
-    const { acquired, status } = await acquireRateLimitSlot(session.user.id, "report");
+    const { acquired, status } = await acquireRateLimitSlot(userId, "report");
     if (!acquired) {
       return NextResponse.json(
         { error: "Too many reports. Please try again later.", status },
@@ -46,21 +45,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Don't allow reporting your own songs
-    if (song.userId === session.user.id) {
+    if (song.userId === userId) {
       return NextResponse.json({ error: "Cannot report your own song" }, { status: 400 });
     }
 
     const report = await prisma.report.create({
       data: {
         songId,
-        reporterId: session.user.id,
+        reporterId: userId,
         reason,
         description: description?.trim()?.slice(0, 1000) || null,
       },
     });
 
     // Console log placeholder for admin notification
-    console.log(`[MODERATION] New report filed: ${report.id} for song ${songId} by user ${session.user.id} (reason: ${reason})`);
+    console.log(`[MODERATION] New report filed: ${report.id} for song ${songId} by user ${userId} (reason: ${reason})`);
 
     return NextResponse.json({ id: report.id, status: "pending" }, { status: 201 });
   } catch {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { prisma } from "@/lib/prisma";
@@ -24,11 +24,9 @@ function userFriendlyError(error: unknown): string {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     // Atomically check and claim a rate limit slot
     const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);

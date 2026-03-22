@@ -41,8 +41,18 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (!token && !isPublic) {
+  // Allow API requests with a Bearer sk-... API key through without session
+  const hasApiKeyHeader =
+    pathname.startsWith("/api/") &&
+    request.headers.get("authorization")?.startsWith("Bearer sk-");
+
+  if (!token && !isPublic && !hasApiKeyHeader) {
     return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // API key auth must NOT access admin routes
+  if (hasApiKeyHeader && !token && (pathname.startsWith("/admin") || pathname.startsWith("/api/admin"))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (token && (pathname === "/login" || pathname === "/register" || pathname === "/forgot-password")) {

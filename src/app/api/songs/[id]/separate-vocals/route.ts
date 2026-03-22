@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { separateVocals, SunoApiError } from "@/lib/sunoapi";
 import type { SeparationType } from "@/lib/sunoapi";
@@ -24,11 +24,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
     const { id: songId } = await params;
 
     const song = await prisma.song.findUnique({ where: { id: songId } });

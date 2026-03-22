@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -10,10 +10,9 @@ import { prisma } from "@/lib/prisma";
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const params = request.nextUrl.searchParams;
     const format = params.get("format") || "json";
@@ -32,8 +31,6 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const userId = session.user.id;
     const today = new Date().toISOString().split("T")[0];
 
     if (format === "csv") {

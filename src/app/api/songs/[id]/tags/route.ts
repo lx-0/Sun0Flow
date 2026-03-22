@@ -1,22 +1,21 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 const MAX_TAGS_PER_SONG = 10;
 const MAX_TAGS_PER_USER = 30;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const song = await prisma.song.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
     if (!song) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -39,13 +38,12 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const song = await prisma.song.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
     if (!song) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -68,7 +66,7 @@ export async function POST(
     let tag;
     if (tagId) {
       tag = await prisma.tag.findFirst({
-        where: { id: tagId, userId: session.user.id },
+        where: { id: tagId, userId: userId },
       });
       if (!tag) {
         return NextResponse.json({ error: "Tag not found" }, { status: 404 });
@@ -76,16 +74,16 @@ export async function POST(
     } else {
       // Find or create tag by name
       tag = await prisma.tag.findUnique({
-        where: { userId_name: { userId: session.user.id, name: tagName } },
+        where: { userId_name: { userId: userId, name: tagName } },
       });
       if (!tag) {
         // Check user tag limit before creating
-        const userTagCount = await prisma.tag.count({ where: { userId: session.user.id } });
+        const userTagCount = await prisma.tag.count({ where: { userId: userId } });
         if (userTagCount >= MAX_TAGS_PER_USER) {
           return NextResponse.json({ error: `Maximum ${MAX_TAGS_PER_USER} tags allowed` }, { status: 400 });
         }
         tag = await prisma.tag.create({
-          data: { name: tagName, userId: session.user.id },
+          data: { name: tagName, userId: userId },
         });
       }
     }

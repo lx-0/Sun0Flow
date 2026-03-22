@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 // PATCH /api/prompt-templates/[id] — update a user template
@@ -8,10 +8,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const template = await prisma.promptTemplate.findUnique({
       where: { id: params.id },
@@ -25,7 +24,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Cannot edit built-in templates" }, { status: 403 });
     }
 
-    if (template.userId !== session.user.id) {
+    if (template.userId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -62,14 +61,13 @@ export async function PATCH(
 
 // DELETE /api/prompt-templates/[id] — delete a user template
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const template = await prisma.promptTemplate.findUnique({
       where: { id: params.id },
@@ -83,7 +81,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Cannot delete built-in templates" }, { status: 403 });
     }
 
-    if (template.userId !== session.user.id) {
+    if (template.userId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

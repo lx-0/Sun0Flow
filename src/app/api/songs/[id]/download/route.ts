@@ -1,22 +1,21 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 
 const DOWNLOAD_RATE_LIMIT = 50; // per hour
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const song = await prisma.song.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
 
     if (!song) {
@@ -32,7 +31,7 @@ export async function GET(
 
     // Rate limit: 50 downloads per hour per user
     const { acquired, status } = await acquireRateLimitSlot(
-      session.user.id,
+      userId,
       "download"
     );
     if (!acquired) {

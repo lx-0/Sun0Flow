@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import {
   uploadFileBase64,
   uploadFileFromUrl,
@@ -42,11 +42,9 @@ interface TrackSource {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
     if (!acquired) {

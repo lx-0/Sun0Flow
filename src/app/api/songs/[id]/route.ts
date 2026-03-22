@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
 import { computeETag, CacheControl } from "@/lib/cache";
@@ -9,18 +9,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const { id } = await params;
 
     const song = await prisma.song.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, userId: userId },
       include: {
         songTags: { include: { tag: true }, orderBy: { tag: { name: "asc" } } },
-        favorites: { where: { userId: session.user.id }, select: { id: true } },
+        favorites: { where: { userId: userId }, select: { id: true } },
         _count: { select: { favorites: true } },
       },
     });

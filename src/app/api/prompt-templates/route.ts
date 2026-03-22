@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 const MAX_USER_TEMPLATES = 20;
@@ -8,17 +8,16 @@ const MAX_USER_TEMPLATES = 20;
 // Optional query param: ?category=pop (filter by category)
 export async function GET(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
     const search = searchParams.get("search");
 
     const where: Record<string, unknown> = {
-      OR: [{ isBuiltIn: true }, { userId: session.user.id }],
+      OR: [{ isBuiltIn: true }, { userId: userId }],
     };
     if (category) {
       where.category = category;
@@ -42,7 +41,7 @@ export async function GET(request: Request) {
     // Also return the distinct categories for the filter UI
     const categories = await prisma.promptTemplate.findMany({
       where: {
-        OR: [{ isBuiltIn: true }, { userId: session.user.id }],
+        OR: [{ isBuiltIn: true }, { userId: userId }],
         category: { not: null },
       },
       select: { category: true },
@@ -62,11 +61,9 @@ export async function GET(request: Request) {
 // POST /api/prompt-templates — create a user template
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const { name, prompt, style, category, description, isInstrumental } = await request.json();
 

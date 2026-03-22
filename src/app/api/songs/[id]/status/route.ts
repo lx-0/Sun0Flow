@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { getTaskStatus } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
@@ -9,19 +9,18 @@ import { invalidateByPrefix } from "@/lib/cache";
 const MAX_POLL_ATTEMPTS = 20;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const { id } = await params;
 
     const song = await prisma.song.findUnique({ where: { id } });
-    if (!song || song.userId !== session.user.id) {
+    if (!song || song.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -55,13 +54,13 @@ export async function GET(
     }
 
     // Check task status with Suno API
-    const userApiKey = await resolveUserApiKey(session.user.id);
+    const userApiKey = await resolveUserApiKey(userId);
     let taskResult;
     try {
       taskResult = await getTaskStatus(song.sunoJobId, userApiKey);
     } catch (pollError) {
       logServerError("status-poll", pollError, {
-        userId: session.user.id,
+        userId: userId,
         route: `/api/songs/${id}/status`,
         params: { songId: id, sunoJobId: song.sunoJobId, pollCount: newPollCount },
       });

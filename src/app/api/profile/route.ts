@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const { userId, error: authError } = await resolveUser(request);
+
+  if (authError) return authError;
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { id: true, email: true, name: true, bio: true, avatarUrl: true, defaultStyle: true, preferredGenres: true },
   });
 
@@ -22,10 +21,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { userId, error: authError } = await resolveUser(request);
+
+  if (authError) return authError;
 
   const body = await request.json();
   const { name, bio, avatarUrl } = body;
@@ -61,7 +59,7 @@ export async function PATCH(request: Request) {
   }
 
   const user = await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: userId },
     data,
     select: { id: true, email: true, name: true, bio: true, avatarUrl: true },
   });
@@ -70,10 +68,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { userId, error: authError } = await resolveUser(request);
+
+  if (authError) return authError;
 
   const { password, confirmEmail } = await request.json();
 
@@ -85,7 +82,7 @@ export async function DELETE(request: Request) {
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { email: true, passwordHash: true },
   });
 
@@ -109,7 +106,7 @@ export async function DELETE(request: Request) {
   }
 
   // Cascade delete: songs, playlists, templates, accounts, sessions all cascade
-  await prisma.user.delete({ where: { id: session.user.id } });
+  await prisma.user.delete({ where: { id: userId } });
 
   return NextResponse.json({ success: true });
 }

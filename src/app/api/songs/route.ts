@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { logServerError } from "@/lib/error-logger";
@@ -7,10 +7,9 @@ import { CacheControl } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const params = request.nextUrl.searchParams;
     const q = params.get("q")?.trim() || "";
@@ -23,7 +22,7 @@ export async function GET(request: NextRequest) {
     const tagId = params.get("tagId") || "";
 
     // Build WHERE conditions
-    const where: Prisma.SongWhereInput = { userId: session.user.id };
+    const where: Prisma.SongWhereInput = { userId: userId };
 
     // Text search: title OR prompt (case-insensitive)
     if (q) {
@@ -98,7 +97,7 @@ export async function GET(request: NextRequest) {
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         include: {
           songTags: { include: { tag: true }, orderBy: { tag: { name: "asc" } } },
-          favorites: { where: { userId: session.user.id }, select: { id: true } },
+          favorites: { where: { userId: userId }, select: { id: true } },
           _count: { select: { favorites: true } },
         },
       }),

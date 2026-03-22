@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { invalidateByPrefix } from "@/lib/cache";
 
@@ -8,13 +8,12 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const song = await prisma.song.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
 
     if (!song) {
@@ -37,7 +36,7 @@ export async function PATCH(
       },
     });
 
-    invalidateByPrefix(`dashboard-stats:${session.user.id}`);
+    invalidateByPrefix(`dashboard-stats:${userId}`);
 
     return NextResponse.json({
       rating: updated.rating,

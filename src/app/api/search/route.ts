@@ -1,21 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { CacheControl } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const q = request.nextUrl.searchParams.get("q")?.trim() || "";
     if (!q) {
       return NextResponse.json({ songs: [], playlists: [] });
     }
-
-    const userId = session.user.id;
 
     const [songs, playlists] = await Promise.all([
       prisma.song.findMany({

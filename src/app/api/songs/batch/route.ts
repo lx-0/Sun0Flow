@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 const MAX_BATCH_SIZE = 50;
@@ -8,10 +8,9 @@ type BatchAction = (typeof VALID_ACTIONS)[number];
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const body = await request.json();
     const { action, songIds } = body as { action: string; songIds: string[] };
@@ -36,8 +35,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    const userId = session.user.id;
 
     // Verify all songs belong to the user
     const userSongs = await prisma.song.findMany({

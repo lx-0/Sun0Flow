@@ -1,20 +1,19 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { invalidateByPrefix } from "@/lib/cache";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const song = await prisma.song.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
 
     if (!song) {
@@ -22,14 +21,14 @@ export async function POST(
     }
 
     const favorite = await prisma.favorite.upsert({
-      where: { userId_songId: { userId: session.user.id, songId: song.id } },
-      create: { userId: session.user.id, songId: song.id },
+      where: { userId_songId: { userId: userId, songId: song.id } },
+      create: { userId: userId, songId: song.id },
       update: {},
     });
 
     const count = await prisma.favorite.count({ where: { songId: song.id } });
 
-    invalidateByPrefix(`dashboard-stats:${session.user.id}`);
+    invalidateByPrefix(`dashboard-stats:${userId}`);
 
     return NextResponse.json({ isFavorite: true, favoriteCount: count, favoriteId: favorite.id });
   } catch {
@@ -41,17 +40,16 @@ export async function POST(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const song = await prisma.song.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, userId: userId },
     });
 
     if (!song) {
@@ -59,12 +57,12 @@ export async function DELETE(
     }
 
     await prisma.favorite.deleteMany({
-      where: { userId: session.user.id, songId: song.id },
+      where: { userId: userId, songId: song.id },
     });
 
     const count = await prisma.favorite.count({ where: { songId: song.id } });
 
-    invalidateByPrefix(`dashboard-stats:${session.user.id}`);
+    invalidateByPrefix(`dashboard-stats:${userId}`);
 
     return NextResponse.json({ isFavorite: false, favoriteCount: count });
   } catch {

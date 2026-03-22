@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 const CATEGORY = "auto-generated";
@@ -11,16 +11,15 @@ const CATEGORY = "auto-generated";
  * If none exist yet, returns an empty array — the client should call
  * POST /api/prompts/generate to populate them.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const prompts = await prisma.promptTemplate.findMany({
       where: {
-        userId: session.user.id,
+        userId: userId,
         category: CATEGORY,
       },
       orderBy: { createdAt: "desc" },

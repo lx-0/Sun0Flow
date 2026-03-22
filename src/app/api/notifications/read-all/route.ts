@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 // PATCH /api/notifications/read-all — mark all notifications as read
-export async function PATCH() {
+export async function PATCH(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     await prisma.notification.updateMany({
-      where: { userId: session.user.id, read: false },
+      where: { userId: userId, read: false },
       data: { read: true },
     });
 

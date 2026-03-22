@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { CacheControl } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { userId, error: authError } = await resolveUser(request);
+
+    if (authError) return authError;
 
     const params = request.nextUrl.searchParams;
     const q = params.get("q")?.trim() || "";
@@ -17,7 +16,7 @@ export async function GET(request: NextRequest) {
     const sortBy = params.get("sortBy") || "recently_liked";
 
     // Build song WHERE conditions
-    const songWhere: Prisma.SongWhereInput = { userId: session.user.id };
+    const songWhere: Prisma.SongWhereInput = { userId: userId };
 
     if (q) {
       songWhere.OR = [
@@ -50,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     const favorites = await prisma.favorite.findMany({
       where: {
-        userId: session.user.id,
+        userId: userId,
         song: songWhere,
       },
       include: {

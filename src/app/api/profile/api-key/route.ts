@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const { userId, error: authError } = await resolveUser(request);
+
+  if (authError) return authError;
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { sunoApiKey: true },
   });
 
@@ -27,10 +26,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { userId, error: authError } = await resolveUser(request);
+
+  if (authError) return authError;
 
   const { sunoApiKey } = await request.json();
 
@@ -45,7 +43,7 @@ export async function PATCH(request: Request) {
   const keyValue = sunoApiKey.trim() || null;
 
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: userId },
     data: { sunoApiKey: keyValue },
   });
 

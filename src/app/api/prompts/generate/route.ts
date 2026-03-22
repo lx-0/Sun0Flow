@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { fetchFeed, type RssItem } from "@/lib/rss";
 import { boostStyle } from "@/lib/sunoapi";
@@ -63,11 +63,9 @@ function scoreItem(item: RssItem): number {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
+    const { userId, error: authError } = await resolveUser(req);
+
+    if (authError) return authError;
 
     let boost = false;
     try {
