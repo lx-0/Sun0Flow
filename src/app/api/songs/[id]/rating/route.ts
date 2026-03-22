@@ -3,6 +3,35 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { invalidateByPrefix } from "@/lib/cache";
 
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { userId, error: authError } = await resolveUser(request);
+    if (authError) return authError;
+
+    const song = await prisma.song.findFirst({
+      where: { id: params.id, userId },
+      select: { rating: true, ratingNote: true },
+    });
+
+    if (!song) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      rating: song.rating,
+      ratingNote: song.ratingNote,
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }

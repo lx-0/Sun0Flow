@@ -24,7 +24,7 @@ import {
 import { PlayIcon as PlayOutlineIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import type { Song } from "@prisma/client";
-import { getRatings, type SongRating } from "@/lib/ratings";
+import type { SongRating } from "@/lib/ratings";
 import { downloadSongFile } from "@/lib/download";
 import { exportAsZip, exportAsM3U, type ExportableSong } from "@/lib/export";
 import { useToast } from "./Toast";
@@ -649,7 +649,6 @@ export function LibraryView({
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [totalSongs, setTotalSongs] = useState<number>(initialSongs.length);
-  const [ratings, setRatings] = useState<Record<string, SongRating>>({});
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
 
@@ -711,24 +710,12 @@ export function LibraryView({
     }
   }, [exportMenuOpen]);
 
-  // ─── Init ratings ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    setRatings(getRatings());
-  }, []);
-
   // ─── Fetch user tags for filter ───────────────────────────────────────────
   useEffect(() => {
     fetch("/api/tags")
       .then((r) => r.json())
       .then((data) => { if (data.tags) setAvailableTags(data.tags); })
       .catch(() => {});
-  }, []);
-
-  // Reload ratings when returning to the page
-  useEffect(() => {
-    const handleFocus = () => setRatings(getRatings());
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   // ─── Sync filters → URL params ───────────────────────────────────────────
@@ -1295,7 +1282,7 @@ export function LibraryView({
               isPlaying={isPlaying}
               currentTime={currentTime}
               audioDuration={audioDuration}
-              rating={ratings[song.id]}
+              rating={song.rating ? { stars: song.rating, note: song.ratingNote ?? "" } : undefined}
               downloadProgress={downloadProgress[song.id] ?? null}
               downloadError={downloadErrors[song.id] ?? null}
               isSelected={selectedSongIds.has(song.id)}

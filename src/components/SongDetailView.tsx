@@ -25,7 +25,7 @@ import {
 } from "@heroicons/react/24/solid";
 import { HeartIcon as HeartOutlineIcon } from "@heroicons/react/24/outline";
 import type { SunoSong } from "@/lib/sunoapi";
-import { getRating, setRating, type SongRating } from "@/lib/ratings";
+import { getRating, type SongRating } from "@/lib/ratings";
 import { downloadSongFile } from "@/lib/download";
 import { useToast } from "./Toast";
 import { WaveformPlayer } from "./WaveformPlayer";
@@ -385,6 +385,8 @@ interface SongDetailViewProps {
   publicSlug?: string | null;
   isHidden?: boolean;
   isInstrumental?: boolean;
+  initialRating?: number | null;
+  initialRatingNote?: string | null;
   songTags?: SongTag[];
   variations?: VariationSummary[];
   variationCount?: number;
@@ -404,6 +406,8 @@ export function SongDetailView({
   publicSlug: initialPublicSlug = null,
   isHidden = false,
   isInstrumental = false,
+  initialRating = null,
+  initialRatingNote = null,
   songTags: initialSongTags = [],
   variations: initialVariations = [],
   variationCount: initialVariationCount = 0,
@@ -422,9 +426,13 @@ export function SongDetailView({
   const [remixAction, setRemixAction] = useState<RemixAction | null>(null);
   const [remixSubmitting, setRemixSubmitting] = useState(false);
 
-  const [rating, setRatingState] = useState<SongRating>({ stars: 0, note: "" });
+  const [rating, setRatingState] = useState<SongRating>({
+    stars: initialRating ?? 0,
+    note: initialRatingNote ?? "",
+  });
   const [saved, setSaved] = useState(false);
-  const [noteDraft, setNoteDraft] = useState("");
+  const [savingRating, setSavingRating] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(initialRatingNote ?? "");
 
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -450,14 +458,15 @@ export function SongDetailView({
 
   const hasAudio = Boolean(song.audioUrl);
 
-  // Load existing rating
+  // Fallback: load from localStorage if no DB rating (graceful degradation for unauthenticated)
   useEffect(() => {
+    if (initialRating) return; // DB rating takes precedence
     const existing = getRating(song.id);
     if (existing) {
       setRatingState(existing);
       setNoteDraft(existing.note);
     }
-  }, [song.id]);
+  }, [song.id, initialRating]);
 
   // Close playlist dropdown on outside click
   useEffect(() => {
@@ -491,12 +500,24 @@ export function SongDetailView({
     }
   }
 
-  function handleSaveRating() {
-    if (rating.stars === 0) return;
+  async function handleSaveRating() {
+    if (rating.stars === 0 || savingRating) return;
     const r: SongRating = { stars: rating.stars, note: noteDraft.trim() };
-    setRating(song.id, r);
-    setRatingState(r);
-    setSaved(true);
+    setSavingRating(true);
+    try {
+      const res = await fetch(`/api/songs/${song.id}/rating`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stars: r.stars, note: r.note }),
+      });
+      if (!res.ok) throw new Error("Failed to save rating");
+      setRatingState(r);
+      setSaved(true);
+    } catch {
+      toast("Failed to save rating", "error");
+    } finally {
+      setSavingRating(false);
+    }
   }
 
   async function handleToggleFavorite() {

@@ -29,6 +29,8 @@ async function fetchDbMeta(songId: string) {
         isHidden: true,
         isInstrumental: true,
         publicSlug: true,
+        rating: true,
+        ratingNote: true,
         _count: { select: { favorites: true } },
         favorites: { where: { userId: session.user.id }, select: { id: true } },
       },
@@ -41,9 +43,11 @@ async function fetchDbMeta(songId: string) {
       publicSlug: dbSong?.publicSlug ?? null,
       isHidden: dbSong?.isHidden ?? false,
       isInstrumental: dbSong?.isInstrumental ?? false,
+      rating: dbSong?.rating ?? null,
+      ratingNote: dbSong?.ratingNote ?? null,
     };
   } catch {
-    return { isFavorite: false, favoriteCount: 0, sunoJobId: null, isPublic: false, publicSlug: null, isHidden: false, isInstrumental: false };
+    return { isFavorite: false, favoriteCount: 0, sunoJobId: null, isPublic: false, publicSlug: null, isHidden: false, isInstrumental: false, rating: null, ratingNote: null };
   }
 }
 
@@ -140,6 +144,8 @@ async function SongDetailContent({ id }: { id: string }) {
       publicSlug={dbMeta.publicSlug}
       isHidden={dbMeta.isHidden}
       isInstrumental={dbMeta.isInstrumental}
+      initialRating={dbMeta.rating}
+      initialRatingNote={dbMeta.ratingNote}
       songTags={songTags}
       variations={variationData.variations}
       variationCount={variationData.variationCount}
