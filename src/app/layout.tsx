@@ -10,8 +10,14 @@ const geistSans = localFont({
   weight: "100 900",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sunoflow.app";
+
 export const metadata: Metadata = {
-  title: "SunoFlow — Personal Music Manager",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "SunoFlow — Personal Music Manager",
+    template: "%s — SunoFlow",
+  },
   description: "Manage your Suno music, discover inspiration, and automate your creative workflow.",
   manifest: "/manifest.json",
   openGraph: {
@@ -19,11 +25,13 @@ export const metadata: Metadata = {
     description: "Manage your Suno music, discover inspiration, and automate your creative workflow.",
     type: "website",
     siteName: "SunoFlow",
+    images: [{ url: "/icons/icon-512.png", width: 512, height: 512, alt: "SunoFlow" }],
   },
   twitter: {
     card: "summary",
     title: "SunoFlow — Personal Music Manager",
     description: "Manage your Suno music, discover inspiration, and automate your creative workflow.",
+    images: ["/icons/icon-512.png"],
   },
 };
 
