@@ -352,6 +352,10 @@ function PreferencesTab() {
         <div className="border-t border-gray-200 dark:border-gray-800" />
 
         <RssFeedsSection />
+
+        <div className="border-t border-gray-200 dark:border-gray-800" />
+
+        <InstagramPostsSection />
       </div>
     </>
   );
@@ -625,6 +629,132 @@ function RssFeedsSection() {
                 onClick={() => removeFeed(url)}
                 className="text-gray-400 dark:text-gray-500 hover:text-red-400 transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 aria-label="Remove feed"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+const IG_POSTS_KEY = "sunoflow_ig_posts";
+
+function InstagramPostsSection() {
+  const [postUrls, setPostUrls] = useState<string[]>([]);
+  const [newUrl, setNewUrl] = useState("");
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(IG_POSTS_KEY);
+      setPostUrls(stored ? JSON.parse(stored) : []);
+    } catch {
+      setPostUrls([]);
+    }
+  }, []);
+
+  const persist = (urls: string[]) => {
+    setPostUrls(urls);
+    try {
+      localStorage.setItem(IG_POSTS_KEY, JSON.stringify(urls));
+    } catch {
+      // quota exceeded — ignore
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const addPost = () => {
+    const url = newUrl.trim();
+    if (!url) return;
+    const igRegex = /^https?:\/\/(www\.)?instagram\.com\/(p|reel|tv)\/[\w-]+\/?/;
+    if (!igRegex.test(url)) {
+      setError("Paste a link to an Instagram post, reel, or IGTV video");
+      return;
+    }
+    if (postUrls.includes(url)) {
+      setError("Post already added");
+      return;
+    }
+    setError("");
+    setNewUrl("");
+    persist([...postUrls, url]);
+  };
+
+  const removePost = (url: string) => {
+    persist(postUrls.filter((u) => u !== url));
+    try {
+      localStorage.removeItem("sunoflow_ig_cache");
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") addPost();
+  };
+
+  // Extract short ID from URL for display
+  const shortId = (url: string) => {
+    const match = url.match(/\/(p|reel|tv)\/([\w-]+)/);
+    return match ? `/${match[1]}/${match[2]}` : url;
+  };
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Instagram Posts</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          Paste Instagram post URLs to build a visual mood board on the Inspire page.
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={newUrl}
+          onChange={(e) => {
+            setNewUrl(e.target.value);
+            setError("");
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="https://instagram.com/p/ABC123..."
+          className={`flex-1 bg-white dark:bg-gray-900 border rounded-lg px-3 py-2 text-base text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent ${
+            error ? "border-red-500" : "border-gray-300 dark:border-gray-700"
+          }`}
+        />
+        <button
+          onClick={addPost}
+          className="flex items-center gap-1 px-3 py-2 bg-pink-600 hover:bg-pink-500 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          <PlusIcon className="w-4 h-4" />
+          Add
+        </button>
+      </div>
+
+      <FieldError error={error} />
+      {saved && <p className="text-xs text-green-400">Saved!</p>}
+
+      {postUrls.length === 0 ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">No Instagram posts added yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {postUrls.map((url) => (
+            <li
+              key={url}
+              className="flex items-center gap-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-2"
+            >
+              <span className="flex-1 text-xs text-gray-700 dark:text-gray-300 truncate">
+                {shortId(url)}
+              </span>
+              <button
+                onClick={() => removePost(url)}
+                className="text-gray-400 dark:text-gray-500 hover:text-red-400 transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                aria-label="Remove post"
               >
                 <TrashIcon className="w-4 h-4" />
               </button>
