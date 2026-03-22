@@ -473,14 +473,16 @@ export function SongDetailView({
 
   const hasAudio = Boolean(song.audioUrl);
 
-  // Fallback: load from localStorage if no DB rating (graceful degradation for unauthenticated)
+  // Fallback: load from backend Rating model if no DB rating on Song
   useEffect(() => {
-    if (initialRating) return; // DB rating takes precedence
-    const existing = getRating(song.id);
-    if (existing) {
+    if (initialRating) return; // Song-level DB rating takes precedence
+    let cancelled = false;
+    getRating(song.id).then((existing) => {
+      if (cancelled || !existing) return;
       setRatingState(existing);
       setNoteDraft(existing.note);
-    }
+    });
+    return () => { cancelled = true; };
   }, [song.id, initialRating]);
 
   // Close playlist dropdown on outside click

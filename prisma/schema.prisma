@@ -72,6 +72,7 @@ model User {
   rssFeeds         RssFeedSubscription[]
   personas         Persona[]
   apiKeys          ApiKey[]
+  ratings          Rating[]
 }
 
 model Song {
@@ -109,6 +110,7 @@ model Song {
   songTags      SongTag[]
   favorites     Favorite[]
   reports       Report[]
+  ratings       Rating[]
 
   @@index([userId, title])
   @@index([userId, prompt])
@@ -293,6 +295,22 @@ model Persona {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, personaId])
+  @@index([userId])
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  userId    String
+  songId    String
+  value     Int      // 1-5 stars
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, songId])
+  @@index([songId])
   @@index([userId])
 }
 

@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     totalFavorites,
     totalPlaylists,
     ratingAgg,
+    userRatingAgg,
     allSongsForGenres,
     topSongs,
     dailyGenerations,
@@ -31,6 +32,12 @@ export async function GET(request: Request) {
       where: { userId, rating: { not: null } },
       _avg: { rating: true },
       _count: { rating: true },
+    }),
+
+    prisma.rating.aggregate({
+      where: { userId },
+      _avg: { value: true },
+      _count: { value: true },
     }),
 
     // All songs with tags for genre breakdown
@@ -103,6 +110,10 @@ export async function GET(request: Request) {
       ? Math.round(ratingAgg._avg.rating * 10) / 10
       : null,
     ratedSongsCount: ratingAgg._count.rating,
+    userRatingAverage: userRatingAgg._avg.value
+      ? Math.round(userRatingAgg._avg.value * 10) / 10
+      : null,
+    userRatedSongsCount: userRatingAgg._count.value,
     genreBreakdown,
     topSongs: topSongs.map((s) => ({
       ...s,

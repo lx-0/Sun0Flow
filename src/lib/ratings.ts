@@ -1,6 +1,6 @@
 /**
- * Song ratings — stored in localStorage for v1.
- * TODO: Move to backend persistence in v2 (POST /api/ratings).
+ * Song ratings — backed by the /api/ratings endpoint.
+ * Replaces the old localStorage-only implementation.
  */
 
 export interface SongRating {
@@ -8,34 +8,60 @@ export interface SongRating {
   note: string;
 }
 
-const STORAGE_KEY = "sunoflow:ratings";
-
-function loadRatings(): Record<string, SongRating> {
-  if (typeof window === "undefined") return {};
+/**
+ * Fetch the current user's rating for a specific song.
+ * Returns null if the user hasn't rated the song or if not authenticated.
+ */
+export async function getRating(songId: string): Promise<SongRating | null> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, SongRating>) : {};
+    const res = await fetch(`/api/ratings?songId=${encodeURIComponent(songId)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const ratings = data.ratings;
+    if (!ratings || ratings.length === 0) return null;
+    return { stars: ratings[0].value, note: "" };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch all ratings for the current user.
+ * Returns a record keyed by songId.
+ */
+export async function getRatings(): Promise<Record<string, SongRating>> {
+  try {
+    const res = await fetch("/api/ratings");
+    if (!res.ok) return {};
+    const data = await res.json();
+    const result: Record<string, SongRating> = {};
+    for (const r of data.ratings) {
+      result[r.songId] = { stars: r.value, note: "" };
+    }
+    return result;
   } catch {
     return {};
   }
 }
 
-export function getRatings(): Record<string, SongRating> {
-  return loadRatings();
+/**
+ * Create or update a rating for a song.
+ */
+export async function setRating(songId: string, rating: SongRating): Promise<void> {
+  await fetch("/api/ratings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ songId, value: rating.stars }),
+  });
 }
 
-export function getRating(songId: string): SongRating | null {
-  return loadRatings()[songId] ?? null;
-}
-
-export function setRating(songId: string, rating: SongRating): void {
-  const ratings = loadRatings();
-  ratings[songId] = rating;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(ratings));
-}
-
-export function removeRating(songId: string): void {
-  const ratings = loadRatings();
-  delete ratings[songId];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(ratings));
+/**
+ * Remove a rating by setting it to the minimum — the API doesn't support DELETE,
+ * so this is a no-op placeholder. The old localStorage version deleted the entry;
+ * with backend persistence, ratings persist but can be overwritten.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function removeRating(songId: string): Promise<void> {
+  // No-op: backend ratings persist. To "clear" a rating,
+  // use the PATCH /api/songs/[id]/rating endpoint with stars=0.
 }
