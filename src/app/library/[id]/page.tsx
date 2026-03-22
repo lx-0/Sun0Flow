@@ -9,6 +9,34 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 async function fetchSong(id: string) {
+  // Look up the song from the local database first (library links use Prisma IDs)
+  try {
+    const session = await auth();
+    if (session?.user?.id) {
+      const dbSong = await prisma.song.findFirst({
+        where: { id, userId: session.user.id },
+      });
+      if (dbSong) {
+        return {
+          id: dbSong.id,
+          title: dbSong.title ?? "Untitled",
+          prompt: dbSong.prompt ?? "",
+          tags: dbSong.tags ?? undefined,
+          audioUrl: dbSong.audioUrl ?? "",
+          imageUrl: dbSong.imageUrl ?? undefined,
+          duration: dbSong.duration ?? undefined,
+          status: (dbSong.generationStatus === "ready" ? "complete" : dbSong.generationStatus === "failed" ? "error" : "pending") as "complete" | "error" | "pending",
+          model: dbSong.sunoModel ?? undefined,
+          lyrics: dbSong.lyrics ?? undefined,
+          createdAt: dbSong.createdAt.toISOString(),
+        } satisfies import("@/lib/sunoapi").SunoSong;
+      }
+    }
+  } catch {
+    // DB lookup failed, continue to external API
+  }
+
+  // Fall back to external Suno API (e.g. for Suno-native IDs)
   try {
     return await sunoApi.getSongById(id);
   } catch {
