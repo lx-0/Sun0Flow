@@ -21,9 +21,13 @@ export async function GET(request: NextRequest) {
     const dateTo = params.get("dateTo") || "";
     const tagId = params.get("tagId") || "";
     const smartFilter = params.get("smartFilter") || "";
+    const includeVariations = params.get("includeVariations") === "true";
 
-    // Build WHERE conditions
-    const where: Prisma.SongWhereInput = { userId: userId };
+    // Build WHERE conditions — exclude child songs (alternates) by default
+    const where: Prisma.SongWhereInput = {
+      userId: userId,
+      ...(includeVariations ? {} : { parentSongId: null }),
+    };
 
     // Full-text search: title, prompt, lyrics, tags (case-insensitive)
     if (q) {
@@ -121,7 +125,7 @@ export async function GET(request: NextRequest) {
         include: {
           songTags: { include: { tag: true }, orderBy: { tag: { name: "asc" } } },
           favorites: { where: { userId: userId }, select: { id: true } },
-          _count: { select: { favorites: true } },
+          _count: { select: { favorites: true, variations: true } },
         },
       }),
       prisma.song.count({ where }),
@@ -137,6 +141,7 @@ export async function GET(request: NextRequest) {
         ...rest,
         isFavorite: favorites.length > 0,
         favoriteCount: _count.favorites,
+        variationCount: _count.variations,
       };
     });
 
