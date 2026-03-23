@@ -68,6 +68,18 @@ vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
+vi.mock("@/lib/credits", () => ({
+  recordCreditUsage: vi.fn().mockResolvedValue(undefined),
+  shouldNotifyLowCredits: vi.fn().mockResolvedValue(false),
+  createLowCreditNotification: vi.fn().mockResolvedValue(undefined),
+  getMonthlyCreditUsage: vi.fn().mockResolvedValue({ creditsRemaining: 100 }),
+  CREDIT_COSTS: { generate: 1 },
+}));
+
+vi.mock("@/lib/cache", () => ({
+  invalidateByPrefix: vi.fn(),
+}));
+
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { generateSong, SunoApiError } from "@/lib/sunoapi";

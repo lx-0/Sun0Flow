@@ -801,44 +801,29 @@ describe("uploadFileFromUrl", () => {
 // ─── 429 retry logic ──────────────────────────────────────────────────────────
 
 describe("retry on 429", () => {
-  it("retries up to 3 times on 429 and succeeds", async () => {
+  it("does not retry on 429 — throws immediately", async () => {
+    mockFetchError(429, "Rate limited");
+
+    const err = await listSongs().catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(SunoApiError);
+    expect(err).toMatchObject({ status: 429 });
+    expect(fetch).toHaveBeenCalledTimes(1); // no retries for 429
+  });
+
+  it("retries once on 500 and succeeds on second attempt", async () => {
     vi.useFakeTimers();
 
-    // First 3 calls: 429, then success
-    mockFetchError(429, "Rate limited");
-    mockFetchError(429, "Rate limited");
-    mockFetchError(429, "Rate limited");
+    // First call: 500, second call: success
+    mockFetchError(500, "Internal Server Error");
     mockFetchOnce({ clips: [MOCK_SONG] });
 
     const promise = listSongs();
-
-    // Advance timers to let retries fire (200ms + 400ms + 800ms)
     await vi.runAllTimersAsync();
 
     const result = await promise;
     expect(result).toHaveLength(1);
-    expect(fetch).toHaveBeenCalledTimes(4);
-
-    vi.useRealTimers();
-  });
-
-  it("throws SunoApiError after max retries exceeded", async () => {
-    vi.useFakeTimers();
-
-    // 4 failures (initial + 3 retries)
-    mockFetchError(429, "Rate limited");
-    mockFetchError(429, "Rate limited");
-    mockFetchError(429, "Rate limited");
-    mockFetchError(429, "Rate limited");
-
-    // Attach catch BEFORE running timers to avoid unhandled rejection
-    const errPromise = listSongs().catch((e: unknown) => e);
-    await vi.runAllTimersAsync();
-
-    const err = await errPromise;
-    expect(err).toBeInstanceOf(SunoApiError);
-    expect(err).toMatchObject({ status: 429 });
-    expect(fetch).toHaveBeenCalledTimes(4); // initial + 3 retries
+    expect(fetch).toHaveBeenCalledTimes(2); // initial + 1 retry
 
     vi.useRealTimers();
   });
@@ -865,11 +850,9 @@ describe("non-retryable error propagation", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("retries on 500 and eventually throws", async () => {
+  it("retries on 500 once and then throws", async () => {
     vi.useFakeTimers();
 
-    mockFetchError(500, "Internal Server Error");
-    mockFetchError(500, "Internal Server Error");
     mockFetchError(500, "Internal Server Error");
     mockFetchError(500, "Internal Server Error");
 
@@ -880,7 +863,7 @@ describe("non-retryable error propagation", () => {
     const err = await errPromise;
     expect(err).toBeInstanceOf(SunoApiError);
     expect(err).toMatchObject({ status: 500 });
-    expect(fetch).toHaveBeenCalledTimes(4); // initial + 3 retries
+    expect(fetch).toHaveBeenCalledTimes(2); // initial + 1 retry (maxRetries=1 by default)
 
     vi.useRealTimers();
   });
@@ -940,11 +923,11 @@ describe("request timeouts", () => {
     expect(callInit.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("retry after 429 still applies timeout per attempt", async () => {
+  it("retry on 500 still applies timeout per attempt", async () => {
     vi.useFakeTimers();
 
-    // First call: 429 (retryable), second call: success
-    mockFetchError(429, "Rate limited");
+    // First call: 500 (retryable), second call: success
+    mockFetchError(500, "Internal Server Error");
     mockFetchOnce(MOCK_TASK_RESPONSE);
 
     const promise = generateSong("test");

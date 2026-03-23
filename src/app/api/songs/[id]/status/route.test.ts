@@ -24,6 +24,9 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
       create: vi.fn(),
     },
+    generationQueueItem: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
   },
 }));
 
@@ -39,11 +42,24 @@ vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
+vi.mock("@/lib/event-bus", () => ({
+  broadcast: vi.fn(),
+}));
+
+vi.mock("@/lib/cache", () => ({
+  invalidateByPrefix: vi.fn(),
+}));
+
+vi.mock("@/lib/auth-resolver", () => ({
+  resolveUser: vi.fn().mockResolvedValue({ userId: "user-1", isApiKey: false, error: null }),
+}));
+
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTaskStatus } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
+import { resolveUser } from "@/lib/auth-resolver";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,7 +93,9 @@ const baseSong = {
 
 beforeEach(() => {
   vi.mocked(auth).mockResolvedValue({ user: { id: "user-1" } } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
+  vi.mocked(resolveUser).mockResolvedValue({ userId: "user-1", isApiKey: false, error: null });
   vi.mocked(resolveUserApiKey).mockResolvedValue(undefined);
+  vi.mocked(prisma.generationQueueItem.updateMany).mockResolvedValue({ count: 0 });
 });
 
 afterEach(() => {
