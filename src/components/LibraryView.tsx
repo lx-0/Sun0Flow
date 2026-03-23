@@ -937,17 +937,8 @@ export function LibraryView({
     setRetryingId(song.id);
 
     try {
-      const body = {
-        prompt: song.prompt,
-        title: song.title || undefined,
-        tags: song.tags || undefined,
-        makeInstrumental: song.isInstrumental,
-      };
-
-      const res = await fetch("/api/generate", {
+      const res = await fetch(`/api/songs/${song.id}/retry`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -963,8 +954,8 @@ export function LibraryView({
         return;
       }
 
-      toast("Retry started! New song will appear shortly.", "success");
-      // Re-fetch the song list to show the new pending song
+      toast("Retry started! Check back shortly.", "success");
+      // Re-fetch the song list to reflect the updated entry
       router.refresh();
     } catch {
       toast("Network error. Please check your connection.", "error");
