@@ -10,7 +10,7 @@ async function fetchSongs() {
     const session = await auth();
     if (!session?.user?.id) return [];
     const songs = await prisma.song.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, archivedAt: null },
       orderBy: { createdAt: "desc" },
       include: {
         favorites: { where: { userId: session.user.id }, select: { id: true } },

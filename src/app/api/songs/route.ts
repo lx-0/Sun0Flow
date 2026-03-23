@@ -22,11 +22,14 @@ export async function GET(request: NextRequest) {
     const tagId = params.get("tagId") || "";
     const smartFilter = params.get("smartFilter") || "";
     const includeVariations = params.get("includeVariations") === "true";
+    const showArchived = params.get("archived") === "true";
 
     // Build WHERE conditions — exclude child songs (alternates) by default
     const where: Prisma.SongWhereInput = {
       userId: userId,
       ...(includeVariations ? {} : { parentSongId: null }),
+      // By default exclude archived songs; when archived=true, show only archived
+      ...(showArchived ? { archivedAt: { not: null } } : { archivedAt: null }),
     };
 
     // Full-text search: title, prompt, lyrics, tags (case-insensitive)

@@ -3,7 +3,7 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 const MAX_BATCH_SIZE = 50;
-const VALID_ACTIONS = ["favorite", "unfavorite", "delete", "tag", "add_to_playlist"] as const;
+const VALID_ACTIONS = ["favorite", "unfavorite", "delete", "restore", "permanent_delete", "tag", "add_to_playlist"] as const;
 type BatchAction = (typeof VALID_ACTIONS)[number];
 
 export async function POST(request: Request) {
@@ -72,8 +72,26 @@ export async function POST(request: Request) {
         break;
       }
       case "delete": {
-        const result = await prisma.song.deleteMany({
+        // Soft-delete: set archivedAt and revoke public sharing
+        const result = await prisma.song.updateMany({
           where: { id: { in: validIds }, userId },
+          data: { archivedAt: new Date(), isPublic: false },
+        });
+        affected = result.count;
+        break;
+      }
+      case "restore": {
+        const result = await prisma.song.updateMany({
+          where: { id: { in: validIds }, userId, archivedAt: { not: null } },
+          data: { archivedAt: null },
+        });
+        affected = result.count;
+        break;
+      }
+      case "permanent_delete": {
+        // Only permanently delete songs that are already archived
+        const result = await prisma.song.deleteMany({
+          where: { id: { in: validIds }, userId, archivedAt: { not: null } },
         });
         affected = result.count;
         break;

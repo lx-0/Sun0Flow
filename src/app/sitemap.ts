@@ -7,7 +7,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sunoflow.app";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const publicSongs = await prisma.song.findMany({
-    where: { isPublic: true, isHidden: false },
+    where: { isPublic: true, isHidden: false, archivedAt: null },
     select: { publicSlug: true, updatedAt: true },
     orderBy: { updatedAt: "desc" },
     take: 5000,

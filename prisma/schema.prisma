@@ -100,6 +100,7 @@ model Song {
   downloadCount    Int      @default(0)
   playCount        Int      @default(0)
   parentSongId     String?
+  archivedAt       DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -117,6 +118,7 @@ model Song {
   @@index([userId, createdAt])
   @@index([userId, playCount])
   @@index([parentSongId])
+  @@index([userId, archivedAt])
 }
 
 model Playlist {

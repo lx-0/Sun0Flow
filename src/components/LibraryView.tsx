@@ -612,6 +612,7 @@ const SMART_FILTER_OPTIONS = [
   { label: "Unrated", value: "unrated" },
   { label: "Most played", value: "most_played" },
   { label: "Favorites", value: "favorites" },
+  { label: "Archive", value: "archived" },
 ] as const;
 
 const STATUS_OPTIONS = [
@@ -711,6 +712,7 @@ export function LibraryView({
   const [batchLoading, setBatchLoading] = useState(false);
 
   const selectionMode = selectedSongIds.size > 0;
+  const isArchiveView = smartFilter === "archived";
 
   // Export state
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -802,7 +804,11 @@ export function LibraryView({
     if (dateTo) params.set("dateTo", dateTo);
     if (sortBy) params.set("sortBy", sortBy);
     if (tagFilter) params.set("tagId", tagFilter);
-    if (smartFilter) params.set("smartFilter", smartFilter);
+    if (smartFilter === "archived") {
+      params.set("archived", "true");
+    } else if (smartFilter) {
+      params.set("smartFilter", smartFilter);
+    }
     return params;
   }
 
@@ -1015,10 +1021,12 @@ export function LibraryView({
     setLastSelectedIndex(null);
   }
 
-  async function handleBatchAction(action: "favorite" | "unfavorite" | "delete") {
+  type BatchActionType = "favorite" | "unfavorite" | "delete" | "restore" | "permanent_delete";
+
+  async function handleBatchAction(action: BatchActionType) {
     if (selectedSongIds.size === 0) return;
 
-    if (action === "delete") {
+    if (action === "delete" || action === "permanent_delete") {
       setShowDeleteConfirm(true);
       return;
     }
@@ -1026,7 +1034,7 @@ export function LibraryView({
     await executeBatchAction(action);
   }
 
-  async function executeBatchAction(action: "favorite" | "unfavorite" | "delete") {
+  async function executeBatchAction(action: BatchActionType) {
     const songIds = Array.from(selectedSongIds);
     setBatchLoading(true);
 
@@ -1058,7 +1066,13 @@ export function LibraryView({
         toast(`${count} song${count !== 1 ? "s" : ""} removed from favorites`, "success");
       } else if (action === "delete") {
         setSongs((prev) => prev.filter((s) => !selectedSongIds.has(s.id)));
-        toast(`${count} song${count !== 1 ? "s" : ""} deleted`, "success");
+        toast(`${count} song${count !== 1 ? "s" : ""} moved to archive`, "success");
+      } else if (action === "restore") {
+        setSongs((prev) => prev.filter((s) => !selectedSongIds.has(s.id)));
+        toast(`${count} song${count !== 1 ? "s" : ""} restored`, "success");
+      } else if (action === "permanent_delete") {
+        setSongs((prev) => prev.filter((s) => !selectedSongIds.has(s.id)));
+        toast(`${count} song${count !== 1 ? "s" : ""} permanently deleted`, "success");
       }
 
       clearSelection();
@@ -1499,9 +1513,11 @@ export function LibraryView({
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center">
           <MusicalNoteIcon className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-700 mb-3" aria-hidden="true" />
           <p className="text-gray-500 dark:text-gray-400 text-sm">
-            {hasAnyFilter
-              ? "No songs match your filters."
-              : "No songs in your library yet."}
+            {isArchiveView
+              ? "Your archive is empty."
+              : hasAnyFilter
+                ? "No songs match your filters."
+                : "No songs in your library yet."}
           </p>
           {hasAnyFilter && (
             <button
@@ -1687,15 +1703,38 @@ export function LibraryView({
             </span>
           </button>
 
-          <button
-            onClick={() => handleBatchAction("delete")}
-            disabled={batchLoading}
-            aria-label="Delete selected songs"
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors min-h-[44px]"
-          >
-            <TrashIcon className="w-4 h-4" />
-            <span className="hidden sm:inline">Delete</span>
-          </button>
+          {isArchiveView ? (
+            <>
+              <button
+                onClick={() => handleBatchAction("restore")}
+                disabled={batchLoading}
+                aria-label="Restore selected songs"
+                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-500 disabled:opacity-50 transition-colors min-h-[44px]"
+              >
+                <ArrowPathIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Restore</span>
+              </button>
+              <button
+                onClick={() => handleBatchAction("permanent_delete")}
+                disabled={batchLoading}
+                aria-label="Permanently delete selected songs"
+                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors min-h-[44px]"
+              >
+                <TrashIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Delete forever</span>
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => handleBatchAction("delete")}
+              disabled={batchLoading}
+              aria-label="Delete selected songs"
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors min-h-[44px]"
+            >
+              <TrashIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          )}
 
           <button
             onClick={clearSelection}
@@ -1707,15 +1746,19 @@ export function LibraryView({
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
+      {/* Delete / Permanent delete confirmation dialog */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" onKeyDown={(e) => { if (e.key === "Escape") setShowDeleteConfirm(false); }}>
           <div className="bg-white dark:bg-gray-900 w-full sm:rounded-2xl rounded-t-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 sm:mx-4 sm:max-w-sm">
             <h3 id="delete-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">
-              Delete {selectedSongIds.size} song{selectedSongIds.size !== 1 ? "s" : ""}?
+              {isArchiveView
+                ? `Permanently delete ${selectedSongIds.size} song${selectedSongIds.size !== 1 ? "s" : ""}?`
+                : `Delete ${selectedSongIds.size} song${selectedSongIds.size !== 1 ? "s" : ""}?`}
             </h3>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              This action cannot be undone. The selected songs will be permanently removed from your library.
+              {isArchiveView
+                ? "This action cannot be undone. The selected songs will be permanently removed from your library."
+                : "The selected songs will be moved to your archive. You can restore them later."}
             </p>
             <div className="mt-4 flex gap-3 justify-end">
               <button
@@ -1726,11 +1769,13 @@ export function LibraryView({
                 Cancel
               </button>
               <button
-                onClick={() => executeBatchAction("delete")}
+                onClick={() => executeBatchAction(isArchiveView ? "permanent_delete" : "delete")}
                 disabled={batchLoading}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 transition-colors min-h-[44px]"
               >
-                {batchLoading ? "Deleting…" : "Delete"}
+                {batchLoading
+                  ? (isArchiveView ? "Deleting forever…" : "Archiving…")
+                  : (isArchiveView ? "Delete forever" : "Delete")}
               </button>
             </div>
           </div>

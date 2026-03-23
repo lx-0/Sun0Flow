@@ -33,7 +33,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const song = await getSong(params.slug);
 
-  if (!song || !song.isPublic || song.isHidden) {
+  if (!song || !song.isPublic || song.isHidden || song.archivedAt) {
     return { robots: { index: false } };
   }
 
@@ -75,7 +75,7 @@ export default async function PublicSongPage({
 }) {
   const song = await getSong(params.slug);
 
-  if (!song || !song.isPublic || song.isHidden) {
+  if (!song || !song.isPublic || song.isHidden || song.archivedAt) {
     notFound();
   }
 
