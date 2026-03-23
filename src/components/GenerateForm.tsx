@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { SparklesIcon, BookmarkIcon, TrashIcon } from "@heroicons/react/24/solid";
-import { BookmarkIcon as BookmarkOutline, ClockIcon, BoltIcon, UserCircleIcon, PencilSquareIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
+import { BookmarkIcon as BookmarkOutline, ClockIcon, BoltIcon, UserCircleIcon, PencilSquareIcon, ChevronDownIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { useToast } from "./Toast";
 import { useGenerationPoller } from "@/hooks/useGenerationPoller";
 import { GenerationProgress } from "./GenerationProgress";
@@ -64,6 +64,14 @@ export function GenerateForm() {
   // Style boost state
   const [isBoosting, setIsBoosting] = useState(false);
 
+  // Credit usage state
+  const [creditInfo, setCreditInfo] = useState<{
+    creditsRemaining: number;
+    budget: number;
+    usagePercent: number;
+    isLow: boolean;
+  } | null>(null);
+
   // Lyrics generator state
   const [showLyricsGenerator, setShowLyricsGenerator] = useState(false);
   const [lyricsPrompt, setLyricsPrompt] = useState("");
@@ -111,6 +119,23 @@ export function GenerateForm() {
     }
   }, [toast]);
 
+  const fetchCredits = useCallback(async () => {
+    try {
+      const res = await fetch("/api/credits");
+      if (res.ok) {
+        const data = await res.json();
+        setCreditInfo({
+          creditsRemaining: data.creditsRemaining,
+          budget: data.budget,
+          usagePercent: data.usagePercent,
+          isLow: data.isLow,
+        });
+      }
+    } catch {
+      // Non-critical
+    }
+  }, []);
+
   const fetchPersonas = useCallback(async () => {
     try {
       const res = await fetch("/api/personas");
@@ -140,7 +165,8 @@ export function GenerateForm() {
     fetchRateLimit();
     fetchTemplates();
     fetchPersonas();
-  }, [fetchRateLimit, fetchTemplates, fetchPersonas]);
+    fetchCredits();
+  }, [fetchRateLimit, fetchTemplates, fetchPersonas, fetchCredits]);
 
   async function handleBoostStyle() {
     if (isBoosting || !stylePrompt.trim()) return;
@@ -320,6 +346,7 @@ export function GenerateForm() {
 
       toast("Song generation started!", "success");
       trackSong(songId, songTitle);
+      fetchCredits();
     } catch {
       toast("Network error. Please check your connection and try again.", "error");
     } finally {
@@ -346,6 +373,22 @@ export function GenerateForm() {
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">Generate</h1>
         <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">Create a new song with AI</p>
       </div>
+
+      {/* Low Credit Warning Banner */}
+      {creditInfo?.isLow && (
+        <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+          <ExclamationTriangleIcon className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              Low Credits
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+              You have {creditInfo.creditsRemaining} of {creditInfo.budget} credits remaining this month ({creditInfo.usagePercent}% used).
+              Check your <a href="/analytics" className="underline font-medium hover:text-amber-900 dark:hover:text-amber-200">usage dashboard</a> for details.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Generation Progress */}
       <GenerationProgress songs={trackedSongs} onDismiss={clearAll} />

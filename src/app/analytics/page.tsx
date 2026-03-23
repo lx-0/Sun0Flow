@@ -10,6 +10,7 @@ import {
   StarIcon,
   CheckCircleIcon,
   ChartBarIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 
 const GenerationsBarChart = dynamic(
@@ -21,6 +22,23 @@ const GenrePieChart = dynamic(
   () => import("@/components/analytics/UserAnalyticsCharts").then((mod) => mod.GenrePieChart),
   { ssr: false, loading: () => <div className="h-[200px] animate-pulse bg-gray-100 dark:bg-gray-800 rounded" /> }
 );
+
+const CreditUsageBarChart = dynamic(
+  () => import("@/components/analytics/UserAnalyticsCharts").then((mod) => mod.CreditUsageBarChart),
+  { ssr: false, loading: () => <div className="h-[200px] animate-pulse bg-gray-100 dark:bg-gray-800 rounded" /> }
+);
+
+interface CreditUsageData {
+  budget: number;
+  creditsUsedThisMonth: number;
+  creditsRemaining: number;
+  generationsThisMonth: number;
+  usagePercent: number;
+  isLow: boolean;
+  totalCreditsAllTime: number;
+  totalGenerationsAllTime: number;
+  dailyChart: Array<{ date: string; credits: number; count: number }>;
+}
 
 interface UserAnalytics {
   totalGenerations: number;
@@ -66,12 +84,17 @@ function StatCard({
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<UserAnalytics | null>(null);
+  const [creditData, setCreditData] = useState<CreditUsageData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/analytics/user");
-      if (res.ok) setData(await res.json());
+      const [analyticsRes, creditsRes] = await Promise.all([
+        fetch("/api/analytics/user"),
+        fetch("/api/credits"),
+      ]);
+      if (analyticsRes.ok) setData(await analyticsRes.json());
+      if (creditsRes.ok) setCreditData(await creditsRes.json());
     } catch {
       // keep existing data
     } finally {
@@ -124,6 +147,79 @@ export default function AnalyticsPage() {
           />
           <StatCard label="Rated Songs" value={data.ratedSongsCount} icon={ChartBarIcon} />
         </div>
+
+        {/* Credit Usage Widget */}
+        {creditData && (
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+                Credit Usage
+              </h2>
+              {creditData.isLow && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-full">
+                  <ExclamationTriangleIcon className="w-3.5 h-3.5" />
+                  Low Credits
+                </span>
+              )}
+            </div>
+
+            {/* Usage bar */}
+            <div>
+              <div className="flex items-center justify-between text-sm mb-1.5">
+                <span className="text-gray-600 dark:text-gray-400">
+                  {creditData.creditsUsedThisMonth} / {creditData.budget} credits used
+                </span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {creditData.creditsRemaining} remaining
+                </span>
+              </div>
+              <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    creditData.isLow
+                      ? "bg-amber-500"
+                      : creditData.usagePercent > 50
+                        ? "bg-violet-500"
+                        : "bg-green-500"
+                  }`}
+                  style={{ width: `${Math.min(100, creditData.usagePercent)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Quick stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-900 dark:text-white">{creditData.generationsThisMonth}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Generations this month</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-900 dark:text-white">{creditData.creditsUsedThisMonth}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Credits used</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {creditData.generationsThisMonth > 0
+                    ? Math.round(creditData.creditsUsedThisMonth / Math.max(1, new Date().getDate()))
+                    : 0}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Daily average</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-900 dark:text-white">{creditData.totalCreditsAllTime}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">All-time credits</p>
+              </div>
+            </div>
+
+            {/* Daily credit chart */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Daily Credit Usage
+              </h3>
+              <CreditUsageBarChart data={creditData.dailyChart} />
+            </div>
+          </div>
+        )}
 
         {/* Generations chart */}
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5">

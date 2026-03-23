@@ -8,6 +8,7 @@ import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
 import { SUNOAPI_KEY } from "@/lib/env";
+import { recordCreditUsage, shouldNotifyLowCredits, createLowCreditNotification, getMonthlyCreditUsage, CREDIT_COSTS } from "@/lib/credits";
 
 /** Map API errors to user-friendly messages, including Suno status for debugging */
 function userFriendlyError(error: unknown): string {
@@ -166,6 +167,25 @@ export async function POST(request: Request) {
           { status: 201 }
         );
       }
+    }
+
+    // Record credit usage for this generation
+    const songId = savedSongs[0]?.id;
+    await recordCreditUsage(userId, "generate", {
+      songId,
+      creditCost: CREDIT_COSTS.generate,
+      description: `Song generation: ${title?.trim() || "Untitled"}`,
+    });
+
+    // Check if user should be warned about low credits
+    try {
+      const shouldNotify = await shouldNotifyLowCredits(userId);
+      if (shouldNotify) {
+        const usage = await getMonthlyCreditUsage(userId);
+        await createLowCreditNotification(userId, usage.creditsRemaining);
+      }
+    } catch {
+      // Non-critical — don't block generation
     }
 
     // Rate limit slot already claimed above

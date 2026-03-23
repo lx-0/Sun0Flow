@@ -73,6 +73,7 @@ model User {
   personas         Persona[]
   apiKeys          ApiKey[]
   ratings          Rating[]
+  creditUsages     CreditUsage[]
 }
 
 model Song {
@@ -330,6 +331,21 @@ model ApiKey {
 
   @@index([keyHash])
   @@index([userId])
+}
+
+model CreditUsage {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String   // "generate", "extend", "cover", "lyrics", "style_boost", "mashup"
+  creditCost  Int      @default(0)
+  songId      String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, action])
 }
 
 model ErrorReport {

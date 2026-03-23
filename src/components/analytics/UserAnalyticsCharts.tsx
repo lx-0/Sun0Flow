@@ -54,6 +54,35 @@ export function GenerationsBarChart({
   );
 }
 
+export function CreditUsageBarChart({
+  data,
+}: {
+  data: Array<{ date: string; credits: number; count: number }>;
+}) {
+  if (data.length === 0) {
+    return <p className="text-gray-500 dark:text-gray-400 text-sm">No data yet</p>;
+  }
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={data}>
+        <XAxis
+          dataKey="date"
+          tick={{ fontSize: 10, fill: "#9ca3af" }}
+          tickFormatter={(v: string) => v.slice(5)}
+          interval="preserveStartEnd"
+        />
+        <YAxis
+          tick={{ fontSize: 10, fill: "#9ca3af" }}
+          allowDecimals={false}
+          width={30}
+        />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
+        <Bar dataKey="credits" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Credits" />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function GenrePieChart({
   data,
 }: {
