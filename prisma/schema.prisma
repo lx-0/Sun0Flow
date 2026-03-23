@@ -74,6 +74,7 @@ model User {
   apiKeys          ApiKey[]
   ratings          Rating[]
   creditUsages     CreditUsage[]
+  generationQueue  GenerationQueueItem[]
 }
 
 model Song {
@@ -113,6 +114,7 @@ model Song {
   favorites     Favorite[]
   reports       Report[]
   ratings       Rating[]
+  queueItems    GenerationQueueItem[]
 
   @@index([userId, title])
   @@index([userId, prompt])
@@ -346,6 +348,28 @@ model CreditUsage {
 
   @@index([userId, createdAt])
   @@index([userId, action])
+}
+
+model GenerationQueueItem {
+  id             String   @id @default(cuid())
+  userId         String
+  prompt         String
+  title          String?
+  tags           String?
+  makeInstrumental Boolean @default(false)
+  personaId      String?
+  status         String   @default("pending") // pending, processing, done, failed, cancelled
+  position       Int
+  songId         String?  // linked Song once generation starts
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song? @relation(fields: [songId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([userId, position])
 }
 
 model ErrorReport {

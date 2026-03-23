@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { SparklesIcon, BookmarkIcon, TrashIcon } from "@heroicons/react/24/solid";
-import { BookmarkIcon as BookmarkOutline, ClockIcon, BoltIcon, UserCircleIcon, PencilSquareIcon, ChevronDownIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { BookmarkIcon as BookmarkOutline, ClockIcon, BoltIcon, UserCircleIcon, PencilSquareIcon, ChevronDownIcon, ExclamationTriangleIcon, QueueListIcon } from "@heroicons/react/24/outline";
 import { useToast } from "./Toast";
 import { useGenerationPoller } from "@/hooks/useGenerationPoller";
+import { useGenerationQueue } from "@/hooks/useGenerationQueue";
 import { GenerationProgress } from "./GenerationProgress";
+import { GenerationQueue } from "./GenerationQueue";
 import { Confetti } from "./Confetti";
 
 interface PersonaOption {
@@ -38,6 +40,16 @@ export function GenerateForm() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { songs: trackedSongs, trackSong, clearAll } = useGenerationPoller();
+  const {
+    items: queueItems,
+    addToQueue,
+    removeFromQueue,
+    reorderQueue,
+    processNext,
+    onGenerationComplete,
+    totalActive: queueTotalActive,
+    isProcessing: queueIsProcessing,
+  } = useGenerationQueue();
 
   const [title, setTitle] = useState(searchParams.get("title") ?? "");
   const [stylePrompt, setStylePrompt] = useState(searchParams.get("tags") ?? "");
@@ -82,6 +94,9 @@ export function GenerateForm() {
   const [showConfetti, setShowConfetti] = useState(false);
   const prevReadyCountRef = useRef(0);
 
+  // Track completed song IDs so we only process next once per completion
+  const processedCompletionsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     const readyCount = trackedSongs.filter((s) => s.status === "ready").length;
     if (readyCount > prevReadyCountRef.current) {
@@ -96,7 +111,22 @@ export function GenerateForm() {
       }
     }
     prevReadyCountRef.current = readyCount;
-  }, [trackedSongs]);
+
+    // Auto-process next queue item when a tracked song completes
+    for (const song of trackedSongs) {
+      if (
+        (song.status === "ready" || song.status === "failed") &&
+        !processedCompletionsRef.current.has(song.songId)
+      ) {
+        processedCompletionsRef.current.add(song.songId);
+        onGenerationComplete(song.songId).then((result) => {
+          if (result?.song) {
+            trackSong(result.song.id, result.song.title);
+          }
+        });
+      }
+    }
+  }, [trackedSongs, onGenerationComplete, trackSong]);
 
   // Track whether we've already shown the 80% toast this session
   const shownLimitToast = useRef(false);
@@ -354,6 +384,65 @@ export function GenerateForm() {
     }
   }
 
+  async function handleAddToQueue() {
+    const prompt = customMode ? lyrics : stylePrompt;
+    if (!prompt?.trim()) {
+      toast("A prompt is required", "error");
+      return;
+    }
+
+    const selectedPersona = personas.find((p) => p.personaId === selectedPersonaId);
+    const { item, error: queueError } = await addToQueue({
+      prompt: prompt.trim(),
+      title: title || undefined,
+      tags: stylePrompt || undefined,
+      makeInstrumental: instrumental,
+      personaId: selectedPersona?.personaId || undefined,
+    });
+
+    if (queueError) {
+      toast(queueError, "error");
+      return;
+    }
+
+    toast("Added to generation queue!", "success");
+
+    // If nothing is processing, start processing immediately
+    if (!queueIsProcessing && item) {
+      const result = await processNext();
+      if (result?.song) {
+        trackSong(result.song.id, result.song.title);
+        fetchCredits();
+      }
+    }
+  }
+
+  function handleQueueMoveUp(index: number) {
+    const activeItems = queueItems.filter(
+      (i) => i.status === "pending" || i.status === "processing"
+    );
+    const pendingItems = activeItems.filter((i) => i.status === "pending");
+    if (index <= 0) return;
+    // Find the pending item at this visual index (skip processing)
+    const pendingIndex = index - (activeItems[0]?.status === "processing" ? 1 : 0);
+    if (pendingIndex <= 0) return;
+    const ids = pendingItems.map((i) => i.id);
+    [ids[pendingIndex - 1], ids[pendingIndex]] = [ids[pendingIndex], ids[pendingIndex - 1]];
+    reorderQueue(ids);
+  }
+
+  function handleQueueMoveDown(index: number) {
+    const activeItems = queueItems.filter(
+      (i) => i.status === "pending" || i.status === "processing"
+    );
+    const pendingItems = activeItems.filter((i) => i.status === "pending");
+    const pendingIndex = index - (activeItems[0]?.status === "processing" ? 1 : 0);
+    if (pendingIndex < 0 || pendingIndex >= pendingItems.length - 1) return;
+    const ids = pendingItems.map((i) => i.id);
+    [ids[pendingIndex], ids[pendingIndex + 1]] = [ids[pendingIndex + 1], ids[pendingIndex]];
+    reorderQueue(ids);
+  }
+
   const builtInTemplates = templates.filter((t) => t.isBuiltIn);
   const userTemplates = templates.filter((t) => !t.isBuiltIn);
   const filteredBuiltIn = selectedCategory
@@ -389,6 +478,14 @@ export function GenerateForm() {
           </div>
         </div>
       )}
+
+      {/* Generation Queue */}
+      <GenerationQueue
+        items={queueItems}
+        onRemove={removeFromQueue}
+        onMoveUp={handleQueueMoveUp}
+        onMoveDown={handleQueueMoveDown}
+      />
 
       {/* Generation Progress */}
       <GenerationProgress songs={trackedSongs} onDismiss={clearAll} />
@@ -847,50 +944,62 @@ export function GenerateForm() {
         })()}
 
         {/* Submit */}
-        <div className="relative group">
-          <button
-            type="submit"
-            disabled={isSubmitting || rateLimit?.remaining === 0}
-            className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl px-4 py-3 transition-colors min-h-[52px]"
-          >
-            {isSubmitting ? (
-              <>
-                <svg
-                  className="animate-spin h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
-                Generating…
-              </>
-            ) : (
-              <>
-                <SparklesIcon className="h-5 w-5" />
-                Generate
-              </>
+        <div className="flex gap-2">
+          <div className="relative group flex-1">
+            <button
+              type="submit"
+              disabled={isSubmitting || rateLimit?.remaining === 0}
+              className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl px-4 py-3 transition-colors min-h-[52px]"
+            >
+              {isSubmitting ? (
+                <>
+                  <svg
+                    className="animate-spin h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <SparklesIcon className="h-5 w-5" />
+                  Generate
+                </>
+              )}
+            </button>
+            {/* Tooltip when limit reached */}
+            {rateLimit?.remaining === 0 && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                Rate limit reached — resets in {Math.max(0, Math.ceil((new Date(rateLimit.resetAt).getTime() - Date.now()) / 60000))} min
+              </div>
             )}
+          </div>
+          <button
+            type="button"
+            onClick={handleAddToQueue}
+            disabled={isSubmitting || queueTotalActive >= 10}
+            title={queueTotalActive >= 10 ? "Queue is full (max 10)" : "Add to generation queue"}
+            className="flex items-center justify-center gap-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 font-semibold rounded-xl px-4 py-3 transition-colors min-h-[52px] whitespace-nowrap"
+          >
+            <QueueListIcon className="h-5 w-5" />
+            Queue{queueTotalActive > 0 ? ` (${queueTotalActive})` : ""}
           </button>
-          {/* Tooltip when limit reached */}
-          {rateLimit?.remaining === 0 && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-              Rate limit reached — resets in {Math.max(0, Math.ceil((new Date(rateLimit.resetAt).getTime() - Date.now()) / 60000))} min
-            </div>
-          )}
         </div>
       </form>
     </div>

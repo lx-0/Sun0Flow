@@ -4,7 +4,7 @@
  */
 
 export interface SSEEvent {
-  type: "generation_update" | "notification";
+  type: "generation_update" | "notification" | "queue_item_complete";
   data: Record<string, unknown>;
 }
 

@@ -59,6 +59,11 @@ export async function GET(
         type: "generation_update",
         data: { songId: id, status: "failed", errorMessage: "Generation timed out" },
       });
+      await prisma.generationQueueItem.updateMany({
+        where: { songId: id, status: "processing" },
+        data: { status: "failed", errorMessage: "Generation timed out" },
+      });
+      broadcast(song.userId, { type: "queue_item_complete", data: { songId: id } });
       return NextResponse.json({ song: updated });
     }
 
@@ -145,6 +150,15 @@ export async function GET(
         type: "generation_update",
         data: { songId: id, status: "ready", title: updated.title, audioUrl: updated.audioUrl, imageUrl: updated.imageUrl, alternateCount },
       });
+
+      // Update linked queue item
+      await prisma.generationQueueItem.updateMany({
+        where: { songId: id, status: "processing" },
+        data: { status: "done" },
+      });
+      // Signal client to process next item
+      broadcast(song.userId, { type: "queue_item_complete", data: { songId: id } });
+
       return NextResponse.json({ song: updated });
     }
 
@@ -161,6 +175,14 @@ export async function GET(
         type: "generation_update",
         data: { songId: id, status: "failed", errorMessage: updated.errorMessage },
       });
+
+      // Update linked queue item and signal next
+      await prisma.generationQueueItem.updateMany({
+        where: { songId: id, status: "processing" },
+        data: { status: "failed", errorMessage: updated.errorMessage },
+      });
+      broadcast(song.userId, { type: "queue_item_complete", data: { songId: id } });
+
       return NextResponse.json({ song: updated });
     }
 
