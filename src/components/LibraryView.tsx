@@ -17,6 +17,7 @@ import {
   TrashIcon,
   CheckIcon,
   TagIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/solid";
 import {
   HeartIcon as HeartOutlineIcon,
@@ -300,6 +301,8 @@ interface SongRowProps {
   onUpdate: (updated: Song) => void;
   onToggleFavorite: (song: Song) => void;
   onToggleSelect: (songId: string, shiftKey: boolean) => void;
+  onRetry: (song: Song) => void;
+  retryingId: string | null;
 }
 
 function SongRow({
@@ -319,6 +322,8 @@ function SongRow({
   onUpdate,
   onToggleFavorite,
   onToggleSelect,
+  onRetry,
+  retryingId,
 }: SongRowProps) {
   const { toast } = useToast();
   const [song, setSong] = useState(initialSong);
@@ -343,6 +348,7 @@ function SongRow({
 
   const isPending = song.generationStatus === "pending";
   const isFailed = song.generationStatus === "failed";
+  const isRetrying = retryingId === song.id;
   const hasAudio = Boolean(song.audioUrl) && !isPending;
   const isDownloading = downloadProgress !== null;
 
@@ -470,6 +476,31 @@ function SongRow({
       </div>
 
       <div className="flex items-center gap-2 px-3 pb-2">
+        {isFailed && (
+          <button
+            onClick={() => onRetry(song)}
+            disabled={isRetrying}
+            className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 transition-colors disabled:opacity-50"
+            title="Retry with same parameters"
+            aria-label="Retry"
+          >
+            {isRetrying ? (
+              <svg
+                className="animate-spin h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <ArrowPathIcon className="w-5 h-5" />
+            )}
+          </button>
+        )}
+
         <button
           onClick={() => onToggleFavorite(song)}
           aria-label={song.isFavorite ? "Remove from favorites" : "Add to favorites"}
@@ -662,6 +693,7 @@ export function LibraryView({
   const [totalSongs, setTotalSongs] = useState<number>(initialSongs.length);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   // Selection state
   const [selectedSongIds, setSelectedSongIds] = useState<Set<string>>(new Set());
@@ -896,6 +928,48 @@ export function LibraryView({
     } catch {
       handleSongUpdate(song);
       toast("Failed to update favorite", "error");
+    }
+  }
+
+  // ─── Retry handler ──────────────────────────────────────────────────────
+  async function handleRetry(song: Song) {
+    if (retryingId) return;
+    setRetryingId(song.id);
+
+    try {
+      const body = {
+        prompt: song.prompt,
+        title: song.title || undefined,
+        tags: song.tags || undefined,
+        makeInstrumental: song.isInstrumental,
+      };
+
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 429 && data.resetAt) {
+          const resetTime = new Date(data.resetAt);
+          const minutesLeft = Math.ceil((resetTime.getTime() - Date.now()) / 60000);
+          toast(`Rate limit reached. Try again in ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}.`, "error");
+        } else {
+          toast(data.error ?? "Retry failed. Please try again.", "error");
+        }
+        return;
+      }
+
+      toast("Retry started! New song will appear shortly.", "success");
+      // Re-fetch the song list to show the new pending song
+      router.refresh();
+    } catch {
+      toast("Network error. Please check your connection.", "error");
+    } finally {
+      setRetryingId(null);
     }
   }
 
@@ -1456,6 +1530,8 @@ export function LibraryView({
               onUpdate={handleSongUpdate}
               onToggleFavorite={handleToggleFavorite}
               onToggleSelect={handleToggleSelect}
+              onRetry={handleRetry}
+              retryingId={retryingId}
             />
           ))}
         </ul>
