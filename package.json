@@ -5,6 +5,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "clean": "rm -rf .next",
+    "fresh": "rm -rf .next node_modules && pnpm install",
     "dev": "prisma migrate resolve --rolled-back 20260322200000_add_missing_schema_objects 2>/dev/null; prisma migrate deploy && rm -rf .next/types && NODE_ENV=development next dev",
     "build": "rm -rf .next/types && prisma generate && next build",
     "start": "next start",
@@ -21,12 +22,7 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@heroicons/react": "^2.2.0",
-    "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^5.22.0",
-    "@rollup/rollup-linux-arm64-gnu": "^4.59.1",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/pg": "^8.18.0",
-    "@types/swagger-ui-react": "^5.18.0",
     "bcryptjs": "^3.0.3",
     "jszip": "^3.10.1",
     "lru-cache": "^11.2.7",
@@ -34,7 +30,6 @@
     "next-auth": "^5.0.0-beta.30",
     "node-mailjet": "^6.0.11",
     "openai": "^6.32.0",
-    "pg": "^8.20.0",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^3.8.0",
@@ -44,7 +39,9 @@
   "devDependencies": {
     "@next/bundle-analyzer": "^14.2.35",
     "@playwright/test": "^1.58.2",
+    "@types/bcryptjs": "^2.4.6",
     "@types/jszip": "^3.4.0",
+    "@types/swagger-ui-react": "^5.18.0",
     "@types/node": "^20.19.37",
     "@types/react": "18.3.28",
     "@types/react-dom": "^18",
