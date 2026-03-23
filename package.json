@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "postinstall": "prisma generate",
-    "dev": "prisma migrate resolve --rolled-back 20260322200000_add_missing_schema_objects 2>/dev/null; prisma migrate deploy && NODE_ENV=development next dev",
-    "build": "prisma generate && next build",
+    "clean": "rm -rf .next",
+    "dev": "prisma migrate resolve --rolled-back 20260322200000_add_missing_schema_objects 2>/dev/null; prisma migrate deploy && rm -rf .next/types && NODE_ENV=development next dev",
+    "build": "rm -rf .next/types && prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
