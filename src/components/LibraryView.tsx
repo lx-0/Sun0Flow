@@ -335,7 +335,11 @@ function SongRow({
   const handleUpdate = useCallback((updated: Song) => {
     if (song.generationStatus === "pending" && updated.generationStatus !== "pending") {
       if (updated.generationStatus === "ready") {
-        toast(`"${updated.title ?? "Song"}" is ready!`, "success");
+        const vc = (updated as Song & { variationCount?: number }).variationCount ?? 0;
+        const msg = vc > 0
+          ? `${vc + 1} versions ready — click to compare`
+          : `"${updated.title ?? "Song"}" is ready!`;
+        toast(msg, "success");
       } else if (updated.generationStatus === "failed") {
         toast(`"${updated.title ?? "Song"}" generation failed`, "error");
       }
@@ -447,6 +451,11 @@ function SongRow({
             {!isPending && song.duration && (
               <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                 {formatTime(song.duration)}
+              </span>
+            )}
+            {!isPending && !isFailed && ((song as Song & { variationCount?: number }).variationCount ?? 0) > 0 && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-[10px] font-medium">
+                {((song as Song & { variationCount?: number }).variationCount ?? 0) + 1} versions
               </span>
             )}
           </div>

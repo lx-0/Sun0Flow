@@ -236,7 +236,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const { songs: allSongs } = await allRes.json();
           const songMap = new Map<
             string,
-            { id: string; title: string | null; generationStatus: string }
+            { id: string; title: string | null; generationStatus: string; variationCount?: number }
           >();
           for (const s of allSongs) {
             songMap.set(s.id, s);
@@ -248,10 +248,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             if (!song) continue;
 
             if (song.generationStatus === "ready") {
+              const vc = song.variationCount ?? 0;
               addNotification({
                 type: "generation_complete",
                 title: "Generation complete",
-                message: `"${song.title || "Untitled"}" is ready to play`,
+                message: vc > 0
+                  ? `${vc + 1} versions ready — click to compare`
+                  : `"${song.title || "Untitled"}" is ready to play`,
                 href: `/library`,
                 songId: song.id,
               });

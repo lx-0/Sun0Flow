@@ -176,6 +176,11 @@ function HistoryRow({ song, onRetry, retryingId }: { song: Song; onRetry: (song:
                 Instrumental
               </span>
             )}
+            {isReady && ((song as Song & { variationCount?: number }).variationCount ?? 0) > 0 && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-[10px] font-medium">
+                {((song as Song & { variationCount?: number }).variationCount ?? 0) + 1} versions
+              </span>
+            )}
           </div>
 
           {/* Prompt */}
