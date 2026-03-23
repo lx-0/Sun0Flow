@@ -22,6 +22,7 @@ import {
   SparklesIcon,
   BookmarkIcon,
   UserGroupIcon,
+  GlobeAltIcon,
 } from "@heroicons/react/24/outline";
 import { GlobalPlayer } from "./GlobalPlayer";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
@@ -38,6 +39,7 @@ const navItems = [
   { label: "Templates", href: "/templates", icon: BookmarkIcon, dataTour: undefined as string | undefined },
   { label: "Personas", href: "/personas", icon: UserGroupIcon, dataTour: undefined as string | undefined },
   { label: "Mashup", href: "/mashup", icon: SparklesIcon, dataTour: undefined as string | undefined },
+  { label: "Discover", href: "/discover", icon: GlobeAltIcon, dataTour: undefined as string | undefined },
   { label: "Playlists", href: "/playlists", icon: QueueListIcon, dataTour: "explore" as string | undefined },
   { label: "Favorites", href: "/favorites", icon: HeartIcon, dataTour: "nav-favorites" as string | undefined },
   { label: "History", href: "/history", icon: ClockIcon, dataTour: undefined as string | undefined },
