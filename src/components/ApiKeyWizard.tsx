@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { KeyIcon, ArrowRightIcon, XMarkIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
 
@@ -15,6 +15,17 @@ export function ApiKeyWizard() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
+
+  // Sync localStorage dismissal after mount to avoid SSR/client render mismatch
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("sunoflow-apikey-wizard-dismissed") === "true") {
+        setDismissed(true);
+      }
+    } catch {
+      // localStorage unavailable
+    }
+  }, []);
 
   // Don't show if user already has a key, hasn't loaded yet, or wizard was dismissed
   if (!user || user.hasSunoApiKey || dismissed) return null;
@@ -54,17 +65,6 @@ export function ApiKeyWizard() {
     }
     setDismissed(true);
   };
-
-  // Check localStorage dismissal on first render
-  if (typeof window !== "undefined") {
-    try {
-      if (localStorage.getItem("sunoflow-apikey-wizard-dismissed") === "true") {
-        return null;
-      }
-    } catch {
-      // localStorage unavailable
-    }
-  }
 
   return (
     <>

@@ -100,7 +100,7 @@ function timeAgo(dateStr: string): string {
   const days = Math.floor(hrs / 24);
   if (days === 1) return "yesterday";
   if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
+  return new Date(dateStr).toLocaleDateString("en-US");
 }
 
 // ─── Usage history chart ─────────────────────────────────────────────────────

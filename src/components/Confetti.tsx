@@ -28,8 +28,13 @@ function generateParticles(): Particle[] {
 }
 
 export function Confetti({ onDone }: { onDone?: () => void }) {
-  const [particles] = useState(generateParticles);
+  const [particles, setParticles] = useState<Particle[]>([]);
   const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    // Generate particles client-side only to avoid SSR/client Math.random() mismatch
+    setParticles(generateParticles());
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
