@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// In-memory IP-based rate limiter for public endpoints
+// ---------------------------------------------------------------------------
+// Rate Limit Thresholds (per IP, sliding window)
+// ---------------------------------------------------------------------------
+// Bucket        | Max Requests | Window   | Applies To
+// ------------- | ------------ | -------- | ---------------------------------
+// "public"      | 30           | 1 minute | /s/* (public share pages)
+// "auth"        | 10           | 1 minute | /api/register, forgot/reset password
+// ---------------------------------------------------------------------------
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const ipHits = new Map<string, Map<string, number[]>>();
 
