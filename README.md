@@ -1,5 +1,7 @@
 # SunoFlow
 
+[![CI](https://github.com/lx-0/SunoFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/lx-0/SunoFlow/actions/workflows/ci.yml)
+
 Personal Suno Music Manager — a mobile-first web app integrating with sunoapi.org for personalized music management.
 
 ## Features
@@ -71,6 +73,17 @@ Without Mailjet configured, emails are logged to the server console.
 | `npm run build` | Build for production |
 | `npm run start` | Start production server |
 | `npm run lint` | Run ESLint |
+
+## CI/CD
+
+GitHub Actions runs lint, type check, unit tests, build, and E2E tests on every push to `main` and on pull requests. The following GitHub repository secrets must be configured:
+
+| Secret | Description |
+|--------|-------------|
+| `RAILWAY_TOKEN` | Railway API token for automated deploys |
+| `DATABASE_URL` | (optional) Postgres URL used for CI migrations (defaults to an ephemeral in-runner DB) |
+
+Sensitive values like `AUTH_SECRET` use CI-only placeholders — only `RAILWAY_TOKEN` must be set for the deploy step to work.
 
 ## Git Hooks
 
