@@ -16,7 +16,9 @@ export interface FeedResult {
 }
 
 function extractTagContent(xml: string, tag: string): string {
-  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
+  // Escape special regex chars in tag name (e.g. "content:encoded")
+  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(":", ":");
+  const regex = new RegExp(`<${escapedTag}[^>]*>([\\s\\S]*?)<\\/${escapedTag}>`, "i");
   const match = xml.match(regex);
   return match ? stripCDATA(match[1].trim()) : "";
 }
@@ -127,10 +129,11 @@ export async function fetchFeed(url: string): Promise<FeedResult> {
       const entryXmls = extractAllTagContent(xml, "entry");
       items = entryXmls.slice(0, 20).map((entry) => {
         const title = stripTags(extractTagContent(entry, "title"));
-        const description = stripTags(
-          extractTagContent(entry, "summary") ||
-            extractTagContent(entry, "content")
-        );
+        // Prefer full content over summary for richer inspiration context
+        const rawContent =
+          extractTagContent(entry, "content") ||
+          extractTagContent(entry, "summary");
+        const description = stripTags(rawContent).slice(0, 500).trim();
         const link = extractAtomLink(entry) || extractTagContent(entry, "id");
         return { title, description, link, source: feedTitle };
       });
@@ -153,9 +156,13 @@ export async function fetchFeed(url: string): Promise<FeedResult> {
         const title = stripTags(
           stripCDATA(extractTagContent(item, "title"))
         );
-        const description = stripTags(
-          stripCDATA(extractTagContent(item, "description"))
-        );
+        // Prefer content:encoded (full article body) over description (often just headline)
+        const contentEncoded =
+          extractTagContent(item, "content:encoded") ||
+          extractTagContent(item, "encoded");
+        const rawDescription = contentEncoded ||
+          stripCDATA(extractTagContent(item, "description"));
+        const description = stripTags(rawDescription).slice(0, 500).trim();
         const link = extractTagContent(item, "link");
         const pubDate = extractTagContent(item, "pubDate");
         return { title, description, link, source: feedTitle, pubDate };

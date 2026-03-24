@@ -87,10 +87,16 @@ export function GenerateForm() {
   } | null>(null);
 
   // Lyrics generator state
-  const [showLyricsGenerator, setShowLyricsGenerator] = useState(false);
-  const [lyricsPrompt, setLyricsPrompt] = useState("");
+  const initialLyricsPrompt = searchParams.get("lyricsprompt") ?? "";
+  const [showLyricsGenerator, setShowLyricsGenerator] = useState(Boolean(initialLyricsPrompt));
+  const [lyricsPrompt, setLyricsPrompt] = useState(initialLyricsPrompt);
   const [generatedLyrics, setGeneratedLyrics] = useState("");
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
+
+  // Auto-generate state (generates title + style + lyricsPrompt from a single description)
+  const [showAutoGenerate, setShowAutoGenerate] = useState(false);
+  const [autoPrompt, setAutoPrompt] = useState(searchParams.get("autoprompt") ?? "");
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
 
   // First-generation confetti celebration
   const [showConfetti, setShowConfetti] = useState(false);
@@ -251,6 +257,34 @@ export function GenerateForm() {
     setLyrics(generatedLyrics);
     setCustomMode(true);
     toast("Lyrics applied!", "success");
+  }
+
+  async function handleAutoGenerate() {
+    if (isAutoGenerating || !autoPrompt.trim()) return;
+    setIsAutoGenerating(true);
+    try {
+      const res = await fetch("/api/generate/auto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: autoPrompt.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.title) setTitle(data.title);
+        if (data.style) setStylePrompt(data.style);
+        if (data.lyricsPrompt) {
+          setLyricsPrompt(data.lyricsPrompt);
+          setShowLyricsGenerator(true);
+        }
+        toast("Fields filled! Generate lyrics next.", "success");
+      } else {
+        toast(data.error ?? "Auto-generation failed", "error");
+      }
+    } catch {
+      toast("Auto-generation failed", "error");
+    } finally {
+      setIsAutoGenerating(false);
+    }
   }
 
   function applyTemplate(template: PromptTemplate) {
@@ -697,6 +731,68 @@ export function GenerateForm() {
           </p>
         </div>
       )}
+
+      {/* Auto-generate panel */}
+      <div className="space-y-0 mb-4">
+        <button
+          type="button"
+          onClick={() => setShowAutoGenerate((v) => !v)}
+          aria-expanded={showAutoGenerate}
+          className="w-full flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+        >
+          <span className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300">
+            <SparklesIcon className="h-4 w-4" />
+            Auto-generate from description
+          </span>
+          <ChevronDownIcon
+            className={`h-4 w-4 text-amber-500 dark:text-amber-400 transition-transform ${
+              showAutoGenerate ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        {showAutoGenerate && (
+          <div className="mt-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Describe what you want and we'll suggest a title, style, and lyrics prompt all at once.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={autoPrompt}
+                onChange={(e) => setAutoPrompt(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAutoGenerate(); } }}
+                placeholder="e.g. a nostalgic road trip song, summer vibes, indie feel…"
+                aria-label="Auto-generation description"
+                maxLength={500}
+                disabled={isAutoGenerating}
+                className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-2.5 text-base sm:text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={handleAutoGenerate}
+                disabled={isAutoGenerating || !autoPrompt.trim()}
+                className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-xl transition-colors whitespace-nowrap"
+              >
+                {isAutoGenerating ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Generating…
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="h-4 w-4" />
+                    Fill fields
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4" data-tour="generate-prompt">
         {/* Title */}

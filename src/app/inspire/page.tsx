@@ -610,13 +610,18 @@ function InspireContent() {
     : igPosts;
 
   const handleRssPrompt = (item: FeedItem) => {
+    // Build a descriptive lyrics-generation prompt from the article content
     const parts: string[] = [];
     if (item.title) parts.push(item.title);
-    if (item.description) parts.push(item.description.slice(0, 100));
+    if (item.description) parts.push(item.description.slice(0, 200));
     if (item.topics && item.topics.length > 0) parts.push(item.topics.join(", "));
     if (item.mood && item.mood !== "neutral") parts.push(`${item.mood} mood`);
-    const prompt = parts.join(". ");
-    router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
+    const lyricsPrompt = parts.join(". ");
+
+    const params = new URLSearchParams();
+    params.set("lyricsprompt", lyricsPrompt);
+    if (item.mood && item.mood !== "neutral") params.set("tags", item.mood);
+    router.push(`/generate?${params.toString()}`);
   };
 
   const handleIgPrompt = (prompt: string) => {
