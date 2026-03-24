@@ -31,6 +31,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useTheme } from "./ThemeProvider";
 import dynamic from "next/dynamic";
+import { ErrorBoundary } from "./ErrorBoundary";
 const GlobalPlayer = dynamic(() => import("./GlobalPlayer").then((m) => m.GlobalPlayer), { ssr: false });
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 const KeyboardShortcutsModal = dynamic(() => import("./KeyboardShortcutsModal").then((m) => m.KeyboardShortcutsModal), { ssr: false });
@@ -491,7 +492,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Global audio player */}
-        <GlobalPlayer sidebarCollapsed={sidebarCollapsed} />
+        <ErrorBoundary source="global-player" fallback={null}>
+          <GlobalPlayer sidebarCollapsed={sidebarCollapsed} />
+        </ErrorBoundary>
 
         {/* Keyboard shortcuts help modal */}
         <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
