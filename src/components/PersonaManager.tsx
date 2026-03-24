@@ -105,7 +105,6 @@ export function PersonaManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskId: song.sunoJobId,
-          audioId: song.sunoJobId, // Suno uses taskId as audioId reference
           name: personaName.trim(),
           description: personaDescription.trim() || undefined,
           style: personaStyle.trim() || undefined,

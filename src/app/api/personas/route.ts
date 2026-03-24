@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
-import { generatePersona, SunoApiError } from "@/lib/sunoapi";
+import { generatePersona, getTaskStatus, SunoApiError } from "@/lib/sunoapi";
 import { prisma } from "@/lib/prisma";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
@@ -29,12 +29,12 @@ export async function POST(request: Request) {
 
     if (authError) return authError;
 
-    const { taskId, audioId, name, description, vocalStart, vocalEnd, style, songId } =
+    const { taskId, name, description, vocalStart, vocalEnd, style, songId } =
       await request.json();
 
-    if (!taskId || !audioId || !name) {
+    if (!taskId || !name) {
       return NextResponse.json(
-        { error: "taskId, audioId, and name are required", code: "VALIDATION_ERROR" },
+        { error: "taskId and name are required", code: "VALIDATION_ERROR" },
         { status: 400 }
       );
     }
@@ -58,10 +58,21 @@ export async function POST(request: Request) {
 
     const userApiKey = await resolveUserApiKey(userId);
 
+    // Resolve the Suno clip ID (audioId) from the task — the frontend only
+    // knows the taskId, but Suno's persona endpoint needs the clip ID.
+    const taskResult = await getTaskStatus(taskId, userApiKey);
+    const clip = taskResult.songs[0];
+    if (!clip?.id) {
+      return NextResponse.json(
+        { error: "Could not resolve audio clip from Suno task. The song may have expired (15-day retention).", code: "CLIP_NOT_FOUND" },
+        { status: 404 }
+      );
+    }
+
     const result = await generatePersona(
       {
         taskId,
-        audioId,
+        audioId: clip.id,
         name: name.trim(),
         description: description?.trim() || name.trim(),
         vocalStart,
