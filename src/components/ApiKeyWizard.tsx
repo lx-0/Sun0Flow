@@ -78,7 +78,7 @@ export function ApiKeyWizard() {
           <div className="flex justify-end p-3 pb-0">
             <button
               onClick={handleDismiss}
-              className="min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
               aria-label="Dismiss wizard"
             >
               <XMarkIcon className="w-5 h-5" />

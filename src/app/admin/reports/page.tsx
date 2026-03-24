@@ -119,7 +119,7 @@ export default function AdminReportsPage() {
           <button
             key={tab.value}
             onClick={() => { setStatusFilter(tab.value); setPage(1); }}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors min-h-[36px] ${
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors min-h-[44px] ${
               statusFilter === tab.value
                 ? "bg-red-900/40 text-red-400"
                 : "text-gray-400 hover:text-white hover:bg-gray-800"

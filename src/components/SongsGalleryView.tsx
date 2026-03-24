@@ -426,7 +426,7 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
                 <button
                   key={style}
                   onClick={() => toggleStyle(style)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[32px] ${
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[44px] ${
                     selectedStyles.has(style)
                       ? "bg-violet-100 dark:bg-violet-900/50 border-violet-400 dark:border-violet-600 text-violet-700 dark:text-violet-300"
                       : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
@@ -448,7 +448,7 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
                 <button
                   key={mood}
                   onClick={() => toggleMood(mood)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[32px] ${
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[44px] ${
                     selectedMoods.has(mood)
                       ? "bg-violet-100 dark:bg-violet-900/50 border-violet-400 dark:border-violet-600 text-violet-700 dark:text-violet-300"
                       : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
@@ -470,7 +470,7 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
                 <button
                   key={df.label}
                   onClick={() => setDateFilter(df.days)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[32px] ${
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[44px] ${
                     dateFilter === df.days
                       ? "bg-violet-100 dark:bg-violet-900/50 border-violet-400 dark:border-violet-600 text-violet-700 dark:text-violet-300"
                       : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"

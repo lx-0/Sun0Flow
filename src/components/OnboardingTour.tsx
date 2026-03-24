@@ -296,7 +296,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
                 </h3>
                 <button
                   onClick={skipTour}
-                  className="min-w-[32px] min-h-[32px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors -mr-1 -mt-1"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors -mr-1 -mt-1"
                   aria-label="Skip tour"
                 >
                   <XMarkIcon className="w-5 h-5" />

@@ -181,7 +181,7 @@ export function DiscoverView() {
                 <button
                   key={opt.value}
                   onClick={() => setSortBy(opt.value)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[32px] ${
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[44px] ${
                     sortBy === opt.value
                       ? "bg-violet-100 dark:bg-violet-900/50 border-violet-400 dark:border-violet-600 text-violet-700 dark:text-violet-300"
                       : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
@@ -198,7 +198,7 @@ export function DiscoverView() {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setTag("")}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[32px] ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[44px] ${
               tag === ""
                 ? "bg-violet-100 dark:bg-violet-900/50 border-violet-400 dark:border-violet-600 text-violet-700 dark:text-violet-300"
                 : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
@@ -210,7 +210,7 @@ export function DiscoverView() {
             <button
               key={g}
               onClick={() => setTag(g)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[32px] ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[44px] ${
                 tag === g
                   ? "bg-violet-100 dark:bg-violet-900/50 border-violet-400 dark:border-violet-600 text-violet-700 dark:text-violet-300"
                   : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"

@@ -75,7 +75,7 @@ export function PwaInstallPrompt() {
         <button
           onClick={dismiss}
           aria-label="Dismiss install prompt"
-          className="flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          className="flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
         >
           <XMarkIcon className="w-5 h-5" />
         </button>

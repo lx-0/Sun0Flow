@@ -326,7 +326,7 @@ function PreferencesTab() {
                 <button
                   key={genre}
                   onClick={() => toggleGenre(genre)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors min-h-[36px] border ${
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors min-h-[44px] border ${
                     selected
                       ? "bg-violet-600 text-white border-violet-600"
                       : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -942,7 +942,7 @@ function PlaybackDefaultsSection() {
             <button
               key={q}
               onClick={() => persist({ quality: q })}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[36px] border ${
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] border ${
                 quality === q
                   ? "bg-violet-600 text-white border-violet-600"
                   : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -1346,10 +1346,10 @@ function TagManagementSection() {
                       className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
                       autoFocus
                     />
-                    <button onClick={() => saveEdit(tag.id)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-green-500 hover:text-green-400" aria-label="Save">
+                    <button onClick={() => saveEdit(tag.id)} className="min-w-[44px] min-h-[44px] flex items-center justify-center text-green-500 hover:text-green-400" aria-label="Save">
                       <CheckIcon className="w-4 h-4" />
                     </button>
-                    <button onClick={() => setEditingId(null)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" aria-label="Cancel">
+                    <button onClick={() => setEditingId(null)} className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" aria-label="Cancel">
                       <XMarkIcon className="w-4 h-4" />
                     </button>
                   </>
@@ -1358,16 +1358,16 @@ function TagManagementSection() {
                     <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
                     <span className="flex-1 text-sm text-gray-900 dark:text-white">{tag.name}</span>
                     <span className="text-xs text-gray-400 dark:text-gray-500">{tag._count.songTags} song{tag._count.songTags !== 1 ? "s" : ""}</span>
-                    <button onClick={() => startEdit(tag)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-400 hover:text-violet-400 transition-colors" aria-label="Edit tag">
+                    <button onClick={() => startEdit(tag)} className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-violet-400 transition-colors" aria-label="Edit tag">
                       <PencilIcon className="w-4 h-4" />
                     </button>
                     {deleteConfirm === tag.id ? (
                       <div className="flex items-center gap-1">
-                        <button onClick={() => deleteTag(tag.id)} className="text-xs text-red-500 hover:text-red-400 min-h-[36px] px-2">Delete</button>
-                        <button onClick={() => setDeleteConfirm(null)} className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 min-h-[36px] px-2">Cancel</button>
+                        <button onClick={() => deleteTag(tag.id)} className="text-xs text-red-500 hover:text-red-400 min-h-[44px] px-2">Delete</button>
+                        <button onClick={() => setDeleteConfirm(null)} className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 min-h-[44px] px-2">Cancel</button>
                       </div>
                     ) : (
-                      <button onClick={() => setDeleteConfirm(tag.id)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-400 hover:text-red-400 transition-colors" aria-label="Delete tag">
+                      <button onClick={() => setDeleteConfirm(tag.id)} className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-red-400 transition-colors" aria-label="Delete tag">
                         <TrashIcon className="w-4 h-4" />
                       </button>
                     )}
@@ -1505,7 +1505,7 @@ function ApiKeySection() {
                 <button
                   onClick={handleRemove}
                   disabled={saving}
-                  className="ml-auto text-xs text-red-500 hover:text-red-400 disabled:opacity-50 min-h-[36px] px-2"
+                  className="ml-auto text-xs text-red-500 hover:text-red-400 disabled:opacity-50 min-h-[44px] px-2"
                 >
                   Remove
                 </button>
@@ -1730,13 +1730,13 @@ function PersonalApiKeysSection() {
                         <button
                           onClick={() => handleRevoke(k.id)}
                           disabled={revoking === k.id}
-                          className="px-2 py-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-medium rounded transition-colors min-h-[32px]"
+                          className="px-2 py-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-medium rounded transition-colors min-h-[44px]"
                         >
                           {revoking === k.id ? "..." : "Confirm"}
                         </button>
                         <button
                           onClick={() => setConfirmRevoke(null)}
-                          className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 min-h-[32px]"
+                          className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 min-h-[44px]"
                         >
                           Cancel
                         </button>
@@ -1744,7 +1744,7 @@ function PersonalApiKeysSection() {
                     ) : (
                       <button
                         onClick={() => setConfirmRevoke(k.id)}
-                        className="text-red-500 hover:text-red-400 p-1 min-h-[32px] min-w-[32px] flex items-center justify-center flex-shrink-0"
+                        className="text-red-500 hover:text-red-400 p-1 min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0"
                         title="Revoke key"
                       >
                         <TrashIcon className="w-4 h-4" />
