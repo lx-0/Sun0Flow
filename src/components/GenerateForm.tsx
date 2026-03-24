@@ -754,7 +754,7 @@ export function GenerateForm() {
         {showAutoGenerate && (
           <div className="mt-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Describe what you want and we'll suggest a title, style, and lyrics prompt all at once.
+              Describe what you want and we&apos;ll suggest a title, style, and lyrics prompt all at once.
             </p>
             <div className="flex gap-2">
               <input
