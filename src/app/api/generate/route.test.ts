@@ -127,9 +127,9 @@ beforeEach(() => {
   });
   vi.mocked(resolveUserApiKey).mockResolvedValue(undefined);
   vi.mocked(getMonthlyCreditUsage).mockResolvedValue(DEFAULT_CREDIT_USAGE);
-  vi.mocked(recordCreditUsage).mockResolvedValue(undefined);
+  vi.mocked(recordCreditUsage).mockResolvedValue(undefined as never);
   vi.mocked(shouldNotifyLowCredits).mockResolvedValue(false);
-  vi.mocked(createLowCreditNotification).mockResolvedValue(undefined);
+  vi.mocked(createLowCreditNotification).mockResolvedValue(undefined as never);
   mockSunoApiKey = "test-key";
   vi.mocked(prisma.song.create).mockResolvedValue({ id: "song-1" } as never);
 });
