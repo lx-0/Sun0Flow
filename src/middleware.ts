@@ -271,13 +271,14 @@ export async function middleware(request: NextRequest) {
 
   // Rate limit auth endpoints: 5 requests per minute per IP (brute-force protection)
   // Covers login (/api/auth/signin, /api/auth/callback/credentials), registration,
-  // and password-reset flows.
+  // and password-reset flows. Disabled in CI to allow E2E test user registration.
   if (
-    pathname === "/api/register" ||
-    pathname === "/api/auth/forgot-password" ||
-    pathname === "/api/auth/reset-password" ||
-    pathname === "/api/auth/signin" ||
-    pathname === "/api/auth/callback/credentials"
+    process.env.CI !== "true" &&
+    (pathname === "/api/register" ||
+      pathname === "/api/auth/forgot-password" ||
+      pathname === "/api/auth/reset-password" ||
+      pathname === "/api/auth/signin" ||
+      pathname === "/api/auth/callback/credentials")
   ) {
     const { allowed, limit } = checkIpRateLimit(ip, "auth", 5);
     if (!allowed) {
