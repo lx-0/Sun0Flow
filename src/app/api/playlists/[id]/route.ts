@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
+import { CacheControl, invalidateByPrefix, cacheKey } from "@/lib/cache";
 
 export async function GET(
   request: Request,
@@ -26,7 +27,9 @@ export async function GET(
       return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
     }
 
-    return NextResponse.json({ playlist });
+    return NextResponse.json({ playlist }, {
+      headers: { "Cache-Control": CacheControl.privateNoCache },
+    });
   } catch {
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -87,6 +90,7 @@ export async function PATCH(
       include: { _count: { select: { songs: true } } },
     });
 
+    invalidateByPrefix(cacheKey("playlists", userId));
     return NextResponse.json({ playlist: updated });
   } catch {
     return NextResponse.json(
@@ -115,6 +119,7 @@ export async function DELETE(
 
     await prisma.playlist.delete({ where: { id: playlist.id } });
 
+    invalidateByPrefix(cacheKey("playlists", userId));
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json(

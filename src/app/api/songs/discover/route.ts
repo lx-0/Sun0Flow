@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { logServerError } from "@/lib/error-logger";
-import { CacheControl } from "@/lib/cache";
+import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
 
 // Simple in-memory IP rate limiter for public endpoint
 const ipHits = new Map<string, { count: number; resetAt: number }>();
@@ -79,28 +79,36 @@ export async function GET(request: NextRequest) {
         break;
     }
 
-    const [songs, total] = await Promise.all([
-      prisma.song.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          title: true,
-          tags: true,
-          imageUrl: true,
-          audioUrl: true,
-          duration: true,
-          rating: true,
-          playCount: true,
-          publicSlug: true,
-          createdAt: true,
-          user: { select: { name: true } },
-        },
-      }),
-      prisma.song.count({ where }),
-    ]);
+    const key = cacheKey("discover", sortBy, tag || "all", String(page));
+    const { songs, total } = await cached(
+      key,
+      async () => {
+        const [results, count] = await Promise.all([
+          prisma.song.findMany({
+            where,
+            orderBy,
+            skip,
+            take: limit,
+            select: {
+              id: true,
+              title: true,
+              tags: true,
+              imageUrl: true,
+              audioUrl: true,
+              duration: true,
+              rating: true,
+              playCount: true,
+              publicSlug: true,
+              createdAt: true,
+              user: { select: { name: true } },
+            },
+          }),
+          prisma.song.count({ where }),
+        ]);
+        return { songs: results, total: count };
+      },
+      CacheTTL.DISCOVER
+    );
 
     const totalPages = Math.ceil(total / limit);
 

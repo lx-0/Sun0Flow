@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
+import { CacheControl, invalidateByPrefix, cacheKey } from "@/lib/cache";
 
 const MAX_PLAYLISTS = 50;
 
@@ -16,7 +17,9 @@ export async function GET(request: Request) {
       orderBy: { updatedAt: "desc" },
     });
 
-    return NextResponse.json({ playlists });
+    return NextResponse.json({ playlists }, {
+      headers: { "Cache-Control": CacheControl.privateNoCache },
+    });
   } catch {
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -75,6 +78,7 @@ export async function POST(request: Request) {
       include: { _count: { select: { songs: true } } },
     });
 
+    invalidateByPrefix(cacheKey("playlists", userId));
     return NextResponse.json({ playlist }, { status: 201 });
   } catch {
     return NextResponse.json(

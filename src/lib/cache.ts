@@ -35,6 +35,10 @@ export const CacheTTL = {
   SEARCH: 15_000, // 15s
   /** Tags list — rarely changes */
   TAGS: 120_000, // 2min
+  /** Discover page results — public, shared, short TTL */
+  DISCOVER: 60_000, // 60s
+  /** Playlist list and aggregate stats — per-user */
+  PLAYLIST: 30_000, // 30s
 } as const;
 
 /** Build a cache key from a prefix and components */
@@ -112,7 +116,7 @@ export function computeETag(data: unknown): string {
  */
 export const CacheControl = {
   /** Public, cacheable data (e.g. public songs) */
-  publicShort: "public, max-age=60, s-maxage=60, stale-while-revalidate=30",
+  publicShort: "public, max-age=60, s-maxage=60, stale-while-revalidate=300",
   /** Private user data — no shared cache */
   privateNoCache: "private, no-cache, no-store, must-revalidate",
   /** Private with short cache — user data that tolerates brief staleness */
