@@ -1,8 +1,15 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AppShell } from "@/components/AppShell";
 import { HistoryView } from "@/components/HistoryView";
 import { HistorySkeleton } from "@/components/Skeleton";
 import { auth } from "@/lib/auth";
+
+export const metadata: Metadata = {
+  title: "Generation History",
+  description: "Review your past music generation requests and results.",
+  robots: { index: false },
+};
 import { prisma } from "@/lib/prisma";
 import type { Song } from "@prisma/client";
 

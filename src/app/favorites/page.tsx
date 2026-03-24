@@ -1,8 +1,15 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AppShell } from "@/components/AppShell";
 import { LibraryView } from "@/components/LibraryView";
 import { LibrarySkeleton } from "@/components/Skeleton";
 import { auth } from "@/lib/auth";
+
+export const metadata: Metadata = {
+  title: "Favorites",
+  description: "Your favorited AI-generated songs, all in one place.",
+  robots: { index: false },
+};
 import { prisma } from "@/lib/prisma";
 
 async function fetchFavorites() {

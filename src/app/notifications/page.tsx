@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import { AppShell } from "@/components/AppShell";
 import { NotificationsView } from "@/components/NotificationsView";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Notifications",
+  description: "Stay up to date with activity on your SunoFlow account.",
+  robots: { index: false },
+};
 
 const PAGE_SIZE = 20;
 

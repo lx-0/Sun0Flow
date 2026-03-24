@@ -1,8 +1,15 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AppShell } from "@/components/AppShell";
 import { PlaylistsView } from "@/components/PlaylistsView";
 import { PlaylistsSkeleton } from "@/components/Skeleton";
 import { auth } from "@/lib/auth";
+
+export const metadata: Metadata = {
+  title: "Playlists",
+  description: "Organize your AI-generated music into custom playlists.",
+  robots: { index: false },
+};
 import { prisma } from "@/lib/prisma";
 
 async function fetchPlaylists() {

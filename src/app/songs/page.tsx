@@ -1,8 +1,15 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AppShell } from "@/components/AppShell";
 import { SongsGalleryView } from "@/components/SongsGalleryView";
 import { SongsGallerySkeleton } from "@/components/Skeleton";
 import { auth } from "@/lib/auth";
+
+export const metadata: Metadata = {
+  title: "Songs Gallery",
+  description: "View and manage your AI-generated songs in a visual gallery.",
+  robots: { index: false },
+};
 import { prisma } from "@/lib/prisma";
 
 async function fetchSongs() {
