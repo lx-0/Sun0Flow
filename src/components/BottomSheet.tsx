@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
 interface BottomSheetProps {
   open: boolean;
   onClose: () => void;
@@ -16,19 +18,53 @@ interface BottomSheetProps {
  */
 export function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
+  const desktopRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
   const [translateY, setTranslateY] = useState(0);
   const [dragging, setDragging] = useState(false);
 
-  // Close on Escape
+  function getActiveDialog(): HTMLDivElement | null {
+    if (typeof window !== "undefined" && window.innerWidth < 768) return sheetRef.current;
+    return desktopRef.current;
+  }
+
+  // Close on Escape + focus trap
   useEffect(() => {
     if (!open) return;
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const dialog = getActiveDialog();
+      if (!dialog) return;
+      const focusable = dialog.querySelectorAll<HTMLElement>(FOCUSABLE);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
+
+  // Move focus into dialog when it opens
+  useEffect(() => {
+    if (!open) return;
+    const dialog = getActiveDialog();
+    if (!dialog) return;
+    const focusable = dialog.querySelectorAll<HTMLElement>(FOCUSABLE);
+    if (focusable.length > 0) {
+      focusable[0].focus();
+    } else {
+      dialog.focus();
+    }
+  }, [open]);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -79,7 +115,8 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
         role="dialog"
         aria-modal="true"
         aria-label={title || "Dialog"}
-        className="fixed z-50 inset-x-0 bottom-0 bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl max-h-[85vh] overflow-y-auto md:hidden"
+        tabIndex={-1}
+        className="fixed z-50 inset-x-0 bottom-0 bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl max-h-[85vh] overflow-y-auto md:hidden focus:outline-none"
         style={{
           transform: translateY > 0 ? `translateY(${translateY}px)` : undefined,
           transition: dragging ? "none" : "transform 0.2s ease-out",
@@ -108,10 +145,12 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
 
       {/* Desktop: centered dialog */}
       <div
+        ref={desktopRef}
         role="dialog"
         aria-modal="true"
         aria-label={title || "Dialog"}
-        className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto hidden md:block"
+        tabIndex={-1}
+        className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto hidden md:block focus:outline-none"
       >
         {title && (
           <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">

@@ -1461,7 +1461,7 @@ function ApiKeySection() {
         <div>
           <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Suno API Key</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Set your personal <a href="https://sunoapi.org" target="_blank" rel="noopener noreferrer" className="text-violet-500 hover:underline">sunoapi.org</a> API key for music generation. Overrides the server default.
+            Set your personal <a href="https://sunoapi.org" target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 underline">sunoapi.org</a> API key for music generation. Overrides the server default.
           </p>
         </div>
 

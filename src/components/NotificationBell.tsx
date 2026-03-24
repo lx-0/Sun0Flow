@@ -108,7 +108,7 @@ export function NotificationBell() {
           <BellIcon className="w-5 h-5" />
         )}
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-violet-500 text-white text-[10px] font-bold leading-none">
+          <span aria-hidden="true" className="absolute top-1.5 right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-violet-500 text-white text-[10px] font-bold leading-none">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
@@ -129,7 +129,7 @@ export function NotificationBell() {
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
-                className="text-xs text-violet-500 hover:text-violet-600 dark:hover:text-violet-400 font-medium transition-colors"
+                className="text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 font-medium transition-colors"
               >
                 Mark all read
               </button>
@@ -179,7 +179,7 @@ export function NotificationBell() {
                         </p>
                       </div>
                       {!n.read && (
-                        <span className="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0 mt-2" />
+                        <span aria-hidden="true" className="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0 mt-2" />
                       )}
                     </button>
                   </li>
@@ -193,7 +193,7 @@ export function NotificationBell() {
             <Link
               href="/notifications"
               onClick={() => setOpen(false)}
-              className="block text-center text-xs text-violet-500 hover:text-violet-600 dark:hover:text-violet-400 font-medium transition-colors"
+              className="block text-center text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 font-medium transition-colors"
             >
               View all notifications
             </Link>

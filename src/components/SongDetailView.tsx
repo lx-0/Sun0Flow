@@ -1215,7 +1215,7 @@ export function SongDetailView({
       {parentSongId && (
         <div className="text-sm text-gray-500 dark:text-gray-400">
           This is a variation of{" "}
-          <Link href={`/library/${parentSongId}`} className="text-violet-500 hover:text-violet-400 underline">
+          <Link href={`/library/${parentSongId}`} className="text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 underline">
             the original song
           </Link>
         </div>

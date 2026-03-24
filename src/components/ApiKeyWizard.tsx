@@ -100,7 +100,7 @@ export function ApiKeyWizard() {
                     href="https://sunoapi.org"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-violet-500 hover:text-violet-400 underline"
+                    className="text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 underline"
                   >
                     sunoapi.org
                   </a>
@@ -111,7 +111,7 @@ export function ApiKeyWizard() {
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-violet-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">1</span>
                     <p className="text-sm text-gray-700 dark:text-gray-300">
                       Visit{" "}
-                      <a href="https://sunoapi.org" target="_blank" rel="noopener noreferrer" className="text-violet-500 hover:text-violet-400 underline font-medium">
+                      <a href="https://sunoapi.org" target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 underline font-medium">
                         sunoapi.org
                       </a>{" "}
                       and create an account
