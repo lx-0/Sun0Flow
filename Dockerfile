@@ -8,19 +8,18 @@ WORKDIR /app
 
 # --- Dependencies ---
 FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 COPY prisma ./prisma/
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec prisma generate
-# Flatten Prisma client + CLI into known paths for the production image.
-# pnpm stores packages under version-hashed dirs that contain glob-unfriendly
-# characters; Docker COPY cannot resolve them reliably, so we dereference the
-# symlinks into flat directories here.
+# With shamefully-hoist=true in .npmrc, pnpm lays out node_modules flat (like
+# npm), so .prisma/client and all other packages live at the top level.
+# We still dereference symlinks (-L) since pnpm uses symlinks internally.
 RUN mkdir -p /prisma-flat/node_modules/@prisma /prisma-flat/node_modules/.prisma && \
     cp -rL node_modules/.prisma/client /prisma-flat/node_modules/.prisma/client && \
     cp -rL node_modules/@prisma/client /prisma-flat/node_modules/@prisma/client && \
     cp -rL node_modules/prisma /prisma-flat/node_modules/prisma && \
-    cp -rL node_modules/.pnpm/@prisma+engines@*/node_modules/@prisma/engines /prisma-flat/node_modules/@prisma/engines
+    cp -rL node_modules/@prisma/engines /prisma-flat/node_modules/@prisma/engines
 
 # --- Build ---
 FROM base AS build
