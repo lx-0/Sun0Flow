@@ -50,8 +50,8 @@ jobs:
       - name: Generate Prisma client
         run: pnpm exec prisma generate
 
-      - name: Push schema to test DB
-        run: pnpm exec prisma db push --skip-generate
+      - name: Apply DB migrations
+        run: pnpm exec prisma migrate deploy
 
       - name: Lint
         run: pnpm lint
