@@ -6,7 +6,7 @@
     "postinstall": "prisma generate",
     "clean": "rm -rf .next",
     "fresh": "rm -rf .next node_modules && pnpm install",
-    "dev": "prisma migrate resolve --rolled-back 20260322200000_add_missing_schema_objects 2>/dev/null; prisma migrate deploy && rm -rf .next/types && NODE_ENV=development next dev",
+    "dev": "prisma migrate resolve --rolled-back 20260322200000_add_missing_schema_objects 2>/dev/null; prisma migrate deploy && rm -rf .next/types && NODE_ENV=development next dev --turbo",
     "build": "rm -rf .next/types && prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
