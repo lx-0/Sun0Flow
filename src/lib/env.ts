@@ -35,6 +35,8 @@ function optionalWarn(name: string): string | undefined {
 
 // --- Required ---
 export const DATABASE_URL = required("DATABASE_URL");
+/** Prisma uses this directly from the environment; validated here for fast-fail. */
+export const SUNOFLOW_DATABASE_URL = required("SUNOFLOW_DATABASE_URL");
 export const AUTH_SECRET = required("AUTH_SECRET");
 export const NEXTAUTH_URL = optional("NEXTAUTH_URL", "http://localhost:3000");
 
@@ -63,6 +65,7 @@ export const LOG_LEVEL = process.env.LOG_LEVEL ?? "info";
 
 export const env = {
   DATABASE_URL,
+  SUNOFLOW_DATABASE_URL,
   AUTH_SECRET,
   NEXTAUTH_URL,
   SUNOAPI_KEY,
