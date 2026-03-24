@@ -12,14 +12,17 @@ COPY package.json pnpm-lock.yaml .npmrc ./
 COPY prisma ./prisma/
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec prisma generate
-# With shamefully-hoist=true in .npmrc, pnpm lays out node_modules flat (like
-# npm), so .prisma/client and all other packages live at the top level.
-# We still dereference symlinks (-L) since pnpm uses symlinks internally.
-RUN mkdir -p /prisma-flat/node_modules/@prisma /prisma-flat/node_modules/.prisma && \
-    cp -rL node_modules/.prisma/client /prisma-flat/node_modules/.prisma/client && \
+# Flatten Prisma into known paths for the production image.
+# shamefully-hoist puts @prisma/client and prisma at the top level, but
+# .prisma/client (the generated output) lives inside the .pnpm store.
+# We dereference symlinks (-L) since pnpm uses them internally.
+RUN mkdir -p /prisma-flat/node_modules/.prisma && \
     cp -rL node_modules/@prisma/client /prisma-flat/node_modules/@prisma/client && \
+    cp -rL node_modules/@prisma/engines /prisma-flat/node_modules/@prisma/engines && \
     cp -rL node_modules/prisma /prisma-flat/node_modules/prisma && \
-    cp -rL node_modules/@prisma/engines /prisma-flat/node_modules/@prisma/engines
+    cp -rL $(node -e "console.log(require.resolve('.prisma/client').replace('/index.js',''))" 2>/dev/null || \
+            find node_modules/.pnpm -path '*/.prisma/client/index.js' -exec dirname {} \; | head -1) \
+       /prisma-flat/node_modules/.prisma/client
 
 # --- Build ---
 FROM base AS build
