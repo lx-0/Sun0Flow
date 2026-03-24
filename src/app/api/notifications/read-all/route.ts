@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
+import { invalidateByPrefix, cacheKey } from "@/lib/cache";
 
 // PATCH /api/notifications/read-all — mark all notifications as read
 export async function PATCH(request: Request) {
@@ -13,6 +14,8 @@ export async function PATCH(request: Request) {
       where: { userId: userId, read: false },
       data: { read: true },
     });
+
+    invalidateByPrefix(cacheKey("notifications-unread", userId));
 
     return NextResponse.json({ ok: true });
   } catch {

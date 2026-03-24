@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { stripHtml } from "@/lib/sanitize";
-import { CacheControl, invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { CacheControl, CacheTTL, cached, invalidateByPrefix, cacheKey } from "@/lib/cache";
 
 const MAX_PLAYLISTS = 50;
 
@@ -12,14 +12,19 @@ export async function GET(request: Request) {
 
     if (authError) return authError;
 
-    const playlists = await prisma.playlist.findMany({
-      where: { userId: userId },
-      include: { _count: { select: { songs: true } } },
-      orderBy: { updatedAt: "desc" },
-    });
+    const playlists = await cached(
+      cacheKey("playlists", userId),
+      () =>
+        prisma.playlist.findMany({
+          where: { userId: userId },
+          include: { _count: { select: { songs: true } } },
+          orderBy: { updatedAt: "desc" },
+        }),
+      CacheTTL.PLAYLIST
+    );
 
     return NextResponse.json({ playlists }, {
-      headers: { "Cache-Control": CacheControl.privateNoCache },
+      headers: { "Cache-Control": CacheControl.privateShort },
     });
   } catch {
     return NextResponse.json(

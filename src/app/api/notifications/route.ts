@@ -3,6 +3,7 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
 import { broadcast } from "@/lib/event-bus";
+import { CacheControl, cached, invalidateByPrefix, cacheKey } from "@/lib/cache";
 
 // GET /api/notifications — list notifications for current user
 export async function GET(request: NextRequest) {
@@ -30,11 +31,16 @@ export async function GET(request: NextRequest) {
     const sliced = hasMore ? notifications.slice(0, limit) : notifications;
     const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
 
-    const unreadCount = await prisma.notification.count({
-      where: { userId: userId, read: false },
-    });
+    // Cache unread count for 10s — refreshed on mutation
+    const unreadCount = await cached(
+      cacheKey("notifications-unread", userId),
+      () => prisma.notification.count({ where: { userId: userId, read: false } }),
+      10_000
+    );
 
-    return NextResponse.json({ notifications: sliced, nextCursor, unreadCount });
+    return NextResponse.json({ notifications: sliced, nextCursor, unreadCount }, {
+      headers: { "Cache-Control": CacheControl.privateNoCache },
+    });
   } catch (error) {
     logServerError("notifications-list", error, { route: "/api/notifications" });
     return NextResponse.json(
@@ -77,6 +83,8 @@ export async function POST(request: NextRequest) {
         songId: songId || null,
       },
     });
+
+    invalidateByPrefix(cacheKey("notifications-unread", userId));
 
     broadcast(userId, {
       type: "notification",

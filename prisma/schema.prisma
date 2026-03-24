@@ -123,6 +123,14 @@ model Song {
   @@index([userId, playCount])
   @@index([parentSongId])
   @@index([userId, archivedAt])
+  @@index([generationStatus])
+  @@index([userId, generationStatus])
+  @@index([userId, rating])
+  @@index([userId, updatedAt])
+  @@index([isPublic, generationStatus, isHidden])
+  @@index([isPublic, createdAt])
+  @@index([isPublic, playCount])
+  @@index([isPublic, rating])
 }
 
 model Playlist {
@@ -374,6 +382,7 @@ model GenerationQueueItem {
 
   @@index([userId, status])
   @@index([userId, position])
+  @@index([status])
 }
 
 model ErrorReport {
