@@ -5,10 +5,13 @@
 
 function required(name: string): string {
   const value = process.env[name];
-  if (!value) {
+  // During `next build`, runtime env vars are not injected into the Docker build
+  // context — skip validation so the build succeeds. The missing value is caught
+  // immediately on first request at runtime when the container boots.
+  if (!value && process.env.NEXT_PHASE !== "phase-production-build") {
     throw new Error(`Missing required environment variable: ${name}`);
   }
-  return value;
+  return value ?? "";
 }
 
 function optional(name: string, defaultValue: string): string {
