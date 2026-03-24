@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import {
   MusicalNoteIcon,
@@ -60,11 +60,7 @@ export default function AdminReportsPage() {
   const [total, setTotal] = useState(0);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchReports();
-  }, [statusFilter, page]);
-
-  async function fetchReports() {
+  const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/reports?status=${statusFilter}&page=${page}`);
@@ -78,7 +74,11 @@ export default function AdminReportsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [statusFilter, page]);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
 
   async function handleAction(reportId: string, action: string) {
     setActionLoading(reportId);
