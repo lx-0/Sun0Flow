@@ -20,6 +20,9 @@ import {
   ForwardIcon,
   ArrowDownTrayIcon,
   XMarkIcon,
+  UserGroupIcon,
+  UserPlusIcon,
+  LinkIcon,
 } from "@heroicons/react/24/outline";
 import { PlayIcon as PlaySolidIcon, CheckIcon } from "@heroicons/react/24/solid";
 import { exportAsZip } from "@/lib/export";
@@ -48,11 +51,26 @@ function songToQueueSong(song: Song): QueueSong | null {
   };
 }
 
+interface CollaboratorUser {
+  id: string;
+  name: string | null;
+  image: string | null;
+  avatarUrl: string | null;
+}
+
 interface PlaylistSongItem {
   id: string;
   songId: string;
   position: number;
   song: Song;
+  addedByUser: CollaboratorUser | null;
+}
+
+interface PlaylistCollaboratorItem {
+  id: string;
+  userId: string | null;
+  status: string;
+  user: CollaboratorUser | null;
 }
 
 interface PlaylistData {
@@ -60,9 +78,11 @@ interface PlaylistData {
   name: string;
   description: string | null;
   isPublic: boolean;
+  isCollaborative: boolean;
   slug: string | null;
   songs: PlaylistSongItem[];
   _count: { songs: number };
+  collaborators: PlaylistCollaboratorItem[];
 }
 
 interface SongListItemProps {
@@ -75,6 +95,7 @@ interface SongListItemProps {
   isSelected: boolean;
   selectionMode: boolean;
   isPlaying: boolean;
+  isCollaborative: boolean;
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
@@ -89,7 +110,7 @@ interface SongListItemProps {
 }
 
 function SongListItem({
-  ps, index, isActive, hasAudio, isDragOver, dragIndex, isSelected, selectionMode, isPlaying,
+  ps, index, isActive, hasAudio, isDragOver, dragIndex, isSelected, selectionMode, isPlaying, isCollaborative,
   onDragStart, onDragOver, onDrop, onDragEnd, onDragHandleTouchStart,
   onTogglePlay, onPlayNext, onAddToQueue, onRemove, onToggleSelect, onLongPress,
 }: SongListItemProps) {
@@ -174,7 +195,7 @@ function SongListItem({
         )}
       </div>
 
-      {/* Title + duration */}
+      {/* Title + duration + attribution */}
       <div className="flex-1 min-w-0">
         <Link
           href={`/library/${ps.songId}`}
@@ -182,9 +203,16 @@ function SongListItem({
         >
           {ps.song.title ?? "Untitled"}
         </Link>
-        {ps.song.duration && (
-          <span className="text-xs text-gray-400 dark:text-gray-500">{formatTime(ps.song.duration)}</span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {ps.song.duration && (
+            <span className="text-xs text-gray-400 dark:text-gray-500">{formatTime(ps.song.duration)}</span>
+          )}
+          {isCollaborative && ps.addedByUser?.name && (
+            <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
+              · {ps.addedByUser.name}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Play button */}
@@ -239,8 +267,10 @@ function SongListItem({
 
 export function PlaylistDetailView({
   playlist: initialPlaylist,
+  isOwner = true,
 }: {
   playlist: PlaylistData;
+  isOwner?: boolean;
 }) {
   const { toast } = useToast();
   const router = useRouter();
@@ -269,6 +299,16 @@ export function PlaylistDetailView({
   const [slug, setSlug] = useState(initialPlaylist.slug);
   const [showSharePanel, setShowSharePanel] = useState(false);
   const [isTogglingShare, setIsTogglingShare] = useState(false);
+
+  // Collaborative state
+  const [isCollaborative, setIsCollaborative] = useState(initialPlaylist.isCollaborative);
+  const [collaborators, setCollaborators] = useState<PlaylistCollaboratorItem[]>(
+    initialPlaylist.collaborators ?? []
+  );
+  const [showCollabPanel, setShowCollabPanel] = useState(false);
+  const [isTogglingCollab, setIsTogglingCollab] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
 
   // Batch selection state
   const [selectedSongIds, setSelectedSongIds] = useState<Set<string>>(new Set());
@@ -594,6 +634,55 @@ export function PlaylistDetailView({
     navigator.clipboard.writeText(code).then(() => toast("Embed code copied!", "success"));
   }
 
+  async function handleToggleCollaborative() {
+    if (isTogglingCollab) return;
+    setIsTogglingCollab(true);
+    try {
+      const res = await fetch(`/api/playlists/${playlist.id}/collaborative`, { method: "PATCH" });
+      if (!res.ok) { toast("Failed to update collaborative mode", "error"); return; }
+      const data = await res.json();
+      setIsCollaborative(data.isCollaborative);
+      if (!data.isCollaborative) setInviteLink(null);
+      toast(data.isCollaborative ? "Collaborative mode enabled" : "Collaborative mode disabled", "success");
+    } catch {
+      toast("Failed to update collaborative mode", "error");
+    } finally {
+      setIsTogglingCollab(false);
+    }
+  }
+
+  async function handleGenerateInvite() {
+    if (isGeneratingInvite) return;
+    setIsGeneratingInvite(true);
+    try {
+      const res = await fetch(`/api/playlists/${playlist.id}/collaborators`, { method: "POST" });
+      if (!res.ok) { toast("Failed to generate invite link", "error"); return; }
+      const data = await res.json();
+      const link = `${window.location.origin}/playlists/invite/${data.collaborator.inviteToken}`;
+      setInviteLink(link);
+    } catch {
+      toast("Failed to generate invite link", "error");
+    } finally {
+      setIsGeneratingInvite(false);
+    }
+  }
+
+  function handleCopyInviteLink() {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink).then(() => toast("Invite link copied!", "success"));
+  }
+
+  async function handleRemoveCollaborator(collaboratorId: string) {
+    try {
+      const res = await fetch(`/api/playlists/${playlist.id}/collaborators/${collaboratorId}`, { method: "DELETE" });
+      if (!res.ok) { toast("Failed to remove collaborator", "error"); return; }
+      setCollaborators((prev) => prev.filter((c) => c.id !== collaboratorId));
+      toast("Collaborator removed", "success");
+    } catch {
+      toast("Failed to remove collaborator", "error");
+    }
+  }
+
   const totalDuration = songs.reduce(
     (sum, ps) => sum + (ps.song.duration ?? 0),
     0
@@ -676,8 +765,22 @@ export function PlaylistDetailView({
             )}
           </div>
           <div className="flex items-center gap-1">
+            {isOwner && (
+              <button
+                onClick={() => { setShowCollabPanel((v) => !v); setShowSharePanel(false); }}
+                aria-label="Collaborative mode"
+                aria-expanded={showCollabPanel}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+                  isCollaborative
+                    ? "text-violet-500 dark:text-violet-400 hover:text-violet-600"
+                    : "text-gray-400 dark:text-gray-500 hover:text-violet-400"
+                }`}
+              >
+                <UserGroupIcon className="w-5 h-5" />
+              </button>
+            )}
             <button
-              onClick={() => setShowSharePanel((v) => !v)}
+              onClick={() => { setShowSharePanel((v) => !v); setShowCollabPanel(false); }}
               aria-label="Share playlist"
               aria-expanded={showSharePanel}
               className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
@@ -688,21 +791,155 @@ export function PlaylistDetailView({
             >
               <ShareIcon className="w-5 h-5" />
             </button>
+            {isOwner && (
+              <>
+                <button
+                  onClick={() => setEditing(true)}
+                  aria-label="Edit playlist"
+                  className="w-11 h-11 rounded-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-violet-400 transition-colors"
+                >
+                  <PencilIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  aria-label="Delete playlist"
+                  className="w-11 h-11 rounded-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors"
+                >
+                  <TrashIcon className="w-5 h-5" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Collaborator avatars */}
+      {isCollaborative && collaborators.filter((c) => c.user).length > 0 && !editing && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400">Collaborators:</span>
+          <div className="flex -space-x-2">
+            {collaborators.filter((c) => c.user).slice(0, 5).map((c) => (
+              <div
+                key={c.id}
+                title={c.user?.name ?? "Collaborator"}
+                className="w-7 h-7 rounded-full bg-violet-200 dark:bg-violet-800 border-2 border-white dark:border-gray-900 overflow-hidden flex items-center justify-center text-xs font-medium text-violet-700 dark:text-violet-300 flex-shrink-0"
+              >
+                {(c.user?.avatarUrl ?? c.user?.image) ? (
+                  <Image
+                    src={(c.user?.avatarUrl ?? c.user?.image)!}
+                    alt={c.user?.name ?? "Collaborator"}
+                    width={28}
+                    height={28}
+                    className="object-cover w-full h-full"
+                  />
+                ) : (
+                  (c.user?.name?.[0] ?? "?").toUpperCase()
+                )}
+              </div>
+            ))}
+            {collaborators.filter((c) => c.user).length > 5 && (
+              <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 border-2 border-white dark:border-gray-900 flex items-center justify-center text-xs font-medium text-gray-600 dark:text-gray-300">
+                +{collaborators.filter((c) => c.user).length - 5}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Collaborative panel (owner only) */}
+      {showCollabPanel && isOwner && !editing && (
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
+          {/* Toggle collaborative */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserGroupIcon className={`w-4 h-4 ${isCollaborative ? "text-violet-500" : "text-gray-400 dark:text-gray-500"}`} />
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {isCollaborative ? "Collaborative mode on" : "Collaborative mode off"}
+              </span>
+            </div>
             <button
-              onClick={() => setEditing(true)}
-              aria-label="Edit playlist"
-              className="w-11 h-11 rounded-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-violet-400 transition-colors"
+              onClick={handleToggleCollaborative}
+              disabled={isTogglingCollab}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:opacity-50 ${
+                isCollaborative ? "bg-violet-600" : "bg-gray-400 dark:bg-gray-600"
+              }`}
+              role="switch"
+              aria-checked={isCollaborative}
+              aria-label="Toggle collaborative mode"
             >
-              <PencilIcon className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              aria-label="Delete playlist"
-              className="w-11 h-11 rounded-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors"
-            >
-              <TrashIcon className="w-5 h-5" />
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  isCollaborative ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
             </button>
           </div>
+
+          {/* Invite link — only shown when collaborative */}
+          {isCollaborative && (
+            <div className="space-y-2">
+              <button
+                onClick={handleGenerateInvite}
+                disabled={isGeneratingInvite}
+                className="flex items-center gap-2 text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-500 transition-colors disabled:opacity-50"
+              >
+                <UserPlusIcon className="w-4 h-4" />
+                {isGeneratingInvite ? "Generating…" : "Generate invite link"}
+              </button>
+
+              {inviteLink && (
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    aria-label="Invite link"
+                    value={inviteLink}
+                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleCopyInviteLink}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors whitespace-nowrap"
+                  >
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    Copy
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Collaborator list */}
+          {isCollaborative && collaborators.filter((c) => c.user).length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Current collaborators</p>
+              {collaborators.filter((c) => c.user).map((c) => (
+                <div key={c.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-violet-100 dark:bg-violet-900 flex items-center justify-center text-xs font-medium text-violet-700 dark:text-violet-300 overflow-hidden flex-shrink-0">
+                      {(c.user?.avatarUrl ?? c.user?.image) ? (
+                        <Image
+                          src={(c.user?.avatarUrl ?? c.user?.image)!}
+                          alt={c.user?.name ?? ""}
+                          width={28}
+                          height={28}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        (c.user?.name?.[0] ?? "?").toUpperCase()
+                      )}
+                    </div>
+                    <span className="text-sm text-gray-900 dark:text-white">{c.user?.name ?? "Unknown"}</span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveCollaborator(c.id)}
+                    aria-label={`Remove ${c.user?.name ?? "collaborator"}`}
+                    className="text-xs text-red-500 hover:text-red-600 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -860,6 +1097,7 @@ export function PlaylistDetailView({
                   isSelected={isSelected}
                   selectionMode={selectionMode}
                   isPlaying={isPlaying}
+                  isCollaborative={isCollaborative}
                   onDragStart={() => handleDragStart(index)}
                   onDragOver={(e: React.DragEvent) => handleDragOver(e, index)}
                   onDrop={(e: React.DragEvent) => handleDrop(e, index)}

@@ -12,14 +12,33 @@ export async function GET(
 
     if (authError) return authError;
 
+    // Allow owner or accepted collaborator to read
     const playlist = await prisma.playlist.findFirst({
-      where: { id: params.id, userId: userId },
+      where: {
+        id: params.id,
+        OR: [
+          { userId },
+          {
+            isCollaborative: true,
+            collaborators: { some: { userId, status: "accepted" } },
+          },
+        ],
+      },
       include: {
         songs: {
           orderBy: { position: "asc" },
-          include: { song: true },
+          include: {
+            song: true,
+            addedByUser: { select: { id: true, name: true, image: true, avatarUrl: true } },
+          },
         },
         _count: { select: { songs: true } },
+        collaborators: {
+          where: { status: "accepted" },
+          include: {
+            user: { select: { id: true, name: true, image: true, avatarUrl: true } },
+          },
+        },
       },
     });
 
@@ -27,7 +46,8 @@ export async function GET(
       return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
     }
 
-    return NextResponse.json({ playlist }, {
+    const isOwner = playlist.userId === userId;
+    return NextResponse.json({ playlist, isOwner }, {
       headers: { "Cache-Control": CacheControl.privateNoCache },
     });
   } catch {

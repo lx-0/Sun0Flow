@@ -13,8 +13,18 @@ export async function POST(
 
     if (authError) return authError;
 
+    // Owner or accepted collaborator can add songs
     const playlist = await prisma.playlist.findFirst({
-      where: { id: params.id, userId: userId },
+      where: {
+        id: params.id,
+        OR: [
+          { userId },
+          {
+            isCollaborative: true,
+            collaborators: { some: { userId, status: "accepted" } },
+          },
+        ],
+      },
       include: { _count: { select: { songs: true } } },
     });
 
@@ -34,7 +44,7 @@ export async function POST(
 
     // Verify user owns the song
     const song = await prisma.song.findFirst({
-      where: { id: songId, userId: userId },
+      where: { id: songId, userId },
     });
 
     if (!song) {
@@ -73,8 +83,12 @@ export async function POST(
         playlistId: playlist.id,
         songId,
         position,
+        addedByUserId: userId,
       },
-      include: { song: true },
+      include: {
+        song: true,
+        addedByUser: { select: { id: true, name: true, image: true, avatarUrl: true } },
+      },
     });
 
     return NextResponse.json({ playlistSong }, { status: 201 });

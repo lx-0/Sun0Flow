@@ -6,34 +6,67 @@ import { PlaylistDetailSkeleton } from "@/components/Skeleton";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-async function fetchPlaylist(id: string) {
+async function fetchPlaylist(id: string, userId: string) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) return null;
-    return await prisma.playlist.findFirst({
-      where: { id, userId: session.user.id },
+    // Allow owner or accepted collaborator
+    const playlist = await prisma.playlist.findFirst({
+      where: {
+        id,
+        OR: [
+          { userId },
+          {
+            isCollaborative: true,
+            collaborators: { some: { userId, status: "accepted" } },
+          },
+        ],
+      },
       select: {
         id: true,
         name: true,
         description: true,
         isPublic: true,
+        isCollaborative: true,
         slug: true,
+        userId: true,
         songs: {
           orderBy: { position: "asc" },
-          include: { song: true },
+          include: {
+            song: true,
+            addedByUser: { select: { id: true, name: true, image: true, avatarUrl: true } },
+          },
         },
         _count: { select: { songs: true } },
+        collaborators: {
+          where: { status: "accepted" },
+          select: {
+            id: true,
+            userId: true,
+            status: true,
+            user: { select: { id: true, name: true, image: true, avatarUrl: true } },
+          },
+        },
       },
     });
+    if (!playlist) return null;
+    const isOwner = playlist.userId === userId;
+    return { playlist, isOwner };
   } catch {
     return null;
   }
 }
 
 async function PlaylistDetailContent({ id }: { id: string }) {
-  const playlist = await fetchPlaylist(id);
-  if (!playlist) notFound();
-  return <PlaylistDetailView playlist={JSON.parse(JSON.stringify(playlist))} />;
+  const session = await auth();
+  if (!session?.user?.id) notFound();
+  const result = await fetchPlaylist(id, session.user.id);
+  if (!result) notFound();
+  const { playlist, isOwner } = result;
+  return (
+    <PlaylistDetailView
+      playlist={JSON.parse(JSON.stringify(playlist))}
+      isOwner={isOwner}
+    />
+  );
 }
 
 export default function PlaylistDetailPage({

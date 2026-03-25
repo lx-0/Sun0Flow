@@ -91,6 +91,8 @@ model User {
   subscription         Subscription?
   paymentEvents        PaymentEvent[]
   playHistory          PlayHistory[]
+  playlistCollaborations PlaylistCollaborator[]
+  playlistSongsAdded     PlaylistSong[]         @relation("PlaylistSongAddedBy")
 }
 
 model Activity {
@@ -174,36 +176,58 @@ model Song {
 }
 
 model Playlist {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  userId      String
-  isPublic    Boolean  @default(false)
-  slug        String?  @unique
-  shareCount  Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  userId           String
+  isPublic         Boolean  @default(false)
+  isCollaborative  Boolean  @default(false)
+  slug             String?  @unique
+  shareCount       Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  songs      PlaylistSong[]
-  activities Activity[]
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  songs         PlaylistSong[]
+  activities    Activity[]
+  collaborators PlaylistCollaborator[]
 
   @@index([userId])
   @@index([userId, name])
 }
 
 model PlaylistSong {
-  id         String   @id @default(cuid())
-  playlistId String
-  songId     String
-  position   Int
-  addedAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  playlistId    String
+  songId        String
+  position      Int
+  addedAt       DateTime @default(now())
+  addedByUserId String?
 
-  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  song     Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  playlist    Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  song        Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  addedByUser User?    @relation("PlaylistSongAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([playlistId, songId])
   @@index([playlistId, position])
+}
+
+model PlaylistCollaborator {
+  id               String    @id @default(cuid())
+  playlistId       String
+  userId           String?   // null until invite is accepted
+  inviteToken      String    @unique @default(cuid())
+  inviteExpiresAt  DateTime
+  status           String    @default("pending") // pending, accepted
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([playlistId])
+  @@index([userId])
+  @@index([inviteToken])
 }
 
 model RateLimitEntry {

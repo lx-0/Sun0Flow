@@ -11,8 +11,18 @@ export async function DELETE(
 
     if (authError) return authError;
 
+    // Find playlist — allow owner or collaborator
     const playlist = await prisma.playlist.findFirst({
-      where: { id: params.id, userId: userId },
+      where: {
+        id: params.id,
+        OR: [
+          { userId },
+          {
+            isCollaborative: true,
+            collaborators: { some: { userId, status: "accepted" } },
+          },
+        ],
+      },
     });
 
     if (!playlist) {
@@ -32,6 +42,15 @@ export async function DELETE(
       return NextResponse.json(
         { error: "Song not in playlist", code: "NOT_FOUND" },
         { status: 404 }
+      );
+    }
+
+    const isOwner = playlist.userId === userId;
+    // Collaborators can only remove songs they added
+    if (!isOwner && playlistSong.addedByUserId !== userId) {
+      return NextResponse.json(
+        { error: "You can only remove songs you added", code: "FORBIDDEN" },
+        { status: 403 }
       );
     }
 
