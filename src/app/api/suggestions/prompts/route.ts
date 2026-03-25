@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
+import { CacheControl } from "@/lib/cache";
 
 const MAX_SUGGESTIONS = 5;
 
@@ -174,7 +175,10 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ suggestions });
+    const response = NextResponse.json({ suggestions });
+    // Personalized per-user — private cache, short TTL (60s) so suggestions stay fresh
+    response.headers.set("Cache-Control", CacheControl.privateShort);
+    return response;
   } catch {
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

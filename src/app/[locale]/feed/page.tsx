@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { AppShell } from "@/components/AppShell";
 import { MusicalNoteIcon, UserGroupIcon } from "@heroicons/react/24/outline";
@@ -51,8 +52,15 @@ function formatRelativeTime(dateStr: string): string {
 function Avatar({ user }: { user: FeedUser }) {
   const initials = (user.name ?? "?").charAt(0).toUpperCase();
   if (user.image) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={user.image} alt={user.name ?? "User"} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />;
+    return (
+      <Image
+        src={user.image}
+        alt={user.name ?? "User"}
+        width={36}
+        height={36}
+        className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+      />
+    );
   }
   return (
     <div className="w-9 h-9 rounded-full bg-violet-600 flex items-center justify-center flex-shrink-0">
@@ -97,8 +105,14 @@ function SongThumb({ song }: { song: FeedSong }) {
     <>
       <div className="w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-700 flex-shrink-0 overflow-hidden flex items-center justify-center">
         {song.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={song.imageUrl} alt={song.title ?? "Song"} className="w-full h-full object-cover" />
+          <Image
+            src={song.imageUrl}
+            alt={song.title ?? "Song"}
+            width={48}
+            height={48}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
         ) : (
           <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-500" />
         )}

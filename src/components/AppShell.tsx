@@ -43,20 +43,22 @@ import { SearchBar } from "./SearchBar";
 import { EmailVerificationBanner } from "./EmailVerificationBanner";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 
+// prefetch: true forces eager prefetch even before the link enters the viewport.
+// Critical user-flow routes get this treatment so they load instantly on first click.
 const NAV_ITEM_DEFS = [
-  { key: "home" as const, href: "/", icon: HomeIcon, dataTour: undefined as string | undefined },
-  { key: "library" as const, href: "/library", icon: BookOpenIcon, dataTour: undefined as string | undefined },
-  { key: "inspire" as const, href: "/inspire", icon: LightBulbIcon, dataTour: "nav-inspire" as string | undefined },
-  { key: "generate" as const, href: "/generate", icon: PlusCircleIcon, dataTour: "nav-generate" as string | undefined },
-  { key: "templates" as const, href: "/templates", icon: BookmarkIcon, dataTour: undefined as string | undefined },
-  { key: "personas" as const, href: "/personas", icon: UserGroupIcon, dataTour: undefined as string | undefined },
-  { key: "mashup" as const, href: "/mashup", icon: SparklesIcon, dataTour: undefined as string | undefined },
-  { key: "feed" as const, href: "/feed", icon: RssIcon, dataTour: undefined as string | undefined },
-  { key: "discover" as const, href: "/discover", icon: GlobeAltIcon, dataTour: undefined as string | undefined },
-  { key: "playlists" as const, href: "/playlists", icon: QueueListIcon, dataTour: "explore" as string | undefined },
-  { key: "favorites" as const, href: "/favorites", icon: HeartIcon, dataTour: "nav-favorites" as string | undefined },
-  { key: "history" as const, href: "/history", icon: ClockIcon, dataTour: undefined as string | undefined },
-  { key: "analytics" as const, href: "/analytics", icon: ChartBarIcon, dataTour: undefined as string | undefined },
+  { key: "home" as const, href: "/", icon: HomeIcon, dataTour: undefined as string | undefined, prefetch: false },
+  { key: "library" as const, href: "/library", icon: BookOpenIcon, dataTour: undefined as string | undefined, prefetch: true },
+  { key: "inspire" as const, href: "/inspire", icon: LightBulbIcon, dataTour: "nav-inspire" as string | undefined, prefetch: false },
+  { key: "generate" as const, href: "/generate", icon: PlusCircleIcon, dataTour: "nav-generate" as string | undefined, prefetch: true },
+  { key: "templates" as const, href: "/templates", icon: BookmarkIcon, dataTour: undefined as string | undefined, prefetch: false },
+  { key: "personas" as const, href: "/personas", icon: UserGroupIcon, dataTour: undefined as string | undefined, prefetch: false },
+  { key: "mashup" as const, href: "/mashup", icon: SparklesIcon, dataTour: undefined as string | undefined, prefetch: false },
+  { key: "feed" as const, href: "/feed", icon: RssIcon, dataTour: undefined as string | undefined, prefetch: false },
+  { key: "discover" as const, href: "/discover", icon: GlobeAltIcon, dataTour: undefined as string | undefined, prefetch: false },
+  { key: "playlists" as const, href: "/playlists", icon: QueueListIcon, dataTour: "explore" as string | undefined, prefetch: false },
+  { key: "favorites" as const, href: "/favorites", icon: HeartIcon, dataTour: "nav-favorites" as string | undefined, prefetch: false },
+  { key: "history" as const, href: "/history", icon: ClockIcon, dataTour: undefined as string | undefined, prefetch: false },
+  { key: "analytics" as const, href: "/analytics", icon: ChartBarIcon, dataTour: undefined as string | undefined, prefetch: false },
 ];
 
 // ─── Focus trap for mobile drawer ────────────────────────────────────────────
@@ -235,6 +237,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden">
+      {/* Invisible prefetch hints for high-conversion routes not in the primary nav */}
+      <Link href="/pricing" prefetch={true} className="sr-only" tabIndex={-1} aria-hidden="true">{""}</Link>
       {/* Skip-to-content link */}
       <a href="#main-content" className="skip-to-content">
         {t("skipToMain")}
@@ -257,12 +261,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Nav links */}
         <nav aria-label="Primary" className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
-          {navItems.map(({ label, href, icon: Icon, dataTour }) => {
+          {navItems.map(({ label, href, icon: Icon, dataTour, prefetch }) => {
             const active = pathname === href;
             return (
               <Link
                 key={href}
                 href={href}
+                prefetch={prefetch}
                 aria-current={active ? "page" : undefined}
                 title={sidebarCollapsed ? label : undefined}
                 {...(dataTour ? { "data-tour": dataTour } : {})}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ChatBubbleLeftIcon } from "@heroicons/react/24/outline";
@@ -40,8 +41,15 @@ function formatRelativeTime(dateStr: string): string {
 function Avatar({ user }: { user: CommentUser }) {
   const initials = (user.name ?? "?").charAt(0).toUpperCase();
   if (user.image) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={user.image} alt={user.name ?? "User"} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />;
+    return (
+      <Image
+        src={user.image}
+        alt={user.name ?? "User"}
+        width={32}
+        height={32}
+        className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+      />
+    );
   }
   return (
     <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center flex-shrink-0">

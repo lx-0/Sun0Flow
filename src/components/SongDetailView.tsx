@@ -43,7 +43,8 @@ import { useQueue } from "./QueueContext";
 const ReportModal = dynamic(() => import("./ReportModal").then((m) => m.ReportModal), { ssr: false });
 import { TagInput } from "./TagInput";
 import { SectionEditor } from "./SectionEditor";
-import { RecommendationSection } from "./SongRecommendations";
+// Lazy-load below-fold recommendations to reduce initial bundle
+const RecommendationSection = dynamic(() => import("./SongRecommendations").then((m) => m.RecommendationSection), { ssr: false });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

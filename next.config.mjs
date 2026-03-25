@@ -28,6 +28,15 @@ const nextConfig = {
         protocol: "https",
         hostname: "**.sunoapi.org",
       },
+      // OAuth provider avatars (Google, GitHub)
+      {
+        protocol: "https",
+        hostname: "**.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
+      },
     ],
   },
   async rewrites() {
@@ -132,6 +141,16 @@ const nextConfig = {
           {
             key: "Cache-Control",
             value: "public, max-age=60, s-maxage=60, stale-while-revalidate=30",
+          },
+        ],
+      },
+      {
+        // Prompt suggestions — private per-user, short TTL
+        source: "/api/suggestions/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "private, max-age=10, must-revalidate",
           },
         ],
       },
