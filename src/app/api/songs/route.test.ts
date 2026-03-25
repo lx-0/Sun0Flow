@@ -17,9 +17,11 @@ vi.mock("@/lib/auth-resolver", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     song: {
       findMany: vi.fn(),
       count: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   },
 }));

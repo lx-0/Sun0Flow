@@ -27,7 +27,15 @@ vi.mock("@/lib/prisma", () => ({
     generationQueueItem: {
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
+    user: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue({}),
+    },
   },
+}));
+
+vi.mock("@/lib/email", () => ({
+  sendGenerationCompleteEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/sunoapi", () => ({

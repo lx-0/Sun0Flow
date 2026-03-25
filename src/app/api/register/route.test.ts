@@ -22,6 +22,7 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/email", () => ({
   sendVerificationEmail: vi.fn().mockResolvedValue(undefined),
+  sendWelcomeEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("bcryptjs", () => ({

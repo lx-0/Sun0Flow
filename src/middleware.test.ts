@@ -9,7 +9,8 @@ vi.mock("next-auth/jwt", () => ({
 
 // next-intl middleware — in tests, just pass the request through unchanged
 vi.mock("next-intl/middleware", () => ({
-  default: vi.fn(() => vi.fn(() => import("next/server").NextResponse.next())),
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  default: vi.fn(() => vi.fn(() => require("next/server").NextResponse.next())),
 }));
 
 vi.mock("@/i18n/routing", () => ({

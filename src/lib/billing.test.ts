@@ -20,8 +20,6 @@ vi.mock("@/lib/logger", () => ({
 
 const mockSubscriptionFindUnique = vi.fn();
 const mockSubscriptionCreate = vi.fn();
-const mockCustomersCreate = vi.fn();
-
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     subscription: {
