@@ -6,11 +6,15 @@ import {
   generateMashup,
   SunoApiError,
 } from "@/lib/sunoapi";
+import { getTaskStatus } from "@/lib/sunoapi/status";
 import { prisma } from "@/lib/prisma";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
+
+// Refresh the audio URL if it's expired or will expire within 1 hour
+const EXPIRY_BUFFER_MS = 60 * 60 * 1000;
 
 function userFriendlyError(error: unknown): string {
   if (error instanceof SunoApiError) {
@@ -111,12 +115,38 @@ export async function POST(request: Request) {
         if (track.songId) {
           const song = await prisma.song.findFirst({
             where: { id: track.songId, userId },
-            select: { audioUrl: true },
+            select: { audioUrl: true, audioUrlExpiresAt: true, sunoJobId: true },
           });
           if (!song?.audioUrl) {
             throw new Error("Selected song has no audio URL");
           }
-          const result = await uploadFileFromUrl(song.audioUrl, userApiKey);
+
+          // Refresh expired or soon-to-expire audio URLs before uploading
+          let audioUrl = song.audioUrl;
+          const isExpiredOrSoon =
+            !song.audioUrlExpiresAt ||
+            song.audioUrlExpiresAt.getTime() - Date.now() < EXPIRY_BUFFER_MS;
+          if (isExpiredOrSoon && song.sunoJobId) {
+            try {
+              const taskResult = await getTaskStatus(song.sunoJobId, userApiKey);
+              const fresh = taskResult.songs.find((s) => s.audioUrl) ?? taskResult.songs[0];
+              if (fresh?.audioUrl) {
+                audioUrl = fresh.audioUrl;
+                // Update DB in background
+                prisma.song.update({
+                  where: { id: track.songId },
+                  data: {
+                    audioUrl: fresh.audioUrl,
+                    audioUrlExpiresAt: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000),
+                  },
+                }).catch(() => {});
+              }
+            } catch {
+              // Refresh failed — try with existing URL, may fail at upload
+            }
+          }
+
+          const result = await uploadFileFromUrl(audioUrl, userApiKey);
           return result.fileUrl;
         }
 
