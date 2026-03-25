@@ -1,3 +1,7 @@
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -135,7 +139,7 @@ const nextConfig = {
   },
 };
 
-let config = nextConfig;
+let config = withNextIntl(nextConfig);
 
 if (process.env.ANALYZE === "true") {
   const withBundleAnalyzer = (await import("@next/bundle-analyzer")).default;

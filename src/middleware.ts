@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import createMiddleware from "next-intl/middleware";
+import { routing } from "@/i18n/routing";
+
+// next-intl locale middleware — handles locale detection and URL rewriting
+const intlMiddleware = createMiddleware(routing);
 
 // ---------------------------------------------------------------------------
 // Correlation ID
@@ -172,6 +177,23 @@ const SECURITY_HEADERS: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Locale-prefixed public path helpers
+// ---------------------------------------------------------------------------
+// Paths that are public regardless of locale prefix (e.g. /login, /de/login)
+const PUBLIC_PATH_SUFFIXES = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+];
+
+function stripLocalePrefix(pathname: string): string {
+  // Strip /en, /de, /ja prefix if present
+  return pathname.replace(/^\/(en|de|ja)(?=\/|$)/, "") || "/";
+}
+
+// ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
 export async function middleware(request: NextRequest) {
@@ -180,8 +202,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const method = request.method;
 
+  // Strip locale prefix for path matching (so /de/login matches /login)
+  const pathnameWithoutLocale = stripLocalePrefix(pathname);
+
   const publicPaths = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/api/auth", "/api/register", "/api/health", "/api/agent-skill", "/s/", "/p/", "/embed/"];
-  const isPublic = publicPaths.some((p) => pathname.startsWith(p));
+  const isPublic = publicPaths.some((p) => pathnameWithoutLocale.startsWith(p) || pathname.startsWith(p));
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? request.ip ?? "unknown";
 
@@ -279,16 +304,16 @@ export async function middleware(request: NextRequest) {
   }
 
   // API key auth must NOT access admin routes
-  if (hasApiKeyHeader && !token && (pathname.startsWith("/admin") || pathname.startsWith("/api/admin"))) {
+  if (hasApiKeyHeader && !token && (pathnameWithoutLocale.startsWith("/admin") || pathname.startsWith("/api/admin"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (token && (pathname === "/login" || pathname === "/register" || pathname === "/forgot-password")) {
+  if (token && PUBLIC_PATH_SUFFIXES.some((p) => pathnameWithoutLocale === p)) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
   // Protect admin routes — require isAdmin on JWT token
-  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
+  if (pathnameWithoutLocale.startsWith("/admin") || pathname.startsWith("/api/admin")) {
     if (!token || !token.isAdmin) {
       if (pathname.startsWith("/api/admin")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -380,14 +405,24 @@ export async function middleware(request: NextRequest) {
   const correlationId =
     request.headers.get(CORRELATION_ID_HEADER) ?? generateCorrelationId();
 
-  const response = NextResponse.next({
-    request: {
-      headers: new Headers({
-        ...Object.fromEntries(request.headers),
-        [CORRELATION_ID_HEADER]: correlationId,
-      }),
-    },
-  });
+  // ── Locale routing (non-API, non-static routes) ──────────────────────────
+  // Run next-intl middleware for page routes to handle locale detection and
+  // URL rewriting. API routes and other special paths skip this.
+  let response: NextResponse;
+  if (!pathname.startsWith("/api/") && !pathname.startsWith("/s/") && !pathname.startsWith("/p/") && !pathname.startsWith("/embed/")) {
+    // Run next-intl middleware which handles locale prefix routing
+    const intlResponse = intlMiddleware(request);
+    response = intlResponse as NextResponse;
+  } else {
+    response = NextResponse.next({
+      request: {
+        headers: new Headers({
+          ...Object.fromEntries(request.headers),
+          [CORRELATION_ID_HEADER]: correlationId,
+        }),
+      },
+    });
+  }
 
   response.headers.set(CORRELATION_ID_HEADER, correlationId);
 

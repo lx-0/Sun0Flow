@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 
 import {
   HomeIcon,
@@ -39,21 +40,22 @@ const KeyboardShortcutsModal = dynamic(() => import("./KeyboardShortcutsModal").
 import { NotificationBell } from "./NotificationBell";
 import { SearchBar } from "./SearchBar";
 import { EmailVerificationBanner } from "./EmailVerificationBanner";
+import { LocaleSwitcher } from "./LocaleSwitcher";
 
-const navItems = [
-  { label: "Home", href: "/", icon: HomeIcon, dataTour: undefined as string | undefined },
-  { label: "Library", href: "/library", icon: BookOpenIcon, dataTour: undefined as string | undefined },
-  { label: "Inspire", href: "/inspire", icon: LightBulbIcon, dataTour: undefined as string | undefined },
-  { label: "Generate", href: "/generate", icon: PlusCircleIcon, dataTour: "nav-generate" as string | undefined },
-  { label: "Templates", href: "/templates", icon: BookmarkIcon, dataTour: undefined as string | undefined },
-  { label: "Personas", href: "/personas", icon: UserGroupIcon, dataTour: undefined as string | undefined },
-  { label: "Mashup", href: "/mashup", icon: SparklesIcon, dataTour: undefined as string | undefined },
-  { label: "Feed", href: "/feed", icon: RssIcon, dataTour: undefined as string | undefined },
-  { label: "Discover", href: "/discover", icon: GlobeAltIcon, dataTour: undefined as string | undefined },
-  { label: "Playlists", href: "/playlists", icon: QueueListIcon, dataTour: "explore" as string | undefined },
-  { label: "Favorites", href: "/favorites", icon: HeartIcon, dataTour: "nav-favorites" as string | undefined },
-  { label: "History", href: "/history", icon: ClockIcon, dataTour: undefined as string | undefined },
-  { label: "Analytics", href: "/analytics", icon: ChartBarIcon, dataTour: undefined as string | undefined },
+const NAV_ITEM_DEFS = [
+  { key: "home" as const, href: "/", icon: HomeIcon, dataTour: undefined as string | undefined },
+  { key: "library" as const, href: "/library", icon: BookOpenIcon, dataTour: undefined as string | undefined },
+  { key: "inspire" as const, href: "/inspire", icon: LightBulbIcon, dataTour: undefined as string | undefined },
+  { key: "generate" as const, href: "/generate", icon: PlusCircleIcon, dataTour: "nav-generate" as string | undefined },
+  { key: "templates" as const, href: "/templates", icon: BookmarkIcon, dataTour: undefined as string | undefined },
+  { key: "personas" as const, href: "/personas", icon: UserGroupIcon, dataTour: undefined as string | undefined },
+  { key: "mashup" as const, href: "/mashup", icon: SparklesIcon, dataTour: undefined as string | undefined },
+  { key: "feed" as const, href: "/feed", icon: RssIcon, dataTour: undefined as string | undefined },
+  { key: "discover" as const, href: "/discover", icon: GlobeAltIcon, dataTour: undefined as string | undefined },
+  { key: "playlists" as const, href: "/playlists", icon: QueueListIcon, dataTour: "explore" as string | undefined },
+  { key: "favorites" as const, href: "/favorites", icon: HeartIcon, dataTour: "nav-favorites" as string | undefined },
+  { key: "history" as const, href: "/history", icon: ClockIcon, dataTour: undefined as string | undefined },
+  { key: "analytics" as const, href: "/analytics", icon: ChartBarIcon, dataTour: undefined as string | undefined },
 ];
 
 // ─── Focus trap for mobile drawer ────────────────────────────────────────────
@@ -163,16 +165,23 @@ const themeIcons: Record<ThemeOption, React.ElementType> = {
   system: ComputerDesktopIcon,
 };
 
-const themeLabels: Record<ThemeOption, string> = {
-  light: "Light theme",
-  dark: "Dark theme",
-  system: "System theme",
-};
-
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("nav");
+  const tCommon = useTranslations("common");
   const pathname = usePathname();
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
+
+  const navItems = NAV_ITEM_DEFS.map((item) => ({
+    ...item,
+    label: t(item.key),
+  }));
+
+  const themeLabels: Record<ThemeOption, string> = {
+    light: tCommon("theme.light"),
+    dark: tCommon("theme.dark"),
+    system: tCommon("theme.system"),
+  };
 
   const cycleTheme = useCallback(() => {
     const idx = themeOrder.indexOf(theme as ThemeOption);
@@ -227,7 +236,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden">
       {/* Skip-to-content link */}
       <a href="#main-content" className="skip-to-content">
-        Skip to content
+        {t("skipToMain")}
       </a>
       {/* ── Desktop sidebar (md+) ── */}
       <aside aria-label="Main navigation" className={`hidden md:flex md:flex-col md:fixed md:inset-y-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 z-20 transition-all duration-200 ${sidebarCollapsed ? "md:w-16" : "md:w-56"}`}>
@@ -238,7 +247,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
           <button
             onClick={toggleSidebarCollapsed}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={t("toggleSidebar")}
             className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             {sidebarCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronLeftIcon className="w-4 h-4" />}
@@ -284,13 +293,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <ShieldCheckIcon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-                {!sidebarCollapsed && "Admin"}
+                {!sidebarCollapsed && t("admin")}
               </Link>
             )}
             <Link
               href="/profile"
               aria-current={pathname === "/profile" ? "page" : undefined}
-              title={sidebarCollapsed ? "Profile" : undefined}
+              title={sidebarCollapsed ? t("profile") : undefined}
               className={`flex items-center rounded-lg text-sm font-medium transition-colors min-h-[44px] ${sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} ${
                 pathname === "/profile"
                   ? "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
@@ -298,12 +307,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <UserCircleIcon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-              {!sidebarCollapsed && "Profile"}
+              {!sidebarCollapsed && t("profile")}
             </Link>
             <Link
               href="/settings"
               aria-current={pathname === "/settings" ? "page" : undefined}
-              title={sidebarCollapsed ? "Settings" : undefined}
+              title={sidebarCollapsed ? t("settings") : undefined}
               className={`flex items-center rounded-lg text-sm font-medium transition-colors min-h-[44px] ${sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} ${
                 pathname === "/settings"
                   ? "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
@@ -311,19 +320,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <Cog6ToothIcon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-              {!sidebarCollapsed && "Settings"}
+              {!sidebarCollapsed && t("settings")}
             </Link>
+            {!sidebarCollapsed && (
+              <div className="px-2 py-1">
+                <LocaleSwitcher />
+              </div>
+            )}
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              aria-label="Sign out"
-              title={sidebarCollapsed ? "Sign out" : undefined}
+              aria-label={tCommon("logout")}
+              title={sidebarCollapsed ? tCommon("logout") : undefined}
               className={`w-full flex items-center rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors min-h-[44px] ${sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"}`}
             >
               {sidebarCollapsed ? (
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-              ) : "Sign out"}
+              ) : tCommon("logout")}
             </button>
           </div>
         )}
@@ -353,7 +367,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="text-violet-400 font-bold text-lg tracking-tight">SunoFlow</span>
           <button
             onClick={() => setSidebarOpen(false)}
-            aria-label="Close menu"
+            aria-label={t("closeMenu")}
             className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             <XMarkIcon className="w-6 h-6" />
@@ -397,7 +411,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <UserCircleIcon className="w-5 h-5" aria-hidden="true" />
-              Profile
+              {t("profile")}
             </Link>
             <Link
               href="/settings"
@@ -410,13 +424,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <Cog6ToothIcon className="w-5 h-5" aria-hidden="true" />
-              Settings
+              {t("settings")}
             </Link>
+            <div className="px-2 py-1">
+              <LocaleSwitcher compact />
+            </div>
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors min-h-[44px]"
             >
-              Sign out
+              {tCommon("logout")}
             </button>
           </div>
         )}
@@ -429,7 +446,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {/* Hamburger (mobile only) */}
           <button
             onClick={() => setSidebarOpen(true)}
-            aria-label="Open menu"
+            aria-label={t("openMenu")}
             className="min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors md:hidden"
           >
             <Bars3Icon className="w-6 h-6" />
@@ -457,7 +474,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <NotificationBell />
               <Link
                 href="/profile"
-                aria-label="Profile"
+                aria-label={t("profile")}
                 className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors md:hidden ${
                   pathname === "/profile" ? "text-violet-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
@@ -466,7 +483,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
               <Link
                 href="/settings"
-                aria-label="Settings"
+                aria-label={t("settings")}
                 className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors md:hidden ${
                   pathname === "/settings" ? "text-violet-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
@@ -477,7 +494,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 onClick={() => signOut({ callbackUrl: "/login" })}
                 className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors min-h-[44px] px-2 hidden md:block"
               >
-                Sign out
+                {tCommon("logout")}
               </button>
             </div>
           )}

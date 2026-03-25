@@ -7,6 +7,18 @@ vi.mock("next-auth/jwt", () => ({
   getToken: vi.fn(),
 }));
 
+// next-intl middleware — in tests, just pass the request through unchanged
+vi.mock("next-intl/middleware", () => ({
+  default: vi.fn(() => vi.fn(() => import("next/server").NextResponse.next())),
+}));
+
+vi.mock("@/i18n/routing", () => ({
+  routing: {
+    locales: ["en", "de", "ja"],
+    defaultLocale: "en",
+  },
+}));
+
 import { getToken } from "next-auth/jwt";
 import { middleware } from "./middleware";
 
