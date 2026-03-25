@@ -50,6 +50,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Cannot report your own song", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
+    // Prevent duplicate reports from the same user for the same song
+    const existing = await prisma.report.findFirst({
+      where: { songId, reporterId: userId },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: "You have already reported this song", code: "DUPLICATE_REPORT" },
+        { status: 409 }
+      );
+    }
+
     const report = await prisma.report.create({
       data: {
         songId,

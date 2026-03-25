@@ -305,6 +305,7 @@ model Report {
   song     Song @relation(fields: [songId], references: [id], onDelete: Cascade)
   reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
 
+  @@unique([songId, reporterId])
   @@index([songId])
   @@index([reporterId])
   @@index([status, createdAt])

@@ -58,6 +58,12 @@ export function ReportModal({ songId, songTitle, onClose }: ReportModalProps) {
         return;
       }
 
+      if (res.status === 409) {
+        toast("You have already reported this song.", "error");
+        onClose();
+        return;
+      }
+
       if (!res.ok) {
         const data = await res.json();
         toast(data.error || "Failed to submit report", "error");

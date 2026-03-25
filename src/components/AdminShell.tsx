@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   ChartBarIcon,
   ChartPieIcon,
@@ -18,13 +19,21 @@ const adminNav = [
   { label: "Analytics", href: "/admin/analytics", icon: ChartPieIcon },
   { label: "Users", href: "/admin/users", icon: UsersIcon },
   { label: "Content", href: "/admin/content", icon: MusicalNoteIcon },
-  { label: "Reports", href: "/admin/reports", icon: FlagIcon },
+  { label: "Reports", href: "/admin/reports", icon: FlagIcon, badge: "reports" as const },
   { label: "Errors", href: "/admin/errors", icon: ExclamationTriangleIcon },
   { label: "Audit Log", href: "/admin/logs", icon: ClipboardDocumentListIcon },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [pendingReports, setPendingReports] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/admin/reports/count")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.pending) setPendingReports(data.pending); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="flex min-h-screen">
@@ -35,8 +44,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
-          {adminNav.map(({ label, href, icon: Icon }) => {
+          {adminNav.map(({ label, href, icon: Icon, badge }) => {
             const active = pathname === href;
+            const showBadge = badge === "reports" && pendingReports > 0;
             return (
               <Link
                 key={href}
@@ -48,7 +58,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <Icon className="w-5 h-5" aria-hidden="true" />
-                {label}
+                <span className="flex-1">{label}</span>
+                {showBadge && (
+                  <span className="text-xs font-bold bg-red-600 text-white rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
+                    {pendingReports > 99 ? "99+" : pendingReports}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -76,8 +91,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
         {/* Mobile nav */}
         <nav className="flex items-center gap-1 px-4 py-2 bg-gray-900 border-b border-gray-800 md:hidden overflow-x-auto">
-          {adminNav.map(({ label, href, icon: Icon }) => {
+          {adminNav.map(({ label, href, icon: Icon, badge }) => {
             const active = pathname === href;
+            const showBadge = badge === "reports" && pendingReports > 0;
             return (
               <Link
                 key={href}
@@ -90,6 +106,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               >
                 <Icon className="w-4 h-4" aria-hidden="true" />
                 {label}
+                {showBadge && (
+                  <span className="text-xs font-bold bg-red-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
+                    {pendingReports > 99 ? "99+" : pendingReports}
+                  </span>
+                )}
               </Link>
             );
           })}
