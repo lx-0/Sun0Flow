@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { TIER_LIMITS } from "@/lib/billing";
 
 /** Estimated credit cost per action type */
 export const CREDIT_COSTS: Record<string, number> = {
@@ -11,11 +12,50 @@ export const CREDIT_COSTS: Record<string, number> = {
   style_boost: 5,
 };
 
-/** Default monthly credit budget per user (configurable) */
+/** Legacy default monthly credit budget — retained for grace period */
 export const DEFAULT_MONTHLY_BUDGET = 500;
 
 /** Threshold percentage at which to warn users (0.0 - 1.0) */
 export const LOW_CREDIT_THRESHOLD = 0.2;
+
+/**
+ * Billing launch date. Users created before this date retain DEFAULT_MONTHLY_BUDGET
+ * for GRACE_PERIOD_DAYS as a transition allowance.
+ */
+export const GRACE_PERIOD_CUTOFF = new Date("2026-03-25T00:00:00Z");
+export const GRACE_PERIOD_DAYS = 30;
+
+/**
+ * Get the monthly credit budget for a user based on their subscription tier.
+ * Users created before GRACE_PERIOD_CUTOFF retain DEFAULT_MONTHLY_BUDGET (500)
+ * for 30 days after the cutoff date.
+ */
+export async function getMonthlyBudget(userId: string): Promise<number> {
+  const gracePeriodEnd = new Date(
+    GRACE_PERIOD_CUTOFF.getTime() + GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  if (new Date() < gracePeriodEnd) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { createdAt: true },
+    });
+    if (user && user.createdAt < GRACE_PERIOD_CUTOFF) {
+      return DEFAULT_MONTHLY_BUDGET;
+    }
+  }
+
+  const sub = await prisma.subscription.findUnique({
+    where: { userId },
+    select: { tier: true, status: true },
+  });
+
+  if (!sub || sub.status !== "active") {
+    return TIER_LIMITS.free.creditsPerMonth;
+  }
+
+  return TIER_LIMITS[sub.tier].creditsPerMonth;
+}
 
 /**
  * Record a credit usage event for a user.
@@ -49,7 +89,8 @@ export async function getMonthlyCreditUsage(userId: string) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [monthlyUsage, totalAllTime, dailyBreakdown] = await Promise.all([
+  const [budget, monthlyUsage, totalAllTime, dailyBreakdown] = await Promise.all([
+    getMonthlyBudget(userId),
     prisma.creditUsage.aggregate({
       where: { userId, createdAt: { gte: startOfMonth } },
       _sum: { creditCost: true },
@@ -74,10 +115,8 @@ export async function getMonthlyCreditUsage(userId: string) {
 
   const creditsUsedThisMonth = monthlyUsage._sum.creditCost ?? 0;
   const generationsThisMonth = monthlyUsage._count;
-  const creditsRemaining = Math.max(0, DEFAULT_MONTHLY_BUDGET - creditsUsedThisMonth);
-  const usagePercent = DEFAULT_MONTHLY_BUDGET > 0
-    ? creditsUsedThisMonth / DEFAULT_MONTHLY_BUDGET
-    : 0;
+  const creditsRemaining = Math.max(0, budget - creditsUsedThisMonth);
+  const usagePercent = budget > 0 ? creditsUsedThisMonth / budget : 0;
   const isLow = usagePercent >= (1 - LOW_CREDIT_THRESHOLD);
 
   // Fill daily chart for current month
@@ -96,7 +135,7 @@ export async function getMonthlyCreditUsage(userId: string) {
   }
 
   return {
-    budget: DEFAULT_MONTHLY_BUDGET,
+    budget,
     creditsUsedThisMonth,
     creditsRemaining,
     generationsThisMonth,
@@ -133,13 +172,17 @@ export async function shouldNotifyLowCredits(userId: string): Promise<boolean> {
 /**
  * Create a low-credit warning notification for the user.
  */
-export async function createLowCreditNotification(userId: string, creditsRemaining: number) {
+export async function createLowCreditNotification(
+  userId: string,
+  creditsRemaining: number,
+  budget: number = DEFAULT_MONTHLY_BUDGET
+) {
   return prisma.notification.create({
     data: {
       userId,
       type: "low_credits",
       title: "Low Credits Warning",
-      message: `You have approximately ${creditsRemaining} credits remaining this month (out of ${DEFAULT_MONTHLY_BUDGET}). Consider reducing usage to avoid running out.`,
+      message: `You have approximately ${creditsRemaining} credits remaining this month (out of ${budget}). Consider reducing usage to avoid running out.`,
       href: "/analytics",
     },
   });

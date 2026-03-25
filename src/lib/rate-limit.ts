@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { RATE_LIMIT_MAX_GENERATIONS } from "@/lib/env";
+import { TIER_LIMITS } from "@/lib/billing";
 
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
@@ -12,7 +13,26 @@ const ACTION_LIMITS: Record<string, number> = {
   verification_email: 3,
 };
 
-function getMaxRequests(action = "generate"): number {
+/**
+ * Get the hourly generation limit for a user based on their subscription tier.
+ */
+export async function getHourlyGenerationLimit(userId: string): Promise<number> {
+  const sub = await prisma.subscription.findUnique({
+    where: { userId },
+    select: { tier: true, status: true },
+  });
+
+  if (!sub || sub.status !== "active") {
+    return TIER_LIMITS.free.generationsPerHour;
+  }
+
+  return TIER_LIMITS[sub.tier].generationsPerHour;
+}
+
+async function resolveLimit(userId: string, action: string): Promise<number> {
+  if (action === "generate") {
+    return getHourlyGenerationLimit(userId);
+  }
   return ACTION_LIMITS[action] ?? RATE_LIMIT_MAX_GENERATIONS;
 }
 
@@ -26,7 +46,7 @@ export async function checkRateLimit(
   userId: string,
   action = "generate"
 ): Promise<{ allowed: boolean; status: RateLimitStatus }> {
-  const limit = getMaxRequests(action);
+  const limit = await resolveLimit(userId, action);
   const windowStart = new Date(Date.now() - WINDOW_MS);
 
   const entries = await prisma.rateLimitEntry.findMany({
@@ -71,7 +91,7 @@ export async function acquireRateLimitSlot(
   userId: string,
   action = "generate"
 ): Promise<{ acquired: boolean; status: RateLimitStatus }> {
-  const limit = getMaxRequests(action);
+  const limit = await resolveLimit(userId, action);
   const windowStart = new Date(Date.now() - WINDOW_MS);
 
   return prisma.$transaction(

@@ -358,6 +358,6 @@ describe("POST /api/generate", () => {
 
     await POST(makeRequest(DEFAULT_BODY));
 
-    expect(createLowCreditNotification).toHaveBeenCalledWith("user-1", 50);
+    expect(createLowCreditNotification).toHaveBeenCalledWith("user-1", 50, 500);
   });
 });

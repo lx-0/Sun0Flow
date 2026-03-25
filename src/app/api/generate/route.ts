@@ -198,7 +198,7 @@ export async function POST(request: Request) {
       const shouldNotify = await shouldNotifyLowCredits(userId);
       if (shouldNotify) {
         const usage = await getMonthlyCreditUsage(userId);
-        await createLowCreditNotification(userId, usage.creditsRemaining);
+        await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
       }
     } catch {
       // Non-critical — don't block generation

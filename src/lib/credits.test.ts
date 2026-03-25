@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@/lib/env", () => ({
   get DATABASE_URL() { return "postgres://test:test@localhost:5432/test"; },
@@ -10,11 +10,22 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
+vi.mock("@/lib/billing", () => ({
+  TIER_LIMITS: {
+    free: { creditsPerMonth: 200, generationsPerHour: 5 },
+    starter: { creditsPerMonth: 1500, generationsPerHour: 25 },
+    pro: { creditsPerMonth: 5000, generationsPerHour: 50 },
+    studio: { creditsPerMonth: 15000, generationsPerHour: 100 },
+  },
+}));
+
 const mockCreditUsageCreate = vi.fn();
 const mockCreditUsageAggregate = vi.fn();
 const mockNotificationFindFirst = vi.fn();
 const mockNotificationCreate = vi.fn();
 const mockQueryRaw = vi.fn();
+const mockUserFindUnique = vi.fn();
+const mockSubscriptionFindUnique = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -25,6 +36,12 @@ vi.mock("@/lib/prisma", () => ({
     notification: {
       findFirst: (...args: unknown[]) => mockNotificationFindFirst(...args),
       create: (...args: unknown[]) => mockNotificationCreate(...args),
+    },
+    user: {
+      findUnique: (...args: unknown[]) => mockUserFindUnique(...args),
+    },
+    subscription: {
+      findUnique: (...args: unknown[]) => mockSubscriptionFindUnique(...args),
     },
     $queryRaw: (...args: unknown[]) => mockQueryRaw(...args),
   },
@@ -40,8 +57,18 @@ import {
   createLowCreditNotification,
 } from "./credits";
 
+// Use fake timers within the grace period so getMonthlyBudget returns 500 for
+// users created before the cutoff date.
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-03-26T12:00:00Z")); // within 30-day grace window
+  // Default: user created before billing cutoff → grace budget = 500
+  mockUserFindUnique.mockResolvedValue({ createdAt: new Date("2026-01-01") });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("constants", () => {
@@ -111,7 +138,7 @@ describe("recordCreditUsage", () => {
 });
 
 describe("getMonthlyCreditUsage", () => {
-  it("returns usage summary with correct calculations", async () => {
+  it("returns usage summary with correct calculations (grace period budget = 500)", async () => {
     mockCreditUsageAggregate
       .mockResolvedValueOnce({ _sum: { creditCost: 100 }, _count: 10 }) // monthly
       .mockResolvedValueOnce({ _sum: { creditCost: 200 }, _count: 20 }); // all time
@@ -120,7 +147,7 @@ describe("getMonthlyCreditUsage", () => {
     const usage = await getMonthlyCreditUsage("user-1");
 
     expect(usage.creditsUsedThisMonth).toBe(100);
-    expect(usage.creditsRemaining).toBe(400); // 500 - 100
+    expect(usage.creditsRemaining).toBe(400); // 500 - 100 (grace period budget)
     expect(usage.generationsThisMonth).toBe(10);
     expect(usage.totalCreditsAllTime).toBe(200);
     expect(usage.totalGenerationsAllTime).toBe(20);
@@ -162,6 +189,36 @@ describe("getMonthlyCreditUsage", () => {
 
     expect(usage.creditsUsedThisMonth).toBe(0);
     expect(usage.creditsRemaining).toBe(500);
+  });
+
+  it("uses subscription tier budget after grace period ends", async () => {
+    // Simulate time after the 30-day grace period
+    vi.setSystemTime(new Date("2026-05-01T00:00:00Z"));
+
+    mockSubscriptionFindUnique.mockResolvedValue({ tier: "starter", status: "active" });
+    mockCreditUsageAggregate
+      .mockResolvedValueOnce({ _sum: { creditCost: 100 }, _count: 10 })
+      .mockResolvedValueOnce({ _sum: { creditCost: 100 }, _count: 10 });
+    mockQueryRaw.mockResolvedValue([]);
+
+    const usage = await getMonthlyCreditUsage("user-1");
+
+    expect(usage.budget).toBe(1500); // starter tier
+    expect(usage.creditsRemaining).toBe(1400);
+  });
+
+  it("uses free tier budget for users without a subscription after grace period", async () => {
+    vi.setSystemTime(new Date("2026-05-01T00:00:00Z"));
+
+    mockSubscriptionFindUnique.mockResolvedValue(null);
+    mockCreditUsageAggregate
+      .mockResolvedValueOnce({ _sum: { creditCost: 50 }, _count: 5 })
+      .mockResolvedValueOnce({ _sum: { creditCost: 50 }, _count: 5 });
+    mockQueryRaw.mockResolvedValue([]);
+
+    const usage = await getMonthlyCreditUsage("user-1");
+
+    expect(usage.budget).toBe(200); // free tier
   });
 });
 
@@ -217,5 +274,15 @@ describe("createLowCreditNotification", () => {
     const call = mockNotificationCreate.mock.calls[0][0];
     expect(call.data.message).toContain("50");
     expect(call.data.message).toContain("500");
+  });
+
+  it("creates a notification with custom budget", async () => {
+    mockNotificationCreate.mockResolvedValue({ id: "notif-new" });
+
+    await createLowCreditNotification("user-1", 100, 1500);
+
+    const call = mockNotificationCreate.mock.calls[0][0];
+    expect(call.data.message).toContain("100");
+    expect(call.data.message).toContain("1500");
   });
 });

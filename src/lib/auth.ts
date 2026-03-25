@@ -100,24 +100,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           });
           logger.info({ userId: user.id, provider: account?.provider ?? "oauth" }, "auth: sign-in success");
         }
-        const dbUser = await prisma.user.findUnique({
-          where: { id: user.id as string },
-          select: { onboardingCompleted: true, isAdmin: true, emailVerified: true, sunoApiKey: true },
-        });
+        const [dbUser, sub] = await Promise.all([
+          prisma.user.findUnique({
+            where: { id: user.id as string },
+            select: { onboardingCompleted: true, isAdmin: true, emailVerified: true, sunoApiKey: true },
+          }),
+          prisma.subscription.findUnique({
+            where: { userId: user.id as string },
+            select: { tier: true, status: true },
+          }),
+        ]);
         token.onboardingCompleted = dbUser?.onboardingCompleted ?? false;
         token.isAdmin = dbUser?.isAdmin ?? false;
         token.emailVerified = dbUser?.emailVerified?.toISOString() ?? null;
         token.hasSunoApiKey = Boolean(dbUser?.sunoApiKey);
+        token.subscriptionTier = sub?.tier ?? "free";
+        token.subscriptionStatus = sub?.status ?? "active";
       }
       if (trigger === "update") {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.id as string },
-          select: { onboardingCompleted: true, isAdmin: true, emailVerified: true, sunoApiKey: true },
-        });
+        const [dbUser, sub] = await Promise.all([
+          prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { onboardingCompleted: true, isAdmin: true, emailVerified: true, sunoApiKey: true },
+          }),
+          prisma.subscription.findUnique({
+            where: { userId: token.id as string },
+            select: { tier: true, status: true },
+          }),
+        ]);
         token.onboardingCompleted = dbUser?.onboardingCompleted ?? false;
         token.isAdmin = dbUser?.isAdmin ?? false;
         token.emailVerified = dbUser?.emailVerified?.toISOString() ?? null;
         token.hasSunoApiKey = Boolean(dbUser?.sunoApiKey);
+        token.subscriptionTier = sub?.tier ?? "free";
+        token.subscriptionStatus = sub?.status ?? "active";
       }
       return token;
     },
@@ -132,6 +148,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.emailVerified ?? null;
         (session.user as unknown as Record<string, unknown>).hasSunoApiKey =
           token.hasSunoApiKey as boolean;
+        (session.user as unknown as Record<string, unknown>).subscriptionTier =
+          token.subscriptionTier ?? "free";
+        (session.user as unknown as Record<string, unknown>).subscriptionStatus =
+          token.subscriptionStatus ?? "active";
       }
       return session;
     },
