@@ -1,10 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { PlayIcon, PauseIcon, MusicalNoteIcon, FlagIcon } from "@heroicons/react/24/solid";
 import { ReportModal } from "@/components/ReportModal";
 import { CommentsSection } from "@/components/CommentsSection";
+import { EmojiReactionPicker } from "@/components/EmojiReactionPicker";
+import { ReactionTimeline, ReactionItem } from "@/components/ReactionTimeline";
+import { useToast } from "@/components/Toast";
+import { useSession } from "next-auth/react";
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -41,6 +45,69 @@ export function PublicSongView({
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(duration ?? 0);
   const [reportOpen, setReportOpen] = useState(false);
+  const [reactions, setReactions] = useState<ReactionItem[]>([]);
+  const { data: session } = useSession();
+  const { toast } = useToast();
+
+  // Fetch all reactions on mount (no auth needed for public songs)
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/songs/${songId}/reactions`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!cancelled && data?.reactions) setReactions(data.reactions);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [songId]);
+
+  const handleReact = useCallback(
+    async (emoji: string) => {
+      const timestamp = Math.max(0, Math.min(currentTime, audioDuration || currentTime));
+
+      const optimistic: ReactionItem = {
+        id: `optimistic-${Date.now()}`,
+        emoji,
+        timestamp,
+        userId: session?.user?.id ?? "",
+        username: session?.user?.name ?? undefined,
+      };
+      setReactions((prev) => [...prev, optimistic]);
+
+      try {
+        const res = await fetch(`/api/songs/${songId}/reactions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emoji, timestamp }),
+        });
+
+        if (res.status === 429) {
+          setReactions((prev) => prev.filter((r) => r.id !== optimistic.id));
+          toast("Slow down! Too many reactions.", "info");
+          return;
+        }
+
+        if (!res.ok) {
+          setReactions((prev) => prev.filter((r) => r.id !== optimistic.id));
+          toast("Couldn't save reaction. Try again.", "error");
+          return;
+        }
+
+        const created: ReactionItem = await res.json();
+        setReactions((prev) =>
+          prev.map((r) =>
+            r.id === optimistic.id
+              ? { ...created, username: session?.user?.name ?? undefined }
+              : r
+          )
+        );
+      } catch {
+        setReactions((prev) => prev.filter((r) => r.id !== optimistic.id));
+        toast("Couldn't save reaction. Try again.", "error");
+      }
+    },
+    [songId, currentTime, audioDuration, session, toast]
+  );
 
   function handleTogglePlay() {
     if (!audioRef.current) return;
@@ -130,7 +197,7 @@ export function PublicSongView({
             </button>
           </div>
 
-          {/* Seek bar */}
+          {/* Seek bar + reaction timeline */}
           <div className="space-y-1">
             <div className="relative h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full">
               <div
@@ -147,10 +214,33 @@ export function PublicSongView({
                 aria-label="Seek"
               />
             </div>
+            {reactions.length > 0 && audioDuration > 0 && (
+              <ReactionTimeline reactions={reactions} duration={audioDuration} />
+            )}
             <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(audioDuration)}</span>
             </div>
+          </div>
+
+          {/* Emoji reaction picker or login prompt */}
+          <div className="flex justify-center">
+            {session?.user ? (
+              <EmojiReactionPicker
+                isPlaying={isPlaying}
+                isAuthenticated={true}
+                onReact={handleReact}
+              />
+            ) : (
+              isPlaying && (
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  <a href="/auth/signin" className="underline hover:text-violet-500 transition-colors">
+                    Log in
+                  </a>{" "}
+                  to react
+                </p>
+              )
+            )}
           </div>
 
           <audio
