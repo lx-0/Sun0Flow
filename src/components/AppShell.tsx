@@ -43,6 +43,10 @@ const KeyboardShortcutsModal = dynamic(() => import("./KeyboardShortcutsModal").
 import { NotificationBell } from "./NotificationBell";
 import { SearchBar } from "./SearchBar";
 import { EmailVerificationBanner } from "./EmailVerificationBanner";
+const ResumePlaybackPrompt = dynamic(
+  () => import("./ResumePlaybackPrompt").then((m) => m.ResumePlaybackPrompt),
+  { ssr: false }
+);
 import { LocaleSwitcher } from "./LocaleSwitcher";
 const FeedbackModal = dynamic(() => import("./FeedbackModal").then((m) => m.FeedbackModal), { ssr: false });
 
@@ -562,6 +566,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Email verification banner */}
         <EmailVerificationBanner />
+
+        {/* Resume playback prompt — shown on load when a saved state exists */}
+        <ResumePlaybackPrompt />
 
         {/* Page content */}
         <main id="main-content" className="flex-1 overflow-y-auto pb-36 md:pb-24">

@@ -12,6 +12,23 @@ import {
 import { proxiedAudioUrl } from "@/lib/audio-cdn";
 import { track } from "@/lib/analytics";
 
+// ─── Playback state persistence ───────────────────────────────────────────────
+
+const SYNC_DEBOUNCE_MS = 12_000; // save every ~12s of activity
+
+function savePlaybackState(
+  songId: string,
+  position: number,
+  queue: QueueSong[],
+  volume: number
+) {
+  fetch("/api/user/playback-state", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ songId, position, queue, volume }),
+  }).catch(() => {});
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface QueueSong {
@@ -99,6 +116,14 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   // Original (unshuffled) queue preserved for unshuffle
   const originalQueueRef = useRef<QueueSong[]>([]);
 
+  // Debounce timer for server-side playback state sync
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Refs for sync (avoid stale closures in debounce callback)
+  const volumeRef = useRef(1);
+
+  const scheduleSyncRef = useRef<((songId: string, position: number, queue: QueueSong[]) => void) | null>(null);
+
   // Track play counts — fire-and-forget POST to avoid double-counting on pause/resume
   const lastTrackedSongRef = useRef<string | null>(null);
   // History timer — log to play history after 5 seconds of a song starting
@@ -147,6 +172,19 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   repeatRef.current = repeat;
   shuffleRef.current = shuffle;
   trackPlayRef.current = trackPlay;
+  volumeRef.current = volume;
+
+  // Debounced sync function — schedule a save of current playback state
+  const scheduleSync = useCallback(
+    (songId: string, position: number, syncQueue: QueueSong[]) => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        savePlaybackState(songId, position, syncQueue, volumeRef.current);
+      }, SYNC_DEBOUNCE_MS);
+    },
+    []
+  );
+  scheduleSyncRef.current = scheduleSync;
 
   /**
    * Returns the audio src for a song, using the CDN proxy by default.
@@ -163,7 +201,16 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current;
 
     const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
+    const onPause = () => {
+      setIsPlaying(false);
+      // Save position on pause so the user can resume from here on another device
+      const q = queueRef.current;
+      const idx = currentIndexRef.current;
+      const currentSong = idx >= 0 ? q[idx] : null;
+      if (currentSong) {
+        scheduleSyncRef.current?.(currentSong.id, audio.currentTime, q);
+      }
+    };
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
     const onDurationChange = () => setDuration(audio.duration);
     const onWaiting = () => setIsBuffering(true);
@@ -278,6 +325,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       audio.src = getAudioSrc(playOrder[playIdx]);
       audio.play().catch(console.error);
       trackPlay(playOrder[playIdx].id);
+      scheduleSyncRef.current?.(playOrder[playIdx].id, 0, playOrder);
     },
     [shuffle, trackPlay]
   );
@@ -382,6 +430,12 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       const audio = audioRef.current;
       if (!audio || duration <= 0) return;
       audio.currentTime = fraction * duration;
+      const q = queueRef.current;
+      const idx = currentIndexRef.current;
+      const currentSong = idx >= 0 ? q[idx] : null;
+      if (currentSong) {
+        scheduleSyncRef.current?.(currentSong.id, fraction * duration, q);
+      }
     },
     [duration]
   );
@@ -487,6 +541,10 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     if (historyTimerRef.current) {
       clearTimeout(historyTimerRef.current);
       historyTimerRef.current = null;
+    }
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
     }
     setQueue([]);
     setCurrentIndex(-1);

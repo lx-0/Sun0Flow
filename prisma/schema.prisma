@@ -93,6 +93,7 @@ model User {
   playHistory          PlayHistory[]
   playlistCollaborations PlaylistCollaborator[]
   playlistSongsAdded     PlaylistSong[]         @relation("PlaylistSongAddedBy")
+  playbackState        PlaybackState?
 }
 
 model Activity {
@@ -160,6 +161,7 @@ model Song {
   activities           Activity[]
   lyricTimestamps      LyricTimestamp[]
   lyricAnnotations     LyricAnnotation[]
+  playbackStates       PlaybackState[]
 
   @@index([userId, title])
   @@index([userId, prompt])
@@ -691,6 +693,21 @@ model LyricTimestamp {
 
   @@unique([songId, lineIndex])
   @@index([songId])
+}
+
+model PlaybackState {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  songId    String
+  position  Float    @default(0)
+  queue     Json     @default("[]")
+  volume    Float    @default(1)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model LyricAnnotation {
