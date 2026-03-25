@@ -1194,10 +1194,11 @@ export function LibraryView({
 
     // Check if the audio URL might be expired (within 3 days of expiry or no expiry set)
     const REFRESH_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000;
-    const expiresAt = (song as Song & { audioUrlExpiresAt?: Date | null }).audioUrlExpiresAt;
+    const rawExpiresAt = (song as Song & { audioUrlExpiresAt?: Date | string | null }).audioUrlExpiresAt;
+    const expiresAtMs = rawExpiresAt ? new Date(rawExpiresAt).getTime() : null;
     const isNearExpiry =
       song.audioUrl &&
-      (!expiresAt || expiresAt.getTime() - Date.now() < REFRESH_THRESHOLD_MS);
+      (!expiresAtMs || isNaN(expiresAtMs) || expiresAtMs - Date.now() < REFRESH_THRESHOLD_MS);
 
     let playSong = song;
     if (isNearExpiry) {
