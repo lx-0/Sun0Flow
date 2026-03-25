@@ -20,6 +20,7 @@ import {
   ClockIcon,
   ShieldCheckIcon,
   ChartBarIcon,
+  PresentationChartLineIcon,
   LightBulbIcon,
   SparklesIcon,
   BookmarkIcon,
@@ -61,6 +62,7 @@ const NAV_ITEM_DEFS = [
   { key: "favorites" as const, href: "/favorites", icon: HeartIcon, dataTour: "nav-favorites" as string | undefined, prefetch: false },
   { key: "history" as const, href: "/history", icon: ClockIcon, dataTour: undefined as string | undefined, prefetch: false },
   { key: "analytics" as const, href: "/analytics", icon: ChartBarIcon, dataTour: undefined as string | undefined, prefetch: false },
+  { key: "stats" as const, href: "/stats", icon: PresentationChartLineIcon, dataTour: undefined as string | undefined, prefetch: false },
 ];
 
 // ─── Focus trap for mobile drawer ────────────────────────────────────────────
