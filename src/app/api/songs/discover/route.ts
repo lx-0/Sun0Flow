@@ -50,6 +50,19 @@ export async function GET(request: NextRequest) {
 
     // Genre tag filter
     const tag = params.get("tag")?.trim() || "";
+    // Mood filter
+    const mood = params.get("mood")?.trim() || "";
+    // Tempo range filters
+    const tempoMinParam = params.get("tempoMin");
+    const tempoMaxParam = params.get("tempoMax");
+    const tempoMin =
+      tempoMinParam && !isNaN(parseInt(tempoMinParam, 10))
+        ? parseInt(tempoMinParam, 10)
+        : null;
+    const tempoMax =
+      tempoMaxParam && !isNaN(parseInt(tempoMaxParam, 10))
+        ? parseInt(tempoMaxParam, 10)
+        : null;
 
     // Base WHERE: public, not hidden, not archived, generation complete
     const where: Prisma.SongWhereInput = {
@@ -62,6 +75,25 @@ export async function GET(request: NextRequest) {
     // Filter by genre tag (match against the tags text field, case-insensitive)
     if (tag) {
       where.tags = { contains: tag, mode: "insensitive" };
+    }
+
+    // Filter by mood (also matched against the tags text field)
+    if (mood && !tag) {
+      where.tags = { contains: mood, mode: "insensitive" };
+    } else if (mood && tag) {
+      // Both filters: use AND
+      where.AND = [
+        { tags: { contains: tag, mode: "insensitive" } },
+        { tags: { contains: mood, mode: "insensitive" } },
+      ];
+      delete where.tags;
+    }
+
+    // Filter by tempo range
+    if (tempoMin !== null || tempoMax !== null) {
+      where.tempo = {};
+      if (tempoMin !== null) where.tempo.gte = tempoMin;
+      if (tempoMax !== null) where.tempo.lte = tempoMax;
     }
 
     // Build ORDER BY
@@ -79,7 +111,15 @@ export async function GET(request: NextRequest) {
         break;
     }
 
-    const key = cacheKey("discover", sortBy, tag || "all", String(page));
+    const key = cacheKey(
+      "discover",
+      sortBy,
+      tag || "all",
+      mood || "any",
+      tempoMin !== null ? String(tempoMin) : "0",
+      tempoMax !== null ? String(tempoMax) : "999",
+      String(page)
+    );
     const { songs, total } = await cached(
       key,
       async () => {
