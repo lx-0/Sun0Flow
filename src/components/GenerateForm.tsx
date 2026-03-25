@@ -49,6 +49,14 @@ interface GenerationPreset {
   createdAt: string;
 }
 
+interface PromptSuggestion {
+  id: string;
+  label: string;
+  stylePrompt: string;
+  isInstrumental: boolean;
+  source: "personal" | "community" | "curated";
+}
+
 export function GenerateForm() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -89,6 +97,9 @@ export function GenerateForm() {
   const [showPresetSaveDialog, setShowPresetSaveDialog] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [isSavingPreset, setIsSavingPreset] = useState(false);
+
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
 
   // Persona state
   const [personas, setPersonas] = useState<PersonaOption[]>([]);
@@ -230,13 +241,26 @@ export function GenerateForm() {
     }
   }, []);
 
+  const fetchSuggestions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/suggestions/prompts");
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestions(data.suggestions);
+      }
+    } catch {
+      // Non-critical
+    }
+  }, []);
+
   useEffect(() => {
     fetchRateLimit();
     fetchTemplates();
     fetchPersonas();
     fetchCredits();
     fetchPresets();
-  }, [fetchRateLimit, fetchTemplates, fetchPersonas, fetchCredits, fetchPresets]);
+    fetchSuggestions();
+  }, [fetchRateLimit, fetchTemplates, fetchPersonas, fetchCredits, fetchPresets, fetchSuggestions]);
 
   async function handleBoostStyle() {
     if (isBoosting || !stylePrompt.trim()) return;
@@ -397,6 +421,13 @@ export function GenerateForm() {
     setCustomMode(preset.customMode);
     setShowPresetPicker(false);
     toast(`Loaded "${preset.name}" preset`, "success");
+  }
+
+  function applySuggestion(suggestion: PromptSuggestion) {
+    setStylePrompt(suggestion.stylePrompt);
+    setInstrumental(suggestion.isInstrumental);
+    setCustomMode(false);
+    toast(`Applied suggestion`, "success");
   }
 
   async function deletePreset(presetId: string) {
@@ -931,6 +962,36 @@ export function GenerateForm() {
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {presets.length} / 20 presets used
           </p>
+        </div>
+      )}
+
+      {/* Suggested for you */}
+      {suggestions.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            Suggested for you
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => applySuggestion(s)}
+                title={s.stylePrompt}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-full hover:border-violet-400 dark:hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/10 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+              >
+                {s.source === "personal" && (
+                  <span className="text-amber-500" aria-hidden="true">★</span>
+                )}
+                {s.label}
+                {s.isInstrumental && (
+                  <span className="text-[10px] font-medium px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 ml-0.5">
+                    Instr
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
