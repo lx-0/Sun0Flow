@@ -93,7 +93,7 @@ export function useOnboarding() {
 }
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
-  const { data: session, update: updateSession } = useSession();
+  const { data: session, status, update: updateSession } = useSession();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -109,8 +109,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     | (Record<string, unknown> & { id: string; onboardingCompleted?: boolean })
     | undefined;
 
+  // Never show tour on public/auth pages
+  const publicPaths = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
+  const isPublicPage = publicPaths.some((p) => pathname.startsWith(p));
+
   // Auto-start tour for new users
   useEffect(() => {
+    if (isPublicPage) return;
+    if (status !== "authenticated") return;
     if (user && user.onboardingCompleted === false && currentStep === -1 && !completing) {
       // Check localStorage fallback — skip may have been persisted even if API call failed
       try {
@@ -120,7 +126,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
       setCurrentStep(0);
     }
-  }, [user, currentStep, completing]);
+  }, [user, currentStep, completing, isPublicPage, status]);
 
   const step = currentStep >= 0 ? TOUR_STEPS[currentStep] : null;
 
