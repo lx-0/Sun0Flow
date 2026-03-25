@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import Link from "next/link";
+import { XMarkIcon, MusicalNoteIcon, BookOpenIcon, QueueListIcon } from "@heroicons/react/24/outline";
 
 type TourStep = {
   id: string;
@@ -97,6 +98,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const router = useRouter();
 
+  const [showWelcome, setShowWelcome] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1); // -1 = inactive
   const [completing, setCompleting] = useState(false);
   const [tooltipPos, setTooltipPos] = useState<{
@@ -113,20 +115,20 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const publicPaths = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
   const isPublicPage = publicPaths.some((p) => pathname.startsWith(p));
 
-  // Auto-start tour for new users
+  // Auto-start welcome modal for new users
   useEffect(() => {
     if (isPublicPage) return;
     if (status !== "authenticated") return;
-    if (user && user.onboardingCompleted === false && currentStep === -1 && !completing) {
+    if (user && user.onboardingCompleted === false && !showWelcome && currentStep === -1 && !completing) {
       // Check localStorage fallback — skip may have been persisted even if API call failed
       try {
         if (localStorage.getItem("sunoflow-tour-completed") === "true") return;
       } catch {
         // localStorage unavailable
       }
-      setCurrentStep(0);
+      setShowWelcome(true);
     }
-  }, [user, currentStep, completing, isPublicPage, status]);
+  }, [user, showWelcome, currentStep, completing, isPublicPage, status]);
 
   const step = currentStep >= 0 ? TOUR_STEPS[currentStep] : null;
 
@@ -205,6 +207,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const completeTour = useCallback(async () => {
     setCompleting(true);
+    setShowWelcome(false);
     setCurrentStep(-1);
     setTooltipPos(null);
     // Persist skip immediately in localStorage as a fallback
@@ -257,7 +260,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       await fetch("/api/onboarding/reset", { method: "POST" });
       await updateSession();
       setCompleting(false);
-      setCurrentStep(0);
+      setShowWelcome(true);
     } catch {
       // silent fail
     }
@@ -268,6 +271,100 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   return (
     <OnboardingContext.Provider value={{ restartTour }}>
       {children}
+
+      {/* Welcome Modal — shown on first login before the tooltip tour */}
+      {showWelcome && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="welcome-modal-title"
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+        >
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={completeTour}
+            aria-hidden="true"
+          />
+
+          {/* Modal card */}
+          <div className="relative z-10 w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Header gradient */}
+            <div className="bg-gradient-to-br from-violet-600 to-violet-800 px-6 py-8 text-center">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-white/20 mb-4">
+                <MusicalNoteIcon className="w-7 h-7 text-white" aria-hidden="true" />
+              </div>
+              <h2 id="welcome-modal-title" className="text-2xl font-bold text-white mb-1">
+                Welcome to SunoFlow!
+              </h2>
+              <p className="text-violet-200 text-sm">Your personal AI music studio</p>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <p className="text-gray-600 dark:text-gray-400 text-sm text-center mb-5">
+                SunoFlow lets you create, manage, and enjoy AI-generated music — all in one place.
+              </p>
+
+              <div className="space-y-3 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center mt-0.5">
+                    <MusicalNoteIcon className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">Generate music</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Describe a mood or genre and create songs instantly</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center mt-0.5">
+                    <BookOpenIcon className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">Manage your library</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Browse, rate, and organize all your generated songs</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center mt-0.5">
+                    <QueueListIcon className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">Build playlists</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Group your favorites and share them with others</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CTAs */}
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setShowWelcome(false);
+                    setCurrentStep(0);
+                  }}
+                  className="w-full px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors"
+                >
+                  Take a quick tour
+                </button>
+                <Link
+                  href="/generate"
+                  onClick={completeTour}
+                  className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-white text-sm font-medium rounded-xl transition-colors text-center"
+                >
+                  Start generating now
+                </Link>
+                <button
+                  onClick={completeTour}
+                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors py-1"
+                >
+                  Skip for now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isActive && (
         <>

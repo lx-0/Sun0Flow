@@ -9,22 +9,24 @@ const REACTION_WINDOW_MS = 60 * 1000; // 1 minute
 
 // Validate that a string is a single emoji character
 function isSingleEmoji(str: string): boolean {
-  if (!str) return false;
-  // Match exactly one emoji (including emoji sequences like family/flag emojis)
-  const emojiRegex = /^\p{Emoji_Presentation}$|^\p{Emoji}\uFE0F$|^\p{Emoji_Modifier_Base}\p{Emoji_Modifier}$|^[\u{1F1E0}-\u{1F1FF}][\u{1F1E0}-\u{1F1FF}]$/u;
-  // Also handle basic emoticons like :)
-  // Use segmenter to count grapheme clusters
-  const segmenter = new Intl.Segmenter();
-  const segments = [...segmenter.segment(str)];
+  if (!str || str.length > 16) return false;
+  // Use Intl.Segmenter to ensure exactly one grapheme cluster
+  const segments = Array.from(new Intl.Segmenter().segment(str));
   if (segments.length !== 1) return false;
-  // Verify it's an emoji character
+  // Verify it contains an emoji code point (not just letters/digits/punctuation)
   const codePoint = str.codePointAt(0);
   if (!codePoint) return false;
-  // Check emoji ranges
-  return emojiRegex.test(str) ||
+  return (
     (codePoint >= 0x1F300 && codePoint <= 0x1FAFF) ||
     (codePoint >= 0x2600 && codePoint <= 0x27BF) ||
-    (codePoint >= 0xFE00 && codePoint <= 0xFE0F);
+    (codePoint >= 0xFE00 && codePoint <= 0xFE0F) ||
+    (codePoint >= 0x1F1E0 && codePoint <= 0x1F1FF) ||
+    (codePoint >= 0x200D && codePoint <= 0x200D) ||
+    (codePoint >= 0x2300 && codePoint <= 0x23FF) ||
+    (codePoint >= 0x2B50 && codePoint <= 0x2B55) ||
+    (codePoint >= 0xE0020 && codePoint <= 0xE007F) ||
+    str.includes("\uFE0F")
+  );
 }
 
 export async function GET(

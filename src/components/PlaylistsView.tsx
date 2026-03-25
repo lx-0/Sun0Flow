@@ -152,10 +152,19 @@ export function PlaylistsView({
       {/* Playlist list */}
       {playlists.length === 0 ? (
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center">
-          <QueueListIcon className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-          <p className="text-gray-500 text-sm">
-            No playlists yet. Create one to organize your songs.
+          <QueueListIcon className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600 mb-3" aria-hidden="true" />
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">No playlists yet</h3>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+            Create a playlist to organize your songs by mood, project, or anything you like.
           </p>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors"
+          >
+            <PlusIcon className="w-4 h-4" aria-hidden="true" />
+            Create your first playlist
+          </button>
         </div>
       ) : (
         <ul className="space-y-2">
