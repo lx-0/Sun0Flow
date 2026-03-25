@@ -36,11 +36,11 @@ const SORT_OPTIONS = [
   { value: "most_played", label: "Most Played" },
 ] as const;
 
-const GENRE_TAGS = [
+const FALLBACK_GENRE_TAGS = [
   "Pop", "Rock", "Hip-Hop", "Electronic", "Jazz",
   "Classical", "R&B", "Country", "Lo-Fi", "Ambient",
   "Metal", "Folk", "Indie", "Funk", "Soul",
-] as const;
+];
 
 function formatDuration(seconds: number | null): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -62,6 +62,8 @@ export function DiscoverView() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [playingSongId, setPlayingSongId] = useState<string | null>(null);
+  const [genreTags, setGenreTags] = useState<string[]>([]);
+  const [loadingGenres, setLoadingGenres] = useState(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +93,26 @@ export function DiscoverView() {
     setSongs([]);
     fetchSongs(1, sortBy, tag);
   }, [sortBy, tag, fetchSongs]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingGenres(true);
+    fetch("/api/songs/genres")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (cancelled) return;
+        const names: string[] =
+          data?.genres?.map((g: { name: string }) => g.name) ?? FALLBACK_GENRE_TAGS;
+        setGenreTags(names.length > 0 ? names : FALLBACK_GENRE_TAGS);
+      })
+      .catch(() => {
+        if (!cancelled) setGenreTags(FALLBACK_GENRE_TAGS);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingGenres(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -206,19 +228,26 @@ export function DiscoverView() {
           >
             All Genres
           </button>
-          {GENRE_TAGS.map((g) => (
-            <button
-              key={g}
-              onClick={() => setTag(g)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[44px] ${
-                tag === g
-                  ? "bg-violet-100 dark:bg-violet-900/50 border-violet-400 dark:border-violet-600 text-violet-700 dark:text-violet-300"
-                  : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
-              }`}
-            >
-              {g}
-            </button>
-          ))}
+          {loadingGenres
+            ? Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-[44px] w-16 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse"
+                />
+              ))
+            : genreTags.map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setTag(g)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[44px] ${
+                    tag === g
+                      ? "bg-violet-100 dark:bg-violet-900/50 border-violet-400 dark:border-violet-600 text-violet-700 dark:text-violet-300"
+                      : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
         </div>
 
         {/* Song grid */}
