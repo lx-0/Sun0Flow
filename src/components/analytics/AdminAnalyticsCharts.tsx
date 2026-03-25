@@ -117,8 +117,8 @@ export function QualityTrendChart({
         />
         <Tooltip
           contentStyle={TOOLTIP_STYLE}
-          formatter={(value: number) => [`${value}%`, "Quality Score"]}
-          labelFormatter={(label: string) => `Week of ${label}`}
+          formatter={(value) => [`${value}%`, "Quality Score"]}
+          labelFormatter={(label) => `Week of ${label}`}
         />
         <Legend
           wrapperStyle={{ fontSize: "11px", color: "#9ca3af" }}
