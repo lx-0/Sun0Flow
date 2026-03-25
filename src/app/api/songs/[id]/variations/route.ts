@@ -6,6 +6,8 @@ import { mockSongs } from "@/lib/sunoapi/mock";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
+import { recordCreditUsage, getMonthlyCreditUsage, CREDIT_COSTS, shouldNotifyLowCredits, createLowCreditNotification } from "@/lib/credits";
+import { insufficientCredits } from "@/lib/api-error";
 
 const MAX_VARIATIONS = 5;
 
@@ -124,6 +126,14 @@ export async function POST(
       );
     }
 
+    // Check credit balance before consuming any upstream resources
+    const creditUsage = await getMonthlyCreditUsage(userId);
+    if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
+      return insufficientCredits(
+        `Insufficient credits. You need ${CREDIT_COSTS.generate} credits but only have ${creditUsage.creditsRemaining} remaining.`
+      );
+    }
+
     // Check rate limit
     const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
     if (!acquired) {
@@ -213,6 +223,24 @@ export async function POST(
           { status: 201 }
         );
       }
+    }
+
+    // Record credit usage for this variation generation
+    await recordCreditUsage(userId, "generate", {
+      songId: savedSong.id,
+      creditCost: CREDIT_COSTS.generate,
+      description: `Variation generation: ${savedSong.title || "Untitled"}`,
+    });
+
+    // Check if user should be warned about low credits
+    try {
+      const shouldNotify = await shouldNotifyLowCredits(userId);
+      if (shouldNotify) {
+        const usage = await getMonthlyCreditUsage(userId);
+        await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
+      }
+    } catch {
+      // Non-critical — don't block generation
     }
 
     return NextResponse.json(
