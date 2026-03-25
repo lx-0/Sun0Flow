@@ -9,6 +9,7 @@ import {
   XMarkIcon,
   SpeakerWaveIcon,
   SpeakerXMarkIcon,
+  HeartIcon,
 } from "@heroicons/react/24/solid";
 import {
   ArrowPathRoundedSquareIcon,
@@ -16,6 +17,7 @@ import {
   MusicalNoteIcon,
   QueueListIcon,
   DocumentTextIcon,
+  HeartIcon as HeartOutlineIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useQueue } from "./QueueContext";
@@ -23,6 +25,7 @@ import { UpNextPanel } from "./UpNextPanel";
 import { LyricsPanel } from "./LyricsPanel";
 import { PlayerWaveform } from "./PlayerWaveform";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -56,9 +59,44 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
 
   const [showUpNext, setShowUpNext] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
+
+  // Fetch favorite status when current song changes
+  useEffect(() => {
+    if (!currentSong?.id || !session?.user) {
+      setIsFavorite(false);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/songs/${currentSong.id}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!cancelled && data) setIsFavorite(data.isFavorite ?? false);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentSong?.id, session?.user]);
+
+  async function handleToggleFavorite() {
+    if (!currentSong) return;
+    const prev = isFavorite;
+    const newFav = !prev;
+    setIsFavorite(newFav);
+    try {
+      const res = await fetch(`/api/songs/${currentSong.id}/favorite`, {
+        method: newFav ? "POST" : "DELETE",
+      });
+      if (!res.ok) {
+        setIsFavorite(prev);
+      }
+    } catch {
+      setIsFavorite(prev);
+    }
+  }
 
   // Close lyrics when navigating to song detail page
   useEffect(() => {
@@ -138,6 +176,23 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
               </span>
             </div>
           </div>
+
+          {/* Favorite button — only shown when authenticated */}
+          {session?.user && (
+            <button
+              onClick={handleToggleFavorite}
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              className={`flex-shrink-0 w-8 h-8 flex items-center justify-center transition-colors ${
+                isFavorite ? "text-pink-500" : "text-gray-400 hover:text-pink-400"
+              }`}
+            >
+              {isFavorite ? (
+                <HeartIcon className="w-5 h-5" />
+              ) : (
+                <HeartOutlineIcon className="w-5 h-5" />
+              )}
+            </button>
+          )}
 
           {/* Volume — hidden on mobile */}
           <div className="hidden sm:flex items-center gap-1 mr-1">
