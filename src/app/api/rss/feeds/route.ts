@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const feeds = await prisma.rssFeedSubscription.findMany({
     where: { userId: userId },
     orderBy: { createdAt: "asc" },
-    select: { id: true, url: true, title: true, createdAt: true },
+    select: { id: true, url: true, title: true, autoGenerate: true, createdAt: true },
   });
 
   return NextResponse.json({ feeds });

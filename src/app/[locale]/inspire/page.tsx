@@ -11,6 +11,9 @@ import {
   BoltIcon,
   MusicalNoteIcon,
   FunnelIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 // ─── Types ───
@@ -39,6 +42,17 @@ interface FeedResult {
   feedTitle: string;
   items: FeedItem[];
   error?: string;
+}
+
+interface PendingFeedGenerationItem {
+  id: string;
+  feedTitle?: string | null;
+  itemTitle: string;
+  itemLink?: string | null;
+  prompt: string;
+  style?: string | null;
+  status: string;
+  createdAt: string;
 }
 
 interface InstagramPost {
@@ -221,6 +235,104 @@ function DailyPrompts({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── Pending Feed Generations Section ───
+
+function PendingFeedGenerations({
+  items,
+  loading,
+  onApprove,
+  onDismiss,
+}: {
+  items: PendingFeedGenerationItem[];
+  loading: boolean;
+  onApprove: (item: PendingFeedGenerationItem) => void;
+  onDismiss: (id: string) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {[...Array(2)].map((_, i) => (
+          <div
+            key={i}
+            className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 animate-pulse"
+          >
+            <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-1/2 mb-2" />
+            <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-full mb-1" />
+            <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-3/4" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <ClockIcon className="w-4 h-4 text-teal-400" />
+        <h3 className="text-sm font-semibold text-teal-400">Pending from feeds</h3>
+        <span className="text-[10px] font-semibold bg-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded-full">
+          {items.length}
+        </span>
+      </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        New items from your auto-generate feeds — review and approve to create music.
+      </p>
+      <div className="space-y-2">
+        {items.map((item) => {
+          const styleParts = item.style?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
+          const moodKey = styleParts[0]?.toLowerCase();
+          const badgeColor = MOOD_COLORS[moodKey ?? ""] ?? MOOD_COLORS.neutral;
+
+          return (
+            <div
+              key={item.id}
+              className="bg-white dark:bg-gray-900 border border-teal-200/30 dark:border-teal-900/30 rounded-xl p-4"
+            >
+              {item.feedTitle && (
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1 truncate">
+                  {item.feedTitle}
+                </p>
+              )}
+              <div className="flex items-start gap-2 mb-1">
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 flex-1 line-clamp-2">
+                  {item.itemTitle}
+                </p>
+                {moodKey && (
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${badgeColor}`}>
+                    {moodKey}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic line-clamp-2 mb-2">
+                {item.prompt}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onApprove(item)}
+                  className="flex items-center gap-1.5 text-sm font-medium text-teal-400 hover:text-teal-300 transition-colors min-h-[44px]"
+                >
+                  <CheckCircleIcon className="w-4 h-4" />
+                  Generate
+                </button>
+                <button
+                  onClick={() => onDismiss(item.id)}
+                  className="flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-red-400 transition-colors min-h-[44px] ml-auto"
+                  aria-label="Dismiss"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -447,6 +559,9 @@ function InspireContent() {
   const [dailyGenerating, setDailyGenerating] = useState(false);
   const [dailyStale, setDailyStale] = useState(false);
 
+  const [pendingGenerations, setPendingGenerations] = useState<PendingFeedGenerationItem[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(true);
+
   const [activeTab, setActiveTab] = useState<InspireTab>("all");
   const [moodFilter, setMoodFilter] = useState<string | null>(null);
   const [dateSortDesc, setDateSortDesc] = useState(true);
@@ -559,11 +674,59 @@ function InspireContent() {
     }
   }, []);
 
+  // ── Pending feed generations ──
+
+  const fetchPendingGenerations = useCallback(async () => {
+    setPendingLoading(true);
+    try {
+      const res = await fetch("/api/feed-generations");
+      if (!res.ok) return;
+      const data = await res.json();
+      setPendingGenerations(data.items ?? []);
+    } catch {
+      // ignore
+    } finally {
+      setPendingLoading(false);
+    }
+  }, []);
+
+  const handleApprovePending = useCallback(
+    async (item: PendingFeedGenerationItem) => {
+      try {
+        const res = await fetch(`/api/feed-generations/${item.id}/approve`, { method: "POST" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setPendingGenerations((prev) => prev.filter((p) => p.id !== item.id));
+        const params = new URLSearchParams();
+        if (data.prompt) params.set("prompt", data.prompt);
+        if (data.style) params.set("tags", data.style);
+        router.push(`/generate?${params.toString()}`);
+      } catch {
+        // ignore
+      }
+    },
+    [router]
+  );
+
+  const handleDismissPending = useCallback(async (id: string) => {
+    setPendingGenerations((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await fetch(`/api/feed-generations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "dismissed" }),
+      });
+    } catch {
+      // ignore — optimistic removal
+    }
+  }, []);
+
   // ── Load on mount ──
 
   useEffect(() => {
     fetchDailyPrompts();
-  }, [fetchDailyPrompts]);
+    fetchPendingGenerations();
+  }, [fetchDailyPrompts, fetchPendingGenerations]);
 
   useEffect(() => {
     if (!feedsLoaded || feedUrls.length === 0) return;
@@ -765,6 +928,16 @@ function InspireContent() {
             </button>
           )}
         </div>
+      )}
+
+      {/* Pending auto-generated from feeds */}
+      {activeTab === "all" && (
+        <PendingFeedGenerations
+          items={pendingGenerations}
+          loading={pendingLoading}
+          onApprove={handleApprovePending}
+          onDismiss={handleDismissPending}
+        />
       )}
 
       {/* Daily auto-generated prompts */}
