@@ -101,6 +101,9 @@ interface SongListItemProps {
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   onDragHandleTouchStart: () => void;
+  onKeyboardReorder: (direction: "up" | "down") => void;
+  isFirst: boolean;
+  isLast: boolean;
   onTogglePlay: () => void;
   onPlayNext: () => void;
   onAddToQueue: () => void;
@@ -111,7 +114,7 @@ interface SongListItemProps {
 
 function SongListItem({
   ps, index, isActive, hasAudio, isDragOver, dragIndex, isSelected, selectionMode, isPlaying, isCollaborative,
-  onDragStart, onDragOver, onDrop, onDragEnd, onDragHandleTouchStart,
+  onDragStart, onDragOver, onDrop, onDragEnd, onDragHandleTouchStart, onKeyboardReorder, isFirst, isLast,
   onTogglePlay, onPlayNext, onAddToQueue, onRemove, onToggleSelect, onLongPress,
 }: SongListItemProps) {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,8 +177,16 @@ function SongListItem({
       ) : (
         <div
           data-drag-handle
-          className="flex-shrink-0 cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 min-w-[44px] min-h-[44px] flex items-center justify-center touch-none"
+          tabIndex={0}
+          role="button"
+          aria-label={`Reorder ${ps.song.title ?? "song"}. Press arrow keys to move up or down.`}
+          aria-disabled={isFirst && isLast}
+          className="flex-shrink-0 cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 min-w-[44px] min-h-[44px] flex items-center justify-center touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded"
           onTouchStart={onDragHandleTouchStart}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowUp") { e.preventDefault(); onKeyboardReorder("up"); }
+            else if (e.key === "ArrowDown") { e.preventDefault(); onKeyboardReorder("down"); }
+          }}
         >
           <Bars3Icon className="w-5 h-5" />
         </div>
@@ -455,6 +466,30 @@ export function PlaylistDetailView({
     touchDragTo.current = index;
     setDragIndex(index);
     setDragOverIndex(index);
+  }
+
+  async function handleKeyboardReorder(index: number, direction: "up" | "down") {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= songs.length) return;
+    const prev = [...songs];
+    const reordered = [...songs];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(newIndex, 0, moved);
+    setSongs(reordered);
+    try {
+      const res = await fetch(`/api/playlists/${playlist.id}/reorder`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ songIds: reordered.map((ps) => ps.songId) }),
+      });
+      if (!res.ok) {
+        setSongs(prev);
+        toast("Failed to reorder", "error");
+      }
+    } catch {
+      setSongs(prev);
+      toast("Failed to reorder", "error");
+    }
   }
 
   function buildPlaylistQueue(): QueueSong[] {
@@ -1103,6 +1138,9 @@ export function PlaylistDetailView({
                   onDrop={(e: React.DragEvent) => handleDrop(e, index)}
                   onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
                   onDragHandleTouchStart={() => handleDragHandleTouchStart(index)}
+                  onKeyboardReorder={(dir) => handleKeyboardReorder(index, dir)}
+                  isFirst={index === 0}
+                  isLast={index === songs.length - 1}
                   onTogglePlay={() => handleTogglePlay(ps.song)}
                   onPlayNext={() => { const qs = songToQueueSong(ps.song); if (qs) playNext(qs); }}
                   onAddToQueue={() => { const qs = songToQueueSong(ps.song); if (qs) addToQueue(qs); }}
