@@ -38,6 +38,7 @@
     "recharts": "^3.8.0",
     "swagger-ui-react": "^5.32.1",
     "next-intl": "^4.8.3",
+    "sharp": "^0.33.5",
     "wavesurfer.js": "^7.12.4"
   },
   "devDependencies": {

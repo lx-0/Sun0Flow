@@ -23,6 +23,10 @@ RUN mkdir -p /prisma-flat/node_modules/.prisma && \
             find node_modules/.pnpm -path '*/.prisma/client/index.js' -exec dirname {} \; | head -1) \
        /prisma-flat/node_modules/.prisma/client
 
+# --- Sharp native build (for Alpine/musl image optimization) ---
+FROM base AS sharp-builder
+RUN npm install --no-package-lock --no-save sharp@^0.33.5
+
 # --- Build ---
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
@@ -47,6 +51,9 @@ RUN rm -rf node_modules/@prisma node_modules/prisma node_modules/.prisma
 COPY --from=deps /prisma-flat/node_modules/.prisma ./node_modules/.prisma
 COPY --from=deps /prisma-flat/node_modules/@prisma ./node_modules/@prisma
 COPY --from=deps /prisma-flat/node_modules/prisma ./node_modules/prisma
+# Install sharp for Next.js standalone image optimization (Alpine/musl native build)
+COPY --from=sharp-builder /app/node_modules/sharp ./node_modules/sharp
+COPY --from=sharp-builder /app/node_modules/@img ./node_modules/@img
 COPY prisma ./prisma/
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
