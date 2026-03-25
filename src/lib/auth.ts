@@ -5,6 +5,7 @@ import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { ensureFreeSubscription } from "@/lib/billing";
 
 export const googleEnabled = Boolean(
   process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
@@ -78,6 +79,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
+  events: {
+    async createUser({ user }) {
+      if (user.id) {
+        await ensureFreeSubscription(user.id).catch((err) =>
+          logger.error({ userId: user.id, err }, "auth: failed to create FREE subscription on signup")
+        );
+      }
+    },
+  },
   callbacks: {
     async jwt({ token, user, trigger, account }) {
       if (user) {

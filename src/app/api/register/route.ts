@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendVerificationEmail } from "@/lib/email";
 import { stripHtml } from "@/lib/sanitize";
+import { ensureFreeSubscription } from "@/lib/billing";
 
 export async function POST(request: Request) {
   try {
@@ -55,6 +56,11 @@ export async function POST(request: Request) {
     });
 
     await sendVerificationEmail(email, verificationToken);
+
+    // Auto-provision FREE subscription for new credential-based users
+    await ensureFreeSubscription(user.id).catch((err) =>
+      logger.error({ userId: user.id, err }, "register: failed to create FREE subscription")
+    );
 
     return NextResponse.json(
       { id: user.id, email: user.email, name: user.name },
