@@ -175,7 +175,8 @@ const SECURITY_HEADERS: Record<string, string> = {
 // Middleware
 // ---------------------------------------------------------------------------
 export async function middleware(request: NextRequest) {
-  const token = await getToken({ req: request, secret: process.env.AUTH_SECRET });
+  const secureCookie = process.env.AUTH_URL?.startsWith("https://") ?? false;
+  const token = await getToken({ req: request, secret: process.env.AUTH_SECRET, secureCookie });
   const { pathname } = request.nextUrl;
   const method = request.method;
 
