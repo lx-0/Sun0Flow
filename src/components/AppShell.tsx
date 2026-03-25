@@ -46,7 +46,7 @@ import { LocaleSwitcher } from "./LocaleSwitcher";
 const NAV_ITEM_DEFS = [
   { key: "home" as const, href: "/", icon: HomeIcon, dataTour: undefined as string | undefined },
   { key: "library" as const, href: "/library", icon: BookOpenIcon, dataTour: undefined as string | undefined },
-  { key: "inspire" as const, href: "/inspire", icon: LightBulbIcon, dataTour: undefined as string | undefined },
+  { key: "inspire" as const, href: "/inspire", icon: LightBulbIcon, dataTour: "nav-inspire" as string | undefined },
   { key: "generate" as const, href: "/generate", icon: PlusCircleIcon, dataTour: "nav-generate" as string | undefined },
   { key: "templates" as const, href: "/templates", icon: BookmarkIcon, dataTour: undefined as string | undefined },
   { key: "personas" as const, href: "/personas", icon: UserGroupIcon, dataTour: undefined as string | undefined },

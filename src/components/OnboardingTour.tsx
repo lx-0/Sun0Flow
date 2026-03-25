@@ -12,6 +12,8 @@ type TourStep = {
   description: string;
   targetSelector: string;
   requiredPath: string;
+  /** Optional URL to navigate to when entering this step (defaults to requiredPath). Use when query params are needed. */
+  navigateTo?: string;
   position: "top" | "bottom" | "left" | "right";
 };
 
@@ -38,9 +40,10 @@ const TOUR_STEPS: TourStep[] = [
     id: "generate",
     title: "Create Your First Song",
     description:
-      "Enter a prompt describing a mood, genre, or theme. You can also pick a template or persona to get started faster.",
+      "We've pre-filled a suggestion for you — \"lo-fi hip hop, chill, relaxing\". Hit Generate to create your first AI track!",
     targetSelector: "[data-tour='generate-prompt']",
     requiredPath: "/generate",
+    navigateTo: "/generate?tags=lo-fi+hip+hop%2C+chill%2C+relaxing",
     position: "bottom",
   },
   {
@@ -58,6 +61,15 @@ const TOUR_STEPS: TourStep[] = [
     description:
       "Tap the heart icon on any song to save it here. Quick access to the tracks you love most.",
     targetSelector: "[data-tour='nav-favorites']",
+    requiredPath: "/library",
+    position: "right",
+  },
+  {
+    id: "inspire",
+    title: "Get Inspired",
+    description:
+      "The Inspire page shows trending songs and creative ideas. Visit it whenever you need fresh style inspiration!",
+    targetSelector: "[data-tour='nav-inspire']",
     requiredPath: "/library",
     position: "right",
   },
@@ -136,7 +148,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!step) return;
     if (pathname !== step.requiredPath) {
-      router.push(step.requiredPath);
+      router.push(step.navigateTo ?? step.requiredPath);
     }
   }, [step, pathname, router]);
 

@@ -116,6 +116,7 @@ export default async function PublicSongPage({
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white flex items-center justify-center p-4">
         <PublicSongView
           songId={song.id}
+          slug={params.slug}
           title={title}
           imageUrl={song.imageUrl}
           audioUrl={song.audioUrl}

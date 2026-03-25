@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { PlayIcon, PauseIcon, MusicalNoteIcon, FlagIcon } from "@heroicons/react/24/solid";
+import Link from "next/link";
+import { PlayIcon, PauseIcon, MusicalNoteIcon, FlagIcon, ShareIcon, SparklesIcon } from "@heroicons/react/24/solid";
 import { ReportModal } from "@/components/ReportModal";
 import { CommentsSection } from "@/components/CommentsSection";
 import { EmojiReactionPicker } from "@/components/EmojiReactionPicker";
@@ -19,6 +20,7 @@ function formatTime(seconds: number): string {
 
 interface PublicSongViewProps {
   songId: string;
+  slug: string;
   title: string;
   imageUrl: string | null;
   audioUrl: string | null;
@@ -31,6 +33,7 @@ interface PublicSongViewProps {
 
 export function PublicSongView({
   songId,
+  slug,
   title,
   imageUrl,
   audioUrl,
@@ -48,6 +51,26 @@ export function PublicSongView({
   const [reactions, setReactions] = useState<ReactionItem[]>([]);
   const { data: session } = useSession();
   const { toast } = useToast();
+
+  const handleShare = useCallback(async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast("Link copied to clipboard!", "success");
+      }
+    } catch {
+      // Fallback: manual copy
+      try {
+        await navigator.clipboard.writeText(url);
+        toast("Link copied to clipboard!", "success");
+      } catch {
+        toast("Could not copy link. Please copy the URL manually.", "error");
+      }
+    }
+  }, [title, toast]);
 
   // Fetch all reactions on mount (no auth needed for public songs)
   useEffect(() => {
@@ -255,8 +278,16 @@ export function PublicSongView({
         </div>
       )}
 
-      {/* Report button */}
-      <div className="flex justify-center">
+      {/* Share + Report buttons */}
+      <div className="flex justify-center gap-2">
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all duration-200 active:scale-95 min-h-[44px]"
+          aria-label="Copy share link"
+        >
+          <ShareIcon className="w-3.5 h-3.5" aria-hidden="true" />
+          Share
+        </button>
         <button
           onClick={() => setReportOpen(true)}
           className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200 active:scale-95 min-h-[44px]"
@@ -266,6 +297,26 @@ export function PublicSongView({
           Report
         </button>
       </div>
+
+      {/* Generate CTA for unauthenticated visitors */}
+      {!session?.user && (
+        <div className="bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-950/30 dark:to-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl p-4 text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-violet-100 dark:bg-violet-900/40">
+            <SparklesIcon className="w-5 h-5 text-violet-600 dark:text-violet-400" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">Love this song?</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Generate something like it — free to try.</p>
+          </div>
+          <Link
+            href={`/register?returnUrl=${encodeURIComponent(`/s/${slug}`)}`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <SparklesIcon className="w-4 h-4" aria-hidden="true" />
+            Create your own music
+          </Link>
+        </div>
+      )}
 
       {/* Report modal */}
       {reportOpen && (
