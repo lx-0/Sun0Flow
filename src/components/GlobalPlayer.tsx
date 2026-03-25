@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PlayIcon,
   PauseIcon,
@@ -24,6 +24,9 @@ import { useQueue } from "./QueueContext";
 import { UpNextPanel } from "./UpNextPanel";
 import { LyricsPanel } from "./LyricsPanel";
 import { PlayerWaveform } from "./PlayerWaveform";
+import { EmojiReactionPicker } from "./EmojiReactionPicker";
+import { ReactionTimeline, ReactionItem } from "./ReactionTimeline";
+import { useToast } from "./Toast";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 
@@ -60,8 +63,11 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
   const [showUpNext, setShowUpNext] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [reactions, setReactions] = useState<ReactionItem[]>([]);
+  const reactionSongIdRef = useRef<string | null>(null);
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { toast } = useToast();
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
 
@@ -80,6 +86,74 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
       .catch(() => {});
     return () => { cancelled = true; };
   }, [currentSong?.id, session?.user]);
+
+  // Fetch reactions when song changes
+  useEffect(() => {
+    if (!currentSong?.id) {
+      setReactions([]);
+      reactionSongIdRef.current = null;
+      return;
+    }
+    if (reactionSongIdRef.current === currentSong.id) return;
+    reactionSongIdRef.current = currentSong.id;
+    setReactions([]);
+    let cancelled = false;
+    fetch(`/api/songs/${currentSong.id}/reactions`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!cancelled && data?.reactions) setReactions(data.reactions);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentSong?.id]);
+
+  const handleReact = useCallback(
+    async (emoji: string) => {
+      if (!currentSong?.id) return;
+      const timestamp = Math.max(0, Math.min(currentTime, duration ?? currentTime));
+
+      // Optimistic update
+      const optimistic: ReactionItem = {
+        id: `optimistic-${Date.now()}`,
+        emoji,
+        timestamp,
+        userId: session?.user?.id ?? "",
+        username: session?.user?.name ?? undefined,
+      };
+      setReactions((prev) => [...prev, optimistic]);
+
+      try {
+        const res = await fetch(`/api/songs/${currentSong.id}/reactions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emoji, timestamp }),
+        });
+
+        if (res.status === 429) {
+          // Remove optimistic, show message
+          setReactions((prev) => prev.filter((r) => r.id !== optimistic.id));
+          toast("Slow down! Too many reactions.", "info");
+          return;
+        }
+
+        if (!res.ok) {
+          setReactions((prev) => prev.filter((r) => r.id !== optimistic.id));
+          toast("Couldn't save reaction. Try again.", "error");
+          return;
+        }
+
+        const created: ReactionItem = await res.json();
+        // Replace optimistic entry with real one
+        setReactions((prev) =>
+          prev.map((r) => (r.id === optimistic.id ? { ...created, username: session?.user?.name ?? undefined } : r))
+        );
+      } catch {
+        setReactions((prev) => prev.filter((r) => r.id !== optimistic.id));
+        toast("Couldn't save reaction. Try again.", "error");
+      }
+    },
+    [currentSong?.id, currentTime, duration, session, toast]
+  );
 
   async function handleToggleFavorite() {
     if (!currentSong) return;
@@ -135,7 +209,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
       )}
 
       <div className="bg-gray-900 dark:bg-gray-800 rounded-2xl md:rounded-none md:rounded-t-2xl shadow-2xl border border-gray-700 dark:border-gray-600 overflow-hidden max-w-3xl mx-auto md:mx-0">
-        {/* Waveform seek bar */}
+        {/* Waveform seek bar + reaction timeline overlay */}
         <div className="relative h-10 px-2 pt-1 pb-0.5 bg-gray-900 dark:bg-gray-800">
           <PlayerWaveform
             songId={currentSong.id}
@@ -144,6 +218,13 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
             isBuffering={isBuffering}
             onSeek={seek}
           />
+          {reactions.length > 0 && duration > 0 && (
+            <div className="absolute inset-x-2 top-0 bottom-0 pointer-events-none">
+              <div className="pointer-events-auto">
+                <ReactionTimeline reactions={reactions} duration={duration} />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2">
@@ -176,6 +257,13 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
               </span>
             </div>
           </div>
+
+          {/* Emoji reaction picker — only when playing and authenticated */}
+          <EmojiReactionPicker
+            isPlaying={isPlaying}
+            isAuthenticated={!!session?.user}
+            onReact={handleReact}
+          />
 
           {/* Favorite button — only shown when authenticated */}
           {session?.user && (
