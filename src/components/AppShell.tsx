@@ -31,6 +31,7 @@ import {
   MoonIcon,
   ComputerDesktopIcon,
   RssIcon,
+  ChatBubbleLeftEllipsisIcon,
 } from "@heroicons/react/24/outline";
 import { useTheme } from "./ThemeProvider";
 import dynamic from "next/dynamic";
@@ -42,6 +43,7 @@ import { NotificationBell } from "./NotificationBell";
 import { SearchBar } from "./SearchBar";
 import { EmailVerificationBanner } from "./EmailVerificationBanner";
 import { LocaleSwitcher } from "./LocaleSwitcher";
+const FeedbackModal = dynamic(() => import("./FeedbackModal").then((m) => m.FeedbackModal), { ssr: false });
 
 // prefetch: true forces eager prefetch even before the link enters the viewport.
 // Critical user-flow routes get this treatment so they load instantly on first click.
@@ -196,6 +198,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [kbFeedback, setKbFeedback] = useState<string | null>(null);
   const kbFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const drawerRef = useRef<HTMLElement>(null);
@@ -347,6 +350,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
             <button
+              onClick={() => setFeedbackOpen(true)}
+              aria-label="Send feedback"
+              title={sidebarCollapsed ? "Send feedback" : undefined}
+              className={`w-full flex items-center rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors min-h-[44px] ${sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"}`}
+            >
+              <ChatBubbleLeftEllipsisIcon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+              {!sidebarCollapsed && "Feedback"}
+            </button>
+            <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               aria-label={tCommon("logout")}
               title={sidebarCollapsed ? tCommon("logout") : undefined}
@@ -466,6 +478,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <LocaleSwitcher compact />
             </div>
             <button
+              onClick={() => { setSidebarOpen(false); setFeedbackOpen(true); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors min-h-[44px]"
+            >
+              <ChatBubbleLeftEllipsisIcon className="w-5 h-5" aria-hidden="true" />
+              Feedback
+            </button>
+            <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors min-h-[44px]"
             >
@@ -553,6 +572,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Keyboard shortcuts help modal */}
         <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+        {/* Feedback button — bottom-right floating, visible when authenticated */}
+        {session?.user && (
+          <button
+            onClick={() => setFeedbackOpen(true)}
+            aria-label="Send feedback"
+            className="fixed bottom-20 right-4 md:bottom-6 z-30 flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-full shadow-lg transition-colors"
+          >
+            <ChatBubbleLeftEllipsisIcon className="w-4 h-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Feedback</span>
+          </button>
+        )}
+
+        {/* Feedback modal */}
+        {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
 
         {/* Keyboard action feedback overlay */}
         {kbFeedback && (

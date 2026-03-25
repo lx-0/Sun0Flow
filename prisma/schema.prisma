@@ -85,6 +85,7 @@ model User {
   reactions            SongReaction[]
   generationFeedbacks  GenerationFeedback[]
   generationPresets    GenerationPreset[]
+  userFeedbacks        UserFeedback[]
   subscription         Subscription?
   paymentEvents        PaymentEvent[]
 }
@@ -525,6 +526,24 @@ model GenerationPreset {
 
   @@index([userId])
   @@index([userId, createdAt])
+}
+
+model UserFeedback {
+  id            String   @id @default(cuid())
+  userId        String
+  category      String   // bug_report, feature_request, general
+  score         Int?     // 1-5, optional
+  comment       String?  @db.Text
+  screenshotUrl String?
+  pageUrl       String
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category, createdAt])
+  @@index([createdAt])
 }
 
 // ---------------------------------------------------------------------------
