@@ -25,6 +25,8 @@ interface ProfileStats {
   totalFavorites: number;
   totalPlaylists: number;
   totalTemplates: number;
+  followersCount: number;
+  followingCount: number;
   memberSince: string;
   lastLoginAt: string | null;
 }
@@ -202,6 +204,16 @@ function AccountStats() {
         <StatCard icon={HeartIcon} label="Favorites" value={stats.totalFavorites} />
         <StatCard icon={QueueListIcon} label="Playlists" value={stats.totalPlaylists} />
         <StatCard icon={SparklesIcon} label="Templates" value={stats.totalTemplates} />
+      </div>
+      <div className="flex justify-center gap-8 pt-1">
+        <div className="text-center">
+          <p className="text-lg font-bold text-gray-900 dark:text-white">{stats.followersCount}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Followers</p>
+        </div>
+        <div className="text-center">
+          <p className="text-lg font-bold text-gray-900 dark:text-white">{stats.followingCount}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Following</p>
+        </div>
       </div>
       <div className="flex flex-col items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
         <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { stripHtml } from "@/lib/sanitize";
 import { CacheControl, CacheTTL, cached, invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { recordActivity } from "@/lib/activity";
 
 const MAX_PLAYLISTS = 50;
 
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
     });
 
     invalidateByPrefix(cacheKey("playlists", userId));
+    recordActivity({ userId, type: "playlist_created", playlistId: playlist.id });
     return NextResponse.json({ playlist }, { status: 201 });
   } catch {
     return NextResponse.json(

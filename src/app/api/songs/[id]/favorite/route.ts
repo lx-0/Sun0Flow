@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { invalidateByPrefix } from "@/lib/cache";
+import { recordActivity } from "@/lib/activity";
 
 export async function POST(
   request: Request,
@@ -29,6 +30,7 @@ export async function POST(
     const count = await prisma.favorite.count({ where: { songId: song.id } });
 
     invalidateByPrefix(`dashboard-stats:${userId}`);
+    recordActivity({ userId, type: "song_favorited", songId: song.id });
 
     return NextResponse.json({ isFavorite: true, favoriteCount: count, favoriteId: favorite.id });
   } catch {

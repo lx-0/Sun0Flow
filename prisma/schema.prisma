@@ -83,6 +83,7 @@ model User {
   comments         Comment[]
   followers        Follow[]  @relation("Following")
   following        Follow[]  @relation("Follower")
+  activities       Activity[]
   reactions            SongReaction[]
   generationFeedbacks  GenerationFeedback[]
   generationPresets    GenerationPreset[]
@@ -90,6 +91,23 @@ model User {
   subscription         Subscription?
   paymentEvents        PaymentEvent[]
   playHistory          PlayHistory[]
+}
+
+model Activity {
+  id         String   @id @default(cuid())
+  userId     String
+  type       String   // "song_created", "playlist_created", "song_favorited"
+  songId     String?
+  playlistId String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song     Song?     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  playlist Playlist? @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([type, createdAt])
 }
 
 model Song {
@@ -136,6 +154,7 @@ model Song {
   reactions            SongReaction[]
   generationFeedbacks  GenerationFeedback[]
   playHistory          PlayHistory[]
+  activities           Activity[]
 
   @@index([userId, title])
   @@index([userId, prompt])
@@ -165,8 +184,9 @@ model Playlist {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  songs PlaylistSong[]
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  songs      PlaylistSong[]
+  activities Activity[]
 
   @@index([userId])
   @@index([userId, name])

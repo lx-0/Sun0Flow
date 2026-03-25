@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { AppShell } from "@/components/AppShell";
-import { MusicalNoteIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import { MusicalNoteIcon, UserGroupIcon, QueueListIcon, HeartIcon } from "@heroicons/react/24/outline";
 
 interface FeedUser {
   id: string;
@@ -22,12 +22,20 @@ interface FeedSong {
   tags: string | null;
 }
 
-interface FeedItem {
-  type: "new_song";
+interface FeedPlaylist {
   id: string;
+  name: string;
+  slug: string | null;
+  songCount: number;
+}
+
+interface FeedItem {
+  id: string;
+  type: "song_created" | "playlist_created" | "song_favorited";
   createdAt: string;
   user: FeedUser;
-  song: FeedSong;
+  song: FeedSong | null;
+  playlist: FeedPlaylist | null;
 }
 
 interface Pagination {
@@ -69,37 +77,6 @@ function Avatar({ user }: { user: FeedUser }) {
   );
 }
 
-function FeedItemCard({ item }: { item: FeedItem }) {
-  const href = item.song.publicSlug ? `/s/${item.song.publicSlug}` : null;
-
-  return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 flex gap-3">
-      <Avatar user={item.user} />
-      <div className="flex-1 min-w-0 space-y-2">
-        <div className="flex items-baseline gap-1.5 flex-wrap">
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-            {item.user.name ?? "Someone"}
-          </span>
-          <span className="text-sm text-gray-500 dark:text-gray-400">published a song</span>
-          <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto flex-shrink-0">
-            {formatRelativeTime(item.createdAt)}
-          </span>
-        </div>
-
-        {href ? (
-          <Link href={href} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors">
-            <SongThumb song={item.song} />
-          </Link>
-        ) : (
-          <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-lg p-2">
-            <SongThumb song={item.song} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function SongThumb({ song }: { song: FeedSong }) {
   return (
     <>
@@ -127,6 +104,111 @@ function SongThumb({ song }: { song: FeedSong }) {
       </div>
     </>
   );
+}
+
+function FeedItemCard({ item }: { item: FeedItem }) {
+  const userHref = `/users/${item.user.id}`;
+
+  if (item.type === "song_created" && item.song) {
+    const songHref = item.song.publicSlug ? `/s/${item.song.publicSlug}` : null;
+    return (
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 flex gap-3">
+        <Link href={userHref}>
+          <Avatar user={item.user} />
+        </Link>
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <Link href={userHref} className="text-sm font-semibold text-gray-900 dark:text-white hover:text-violet-600 dark:hover:text-violet-400">
+              {item.user.name ?? "Someone"}
+            </Link>
+            <span className="text-sm text-gray-500 dark:text-gray-400">published a song</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto flex-shrink-0">
+              {formatRelativeTime(item.createdAt)}
+            </span>
+          </div>
+          {songHref ? (
+            <Link href={songHref} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors">
+              <SongThumb song={item.song} />
+            </Link>
+          ) : (
+            <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-lg p-2">
+              <SongThumb song={item.song} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (item.type === "playlist_created" && item.playlist) {
+    const playlistHref = item.playlist.slug
+      ? `/playlists/${item.playlist.slug}`
+      : `/playlists/${item.playlist.id}`;
+    return (
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 flex gap-3">
+        <Link href={userHref}>
+          <Avatar user={item.user} />
+        </Link>
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <Link href={userHref} className="text-sm font-semibold text-gray-900 dark:text-white hover:text-violet-600 dark:hover:text-violet-400">
+              {item.user.name ?? "Someone"}
+            </Link>
+            <span className="text-sm text-gray-500 dark:text-gray-400">created a playlist</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto flex-shrink-0">
+              {formatRelativeTime(item.createdAt)}
+            </span>
+          </div>
+          <Link href={playlistHref} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors">
+            <div className="w-12 h-12 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0">
+              <QueueListIcon className="w-6 h-6 text-violet-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{item.playlist.name}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {item.playlist.songCount} song{item.playlist.songCount !== 1 ? "s" : ""}
+              </p>
+            </div>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.type === "song_favorited" && item.song) {
+    const songHref = item.song.publicSlug ? `/s/${item.song.publicSlug}` : null;
+    return (
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 flex gap-3">
+        <Link href={userHref}>
+          <Avatar user={item.user} />
+        </Link>
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <Link href={userHref} className="text-sm font-semibold text-gray-900 dark:text-white hover:text-violet-600 dark:hover:text-violet-400">
+              {item.user.name ?? "Someone"}
+            </Link>
+            <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <HeartIcon className="w-3.5 h-3.5 text-pink-500 inline" /> favorited a song
+            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto flex-shrink-0">
+              {formatRelativeTime(item.createdAt)}
+            </span>
+          </div>
+          {songHref ? (
+            <Link href={songHref} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors">
+              <SongThumb song={item.song} />
+            </Link>
+          ) : (
+            <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-lg p-2">
+              <SongThumb song={item.song} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function FeedContent() {
@@ -173,7 +255,7 @@ function FeedContent() {
         <div className="space-y-1">
           <p className="text-base font-medium text-gray-700 dark:text-gray-300">Your feed is empty</p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Follow other creators to see their new songs here.
+            Follow other creators to see their songs, playlists, and favorites here.
           </p>
         </div>
         <Link

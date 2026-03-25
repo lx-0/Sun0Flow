@@ -1,42 +1,32 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const PAGE_SIZE = 20;
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required", code: "UNAUTHORIZED" },
-        { status: 401 }
-      );
-    }
-    const userId = session.user.id;
-
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
     const skip = (page - 1) * PAGE_SIZE;
 
-    // Get the list of users this person follows
-    const following = await prisma.follow.findMany({
-      where: { followerId: userId },
-      select: { followingId: true },
+    // Verify user exists
+    const user = await prisma.user.findUnique({
+      where: { id: params.id },
+      select: { id: true },
     });
-
-    if (following.length === 0) {
-      return NextResponse.json({
-        items: [],
-        pagination: { page, totalPages: 0, total: 0, hasMore: false },
-      });
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found", code: "NOT_FOUND" },
+        { status: 404 }
+      );
     }
-
-    const followingIds = following.map((f) => f.followingId);
 
     const [activities, total] = await Promise.all([
       prisma.activity.findMany({
-        where: { userId: { in: followingIds } },
+        where: { userId: params.id },
         orderBy: { createdAt: "desc" },
         skip,
         take: PAGE_SIZE,
@@ -44,7 +34,6 @@ export async function GET(request: Request) {
           id: true,
           type: true,
           createdAt: true,
-          user: { select: { id: true, name: true, image: true } },
           song: {
             select: {
               id: true,
@@ -70,9 +59,7 @@ export async function GET(request: Request) {
           },
         },
       }),
-      prisma.activity.count({
-        where: { userId: { in: followingIds } },
-      }),
+      prisma.activity.count({ where: { userId: params.id } }),
     ]);
 
     const items = activities
@@ -95,7 +82,6 @@ export async function GET(request: Request) {
         id: a.id,
         type: a.type,
         createdAt: a.createdAt,
-        user: a.user,
         song: a.song
           ? {
               id: a.song.id,

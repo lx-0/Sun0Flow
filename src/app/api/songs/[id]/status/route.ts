@@ -8,6 +8,7 @@ import { invalidateByPrefix } from "@/lib/cache";
 import { broadcast } from "@/lib/event-bus";
 import { sendGenerationCompleteEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
+import { recordActivity } from "@/lib/activity";
 import crypto from "crypto";
 
 const MAX_POLL_ATTEMPTS = 60;
@@ -157,6 +158,9 @@ export async function GET(
         type: "generation_update",
         data: { songId: id, status: "ready", title: updated.title, audioUrl: updated.audioUrl, imageUrl: updated.imageUrl, alternateCount },
       });
+
+      // Record activity for the primary song
+      recordActivity({ userId: song.userId, type: "song_created", songId: id });
 
       // Update linked queue item
       await prisma.generationQueueItem.updateMany({
