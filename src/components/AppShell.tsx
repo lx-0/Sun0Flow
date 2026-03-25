@@ -222,7 +222,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [sidebarOpen]);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       {/* Skip-to-content link */}
       <a href="#main-content" className="skip-to-content">
         Skip to content
