@@ -11,7 +11,8 @@ const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 if (dsn) {
   Sentry.init({
     dsn,
-    environment: process.env.NODE_ENV ?? "production",
+    environment: process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT ?? process.env.NODE_ENV ?? "production",
+    release: process.env.NEXT_PUBLIC_SENTRY_RELEASE,
 
     // Capture 10% of sessions for Session Replay in production
     replaysSessionSampleRate: 0.1,

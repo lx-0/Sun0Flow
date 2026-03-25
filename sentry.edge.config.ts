@@ -11,7 +11,8 @@ const dsn = process.env.SENTRY_DSN;
 if (dsn) {
   Sentry.init({
     dsn,
-    environment: process.env.NODE_ENV ?? "production",
+    environment: process.env.SENTRY_ENVIRONMENT ?? process.env.NODE_ENV ?? "production",
+    release: process.env.SENTRY_RELEASE ?? process.env.RAILWAY_GIT_COMMIT_SHA,
     tracesSampleRate: 0.1,
   });
 }

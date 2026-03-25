@@ -169,6 +169,9 @@ if (process.env.ANALYZE === "true") {
 const sentryDsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
 if (sentryDsn) {
   const { withSentryConfig } = await import("@sentry/nextjs");
+  // Derive release name from explicit env var, then Railway-injected commit SHA
+  const sentryRelease =
+    process.env.SENTRY_RELEASE ?? process.env.RAILWAY_GIT_COMMIT_SHA;
   config = withSentryConfig(config, {
     // Suppress noisy Sentry build output unless in CI
     silent: !process.env.CI,
@@ -181,6 +184,7 @@ if (sentryDsn) {
     },
     org: process.env.SENTRY_ORG,
     project: process.env.SENTRY_PROJECT,
+    release: sentryRelease ? { name: sentryRelease } : undefined,
   });
 }
 
