@@ -117,6 +117,7 @@ function toQueueSong(song: Song): QueueSong {
     audioUrl: song.audioUrl ?? "",
     imageUrl: song.imageUrl,
     duration: song.duration,
+    lyrics: song.lyrics,
   };
 }
 

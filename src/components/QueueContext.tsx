@@ -19,6 +19,7 @@ export interface QueueSong {
   audioUrl: string;
   imageUrl: string | null;
   duration: number | null;
+  lyrics?: string | null;
 }
 
 export type RepeatMode = "off" | "repeat-all" | "repeat-one";

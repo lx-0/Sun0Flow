@@ -1057,7 +1057,7 @@ export function SongDetailView({
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 flex items-center justify-center">
           <button
             onClick={() =>
-              togglePlay({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl ?? null, duration: song.duration ?? null })
+              togglePlay({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics })
             }
             aria-label={isThisSongPlaying ? "Pause" : "Play"}
             className="flex items-center gap-2 px-6 py-3 text-sm font-medium rounded-xl bg-violet-600 hover:bg-violet-500 text-white shadow-sm transition-all duration-200 active:scale-95 min-h-[44px]"
@@ -1136,7 +1136,7 @@ export function SongDetailView({
           <>
             <button
               onClick={() => {
-                playNext({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl ?? null, duration: song.duration ?? null });
+                playNext({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
                 toast("Playing next", "success");
               }}
               className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"
@@ -1146,7 +1146,7 @@ export function SongDetailView({
             </button>
             <button
               onClick={() => {
-                addToQueue({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl ?? null, duration: song.duration ?? null });
+                addToQueue({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
                 toast("Added to queue", "success");
               }}
               className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"

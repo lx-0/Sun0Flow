@@ -317,6 +317,7 @@ function songToQueueSong(song: Song): QueueSong | null {
     audioUrl: song.audioUrl,
     imageUrl: song.imageUrl,
     duration: song.duration,
+    lyrics: song.lyrics,
   };
 }
 
@@ -391,7 +392,7 @@ function SongRowMenu({
             <button
               onClick={() => {
                 setOpen(false);
-                const qs: QueueSong = { id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl, duration: song.duration };
+                const qs: QueueSong = { id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl, duration: song.duration, lyrics: song.lyrics };
                 playNext(qs);
                 toast("Playing next", "success");
               }}
@@ -405,7 +406,7 @@ function SongRowMenu({
             <button
               onClick={() => {
                 setOpen(false);
-                const qs: QueueSong = { id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl, duration: song.duration };
+                const qs: QueueSong = { id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl, duration: song.duration, lyrics: song.lyrics };
                 addToQueue(qs);
                 toast("Added to queue", "success");
               }}

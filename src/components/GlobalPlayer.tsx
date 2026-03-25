@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   PlayIcon,
   PauseIcon,
@@ -15,11 +15,14 @@ import {
   ArrowsRightLeftIcon,
   MusicalNoteIcon,
   QueueListIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useQueue } from "./QueueContext";
 import { UpNextPanel } from "./UpNextPanel";
+import { LyricsPanel } from "./LyricsPanel";
 import { PlayerWaveform } from "./PlayerWaveform";
+import { usePathname } from "next/navigation";
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -52,13 +55,40 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
   } = useQueue();
 
   const [showUpNext, setShowUpNext] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
+  const pathname = usePathname();
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
+
+  // Close lyrics when navigating to song detail page
+  useEffect(() => {
+    if (pathname?.includes("/library/")) {
+      setShowLyrics(false);
+    }
+  }, [pathname]);
+
+  // Close lyrics when current song changes to one without lyrics
+  useEffect(() => {
+    if (!currentSong?.lyrics) {
+      setShowLyrics(false);
+    }
+  }, [currentSong?.id, currentSong?.lyrics]);
 
   if (!currentSong) return null;
 
   return (
     <div role="region" aria-label="Audio player" className={`fixed bottom-16 left-0 right-0 z-20 px-2 md:bottom-0 transition-all duration-200 ${sidebarCollapsed ? "md:left-16" : "md:left-56"}`}>
+      {/* Lyrics panel */}
+      {showLyrics && currentSong?.lyrics && (
+        <div className="max-w-3xl mx-auto md:mx-0 mb-1">
+          <LyricsPanel
+            lyrics={currentSong.lyrics}
+            songTitle={currentSong.title}
+            onClose={() => setShowLyrics(false)}
+          />
+        </div>
+      )}
+
       {/* Up Next panel */}
       {showUpNext && (
         <div className="max-w-3xl mx-auto md:mx-0 mb-1">
@@ -202,6 +232,22 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
                 </span>
               )}
             </button>
+
+            {/* Lyrics toggle — only shown when current song has lyrics */}
+            {currentSong?.lyrics && (
+              <button
+                onClick={() => setShowLyrics((v) => !v)}
+                aria-label={showLyrics ? "Hide lyrics" : "Show lyrics"}
+                aria-expanded={showLyrics}
+                className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors ${
+                  showLyrics
+                    ? "text-violet-400"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <DocumentTextIcon className="w-5 h-5" />
+              </button>
+            )}
 
             {/* Up Next toggle */}
             <button
