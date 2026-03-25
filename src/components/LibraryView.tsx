@@ -593,7 +593,7 @@ function SongRow({
       tabIndex={0}
       aria-selected={isActive}
       aria-label={songAriaLabel}
-      className={`group bg-white dark:bg-gray-900 border rounded-xl overflow-hidden transition-colors ${
+      className={`group bg-white dark:bg-gray-900 border rounded-xl transition-colors ${
         isSelected
           ? "border-violet-500 bg-violet-50 dark:bg-violet-950/30"
           : isActive
