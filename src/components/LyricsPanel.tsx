@@ -36,7 +36,7 @@ export function LyricsPanel({ lyrics, songTitle, onClose }: LyricsPanelProps) {
     <div
       ref={panelRef}
       role="dialog"
-      aria-label="Lyrics"
+      aria-label="Song lyrics panel"
       className="bg-gray-900/95 border border-gray-700 rounded-t-2xl shadow-2xl overflow-hidden w-full md:max-w-[600px] md:ml-auto animate-slide-in"
     >
       {/* Header */}

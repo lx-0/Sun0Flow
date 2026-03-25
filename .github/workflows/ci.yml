@@ -31,6 +31,7 @@ jobs:
       DATABASE_URL: postgres://projects:projects@localhost:5432/sunoflow
       AUTH_SECRET: ci-test-secret-not-for-production
       AUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: "1"
 
     steps:
       - uses: actions/checkout@v4
