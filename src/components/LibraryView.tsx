@@ -1049,6 +1049,21 @@ export function LibraryView({
           e.preventDefault();
           handleTogglePlay(song);
         }
+      } else if (e.key === "f" && currentIdx >= 0) {
+        // Toggle favorite on focused song
+        const song = songs[currentIdx];
+        if (song) {
+          e.preventDefault();
+          handleToggleFavorite(song);
+        }
+      } else if (e.key === "Delete" && currentIdx >= 0) {
+        // Remove focused song (with confirmation dialog)
+        const song = songs[currentIdx];
+        if (song) {
+          e.preventDefault();
+          setSelectedSongIds(new Set([song.id]));
+          setShowDeleteConfirm(true);
+        }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

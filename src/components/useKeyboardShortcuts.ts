@@ -13,10 +13,10 @@ export interface Shortcut {
 }
 
 export const SHORTCUTS: Shortcut[] = [
-  { keys: ["g", "n"], label: "Go to Generate", category: "navigation" },
   { keys: ["g", "l"], label: "Go to Library", category: "navigation" },
-  { keys: ["g", "f"], label: "Go to Favorites", category: "navigation" },
-  { keys: ["g", "h"], label: "Go to Home", category: "navigation" },
+  { keys: ["g", "g"], label: "Go to Generate", category: "navigation" },
+  { keys: ["g", "i"], label: "Go to Inspire", category: "navigation" },
+  { keys: ["g", "s"], label: "Go to Settings", category: "navigation" },
   { keys: [" "], label: "Play / Pause", category: "playback" },
   { keys: ["←"], label: "Seek back 10s", category: "playback" },
   { keys: ["→"], label: "Seek forward 10s", category: "playback" },
@@ -107,7 +107,7 @@ export function useKeyboardShortcuts(
       if (pendingRef.current === "g") {
         clearPending();
         switch (key) {
-          case "n":
+          case "g":
             e.preventDefault();
             router.push("/generate");
             return;
@@ -115,13 +115,13 @@ export function useKeyboardShortcuts(
             e.preventDefault();
             router.push("/library");
             return;
-          case "f":
+          case "i":
             e.preventDefault();
-            router.push("/favorites");
+            router.push("/inspire");
             return;
-          case "h":
+          case "s":
             e.preventDefault();
-            router.push("/");
+            router.push("/settings");
             return;
         }
         // Unknown second key — ignore
