@@ -47,7 +47,7 @@ const nextConfig = {
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob: https://*.sunoapi.org https://*.removeai.ai https://*.redpandaai.co",
+          "img-src 'self' data: blob: https:",
           "media-src 'self' blob: https://*.sunoapi.org https://*.aiquickdraw.com",
           "font-src 'self' data:",
           "connect-src 'self' https://*.sunoapi.org https://*.aiquickdraw.com",
