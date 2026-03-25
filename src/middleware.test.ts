@@ -184,12 +184,12 @@ describe("middleware — body size limit", () => {
 });
 
 describe("middleware — API versioning", () => {
-  it("redirects deprecated /api/* routes to /api/v1/", async () => {
+  it("passes through /api/* routes without redirect (rewrite handled by next.config.mjs)", async () => {
     vi.mocked(getToken).mockResolvedValue({ id: "user-1", sub: "user-1" } as never);
 
     const res = await middleware(makeRequest("http://localhost/api/songs"));
-    expect(res.status).toBe(301);
-    expect(res.headers.get("location")).toContain("/api/v1/songs");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
   });
 
   it("does not redirect /api/v1/ routes", async () => {

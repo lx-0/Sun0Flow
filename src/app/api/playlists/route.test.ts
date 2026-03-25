@@ -25,6 +25,14 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/cache", () => ({
+  cached: vi.fn((_key: string, fetcher: () => Promise<unknown>) => fetcher()),
+  cacheKey: vi.fn((...parts: string[]) => parts.join(":")),
+  invalidateByPrefix: vi.fn(),
+  CacheTTL: { PLAYLIST: 30000 },
+  CacheControl: { privateShort: "private, max-age=10, must-revalidate" },
+}));
+
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 

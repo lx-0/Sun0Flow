@@ -108,13 +108,13 @@ describe("GET /api/songs/[id]/status", () => {
   it("marks song as failed when poll count exceeds max (timeout)", async () => {
     vi.mocked(prisma.song.findUnique).mockResolvedValue({
       ...baseSong,
-      pollCount: 20, // At max
+      pollCount: 60, // At max
     } as never);
     vi.mocked(prisma.song.update).mockResolvedValue({
       ...baseSong,
       generationStatus: "failed",
       errorMessage: "Generation timed out",
-      pollCount: 21,
+      pollCount: 61,
     } as never);
 
     const res = await GET(makeRequest(), makeParams());
