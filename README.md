@@ -119,6 +119,12 @@ Copy `.env.example` to `.env` and fill in the values. All variables are document
 | `SENTRY_AUTH_TOKEN` | No | Sentry auth token for source map uploads during build |
 | `SENTRY_ORG` | No | Sentry organisation slug |
 | `SENTRY_PROJECT` | No | Sentry project slug |
+| `STRIPE_SECRET_KEY` | No | Stripe secret key (`sk_test_…` / `sk_live_…`) |
+| `STRIPE_PUBLISHABLE_KEY` | No | Stripe publishable key (`pk_test_…` / `pk_live_…`) |
+| `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret (`whsec_…`) — required for `/api/webhooks/stripe` |
+| `STRIPE_PRICE_STARTER` | No | Stripe Price ID for the Starter plan ($9.99/mo) |
+| `STRIPE_PRICE_PRO` | No | Stripe Price ID for the Pro plan ($24.99/mo) |
+| `STRIPE_PRICE_STUDIO` | No | Stripe Price ID for the Studio plan ($49.99/mo) |
 
 > **Note:** Both `DATABASE_URL` and `SUNOFLOW_DATABASE_URL` must point to the same Postgres instance. This is a current quirk of the Prisma schema configuration.
 
@@ -178,6 +184,68 @@ pnpm test:e2e
 ```
 
 Playwright config lives in `playwright.config.ts`. E2E tests are under `e2e/`.
+
+### Stripe webhook forwarding (local development)
+
+To test the Stripe billing integration locally you need the [Stripe CLI](https://stripe.com/docs/stripe-cli) to forward webhook events from Stripe to your local server.
+
+**1. Install the Stripe CLI**
+
+```bash
+# macOS
+brew install stripe/stripe-cli/stripe
+
+# Linux / WSL — download from https://github.com/stripe/stripe-cli/releases
+# or via the shell installer:
+curl -s https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg
+echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" | sudo tee /etc/apt/sources.list.d/stripe.list
+sudo apt update && sudo apt install stripe
+```
+
+**2. Log in to the Stripe CLI**
+
+```bash
+stripe login
+```
+
+**3. Forward webhook events to your local server**
+
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+
+The CLI will print a webhook signing secret that begins with `whsec_`. Copy it into your `.env`:
+
+```env
+STRIPE_WEBHOOK_SECRET=whsec_<the-value-printed-by-stripe-listen>
+```
+
+**4. Trigger test events**
+
+In a separate terminal you can fire any Stripe event against your local handler:
+
+```bash
+# Simulate a successful subscription creation
+stripe trigger customer.subscription.created
+
+# Simulate a failed payment
+stripe trigger invoice.payment_failed
+
+# Simulate cancellation
+stripe trigger customer.subscription.deleted
+```
+
+All events are logged via Pino (`payment events` logger) and any errors are captured in Sentry if configured.
+
+**5. Full end-to-end checkout test**
+
+1. Start the dev server: `pnpm dev`
+2. Start webhook forwarding: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
+3. Open `http://localhost:3000/pricing` and click an upgrade button.
+4. Use Stripe test card `4242 4242 4242 4242` with any future expiry and any CVC.
+5. On success you are redirected to `/settings/billing?success=1` and the user's subscription record is updated.
+
+> Stripe test card numbers: `4242 4242 4242 4242` (succeeds), `4000 0000 0000 9995` (payment fails / PAST_DUE).
 
 ### Project structure
 
