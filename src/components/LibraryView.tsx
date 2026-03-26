@@ -418,6 +418,7 @@ interface SongRowProps {
   onSingleArchive: (song: Song) => void;
   onSingleRestore: (song: Song) => void;
   onSingleDeleteForever: (song: Song) => void;
+  onTagClick?: (tagId: string) => void;
 }
 
 function SongRow({
@@ -445,6 +446,7 @@ function SongRow({
   onSingleArchive,
   onSingleRestore,
   onSingleDeleteForever,
+  onTagClick,
 }: SongRowProps) {
   const { toast } = useToast();
   const [song, setSong] = useState(initialSong);
@@ -590,7 +592,7 @@ function SongRow({
             {!isPending && !isFailed && (song as SongWithTags).songTags?.length > 0 && (
               <div className="flex gap-1 flex-wrap">
                 {(song as SongWithTags).songTags.slice(0, 3).map((st) => (
-                  <TagChip key={st.tag.id} tag={st.tag} size="xs" onClick={() => setTagFilter((prev) => prev.includes(st.tag.id) ? prev : [...prev, st.tag.id])} />
+                  <TagChip key={st.tag.id} tag={st.tag} size="xs" onClick={() => onTagClick?.(st.tag.id)} />
                 ))}
                 {(song as SongWithTags).songTags.length > 3 && (
                   <span className="text-[10px] text-gray-500 dark:text-gray-400">+{(song as SongWithTags).songTags.length - 3}</span>
@@ -2327,6 +2329,7 @@ export function LibraryView({
                   onSingleArchive={(s) => handleSingleSongAction(s, "delete")}
                   onSingleRestore={(s) => handleSingleSongAction(s, "restore")}
                   onSingleDeleteForever={(s) => handleSingleSongAction(s, "permanent_delete")}
+                  onTagClick={(tagId) => setTagFilter((prev) => prev.includes(tagId) ? prev : [...prev, tagId])}
                 />
               </div>
             );
