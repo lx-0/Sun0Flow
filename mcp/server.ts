@@ -22,6 +22,11 @@ import { getTools, getTool } from "./registry";
 
 // Register all tools by importing them (side-effect: calls registerTool)
 import "./tools/info";
+import "./tools/generate_song";
+import "./tools/list_songs";
+import "./tools/get_song";
+import "./tools/playlist";
+import "./tools/get_credits";
 
 async function main(): Promise<void> {
   const userId = await resolveApiKeyFromEnv();
