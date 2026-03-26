@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { PlayIcon, PauseIcon, MusicalNoteIcon, FlagIcon, ShareIcon, SparklesIcon } from "@heroicons/react/24/solid";
+import { PlayIcon, PauseIcon, MusicalNoteIcon, FlagIcon, ShareIcon, SparklesIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/24/solid";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import { useSession } from "next-auth/react";
@@ -57,6 +57,8 @@ export function PublicSongView({
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(duration ?? 0);
   const [reportOpen, setReportOpen] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
   const [reactions, setReactions] = useState<ReactionItem[]>([]);
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -148,6 +150,23 @@ export function PublicSongView({
     },
     [songId, currentTime, audioDuration, session, toast]
   );
+
+  function handleVolumeChange(value: number) {
+    setVolume(value);
+    setMuted(value === 0);
+    if (audioRef.current) {
+      audioRef.current.volume = value;
+      audioRef.current.muted = value === 0;
+    }
+  }
+
+  function handleToggleMute() {
+    const nextMuted = !muted;
+    setMuted(nextMuted);
+    if (audioRef.current) {
+      audioRef.current.muted = nextMuted;
+    }
+  }
 
   function handleTogglePlay() {
     if (!audioRef.current) return;
@@ -261,6 +280,31 @@ export function PublicSongView({
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(audioDuration)}</span>
             </div>
+          </div>
+
+          {/* Volume control */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleMute}
+              className="text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors flex-shrink-0"
+              aria-label={muted ? "Unmute" : "Mute"}
+            >
+              {muted || volume === 0 ? (
+                <SpeakerXMarkIcon className="w-4 h-4" aria-hidden="true" />
+              ) : (
+                <SpeakerWaveIcon className="w-4 h-4" aria-hidden="true" />
+              )}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={muted ? 0 : volume}
+              onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+              className="flex-1 h-1.5 accent-violet-500 cursor-pointer"
+              aria-label="Volume"
+            />
           </div>
 
           {/* Emoji reaction picker or login prompt */}
