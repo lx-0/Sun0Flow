@@ -12,7 +12,8 @@ import {
   XMarkIcon,
   FunnelIcon,
 } from "@heroicons/react/24/solid";
-import { HeartIcon as HeartOutlineIcon } from "@heroicons/react/24/outline";
+import { HeartIcon as HeartOutlineIcon, CloudArrowDownIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
+import { useOfflineCache } from "@/hooks/useOfflineCache";
 import type { Song } from "@prisma/client";
 import { downloadSongFile } from "@/lib/download";
 import { useToast } from "./Toast";
@@ -71,9 +72,13 @@ interface SongCardProps {
   onPlayToggle: () => void;
   onFavoriteToggle: () => void;
   onDownload: () => void;
+  isCached: boolean;
+  isSaving: boolean;
+  onSaveOffline: () => void;
+  onRemoveOffline: () => void;
 }
 
-function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload }: SongCardProps) {
+function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload, isCached, isSaving, onSaveOffline, onRemoveOffline }: SongCardProps) {
   const hasAudio = !!song.audioUrl;
   const coverUrl = song.imageUrl || "/default-cover.png";
 
@@ -119,6 +124,13 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload 
         {(song.variationCount ?? 0) > 0 && (
           <span className="absolute top-2 right-2 px-1.5 py-0.5 text-[10px] font-medium bg-violet-600/90 text-white rounded-full">
             {(song.variationCount ?? 0) + 1} versions
+          </span>
+        )}
+        {/* Offline badge */}
+        {isCached && (
+          <span className="absolute bottom-2 left-2 px-1.5 py-0.5 text-[10px] font-medium bg-green-600/90 text-white rounded-full flex items-center gap-0.5">
+            <CheckCircleIcon className="w-2.5 h-2.5" />
+            Offline
           </span>
         )}
         {/* Playing indicator */}
@@ -169,6 +181,21 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload 
                 <ArrowDownTrayIcon className="w-4.5 h-4.5 text-gray-400 hover:text-violet-500" />
               </button>
             )}
+            {hasAudio && (
+              <button
+                onClick={isCached ? onRemoveOffline : onSaveOffline}
+                disabled={isSaving}
+                className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center disabled:opacity-50"
+                aria-label={isCached ? "Remove from offline" : "Save for offline playback"}
+                title={isCached ? "Remove from offline" : "Save for offline"}
+              >
+                {isCached ? (
+                  <CheckCircleIcon className="w-4.5 h-4.5 text-green-500" />
+                ) : (
+                  <CloudArrowDownIcon className={`w-4.5 h-4.5 ${isSaving ? "text-violet-400 animate-pulse" : "text-gray-400 hover:text-violet-500"}`} />
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -180,6 +207,7 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload 
 
 export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
   const { toast } = useToast();
+  const { cachedIds, saving, saveOffline, removeOffline } = useOfflineCache();
 
   // State
   const [songs, setSongs] = useState<SongWithMeta[]>(initialSongs);
@@ -188,6 +216,7 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
   const [selectedStyles, setSelectedStyles] = useState<Set<string>>(new Set());
   const [selectedMoods, setSelectedMoods] = useState<Set<string>>(new Set());
   const [dateFilter, setDateFilter] = useState<number>(-1); // days, -1 = all
+  const [offlineOnly, setOfflineOnly] = useState(false);
   const [playingSongId, setPlayingSongId] = useState<string | null>(null);
 
   // Audio ref
@@ -248,8 +277,13 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
       }
     }
 
+    // Offline-only filter
+    if (offlineOnly) {
+      result = result.filter((s) => cachedIds.has(s.id));
+    }
+
     return result;
-  }, [songs, search, selectedStyles, selectedMoods, dateFilter]);
+  }, [songs, search, selectedStyles, selectedMoods, dateFilter, offlineOnly, cachedIds]);
 
   // Play/pause toggle
   const handlePlayToggle = useCallback(
@@ -354,12 +388,13 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
     }
   }, []);
 
-  const activeFilterCount = selectedStyles.size + selectedMoods.size + (dateFilter >= 0 ? 1 : 0);
+  const activeFilterCount = selectedStyles.size + selectedMoods.size + (dateFilter >= 0 ? 1 : 0) + (offlineOnly ? 1 : 0);
 
   const clearFilters = () => {
     setSelectedStyles(new Set());
     setSelectedMoods(new Set());
     setDateFilter(-1);
+    setOfflineOnly(false);
     setSearch("");
   };
 
@@ -482,6 +517,24 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
             </div>
           </div>
 
+          {/* Offline */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+              Availability
+            </h3>
+            <button
+              onClick={() => setOfflineOnly(!offlineOnly)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[44px] flex items-center gap-1.5 ${
+                offlineOnly
+                  ? "bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 text-green-700 dark:text-green-300"
+                  : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
+              }`}
+            >
+              <CheckCircleIcon className="w-3.5 h-3.5" />
+              Available offline
+            </button>
+          </div>
+
           {/* Clear all */}
           {activeFilterCount > 0 && (
             <button
@@ -521,6 +574,10 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
               onPlayToggle={() => handlePlayToggle(song)}
               onFavoriteToggle={() => handleFavoriteToggle(song)}
               onDownload={() => handleDownload(song)}
+              isCached={cachedIds.has(song.id)}
+              isSaving={saving.has(song.id)}
+              onSaveOffline={() => saveOffline({ id: song.id, title: song.title, imageUrl: song.imageUrl })}
+              onRemoveOffline={() => removeOffline(song.id)}
             />
           ))}
         </div>

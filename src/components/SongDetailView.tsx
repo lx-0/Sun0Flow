@@ -35,7 +35,8 @@ import {
   CodeBracketIcon,
   ArrowsRightLeftIcon,
 } from "@heroicons/react/24/solid";
-import { HeartIcon as HeartOutlineIcon, QueueListIcon, HandThumbUpIcon as HandThumbUpOutlineIcon, HandThumbDownIcon as HandThumbDownOutlineIcon } from "@heroicons/react/24/outline";
+import { HeartIcon as HeartOutlineIcon, QueueListIcon, HandThumbUpIcon as HandThumbUpOutlineIcon, HandThumbDownIcon as HandThumbDownOutlineIcon, CloudArrowDownIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
+import { useOfflineCache } from "@/hooks/useOfflineCache";
 import type { SunoSong } from "@/lib/sunoapi";
 import { getRating, type SongRating } from "@/lib/ratings";
 import { DownloadButton } from "./DownloadButton";
@@ -936,6 +937,9 @@ export function SongDetailView({
   const userTier = ((session?.user as unknown as Record<string, unknown>)?.subscriptionTier as SubscriptionTier) ?? "free";
   const canSeparateVocals = canUseFeature("vocalSeparation", userTier);
   const { toast } = useToast();
+  const { cachedIds, saving: offlineSaving, saveOffline, removeOffline } = useOfflineCache();
+  const isCached = cachedIds.has(song.id);
+  const isSavingOffline = offlineSaving.has(song.id);
   const { playNext, addToQueue, togglePlay, isPlaying, currentIndex, queue } = useQueue();
   const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
   const isThisSongPlaying = isPlaying && currentSong?.id === song.id;
@@ -1598,6 +1602,28 @@ export function SongDetailView({
         {/* Primary actions */}
         {hasAudio && (
           <DownloadButton song={song} />
+        )}
+        {hasAudio && (
+          <button
+            onClick={() =>
+              isCached
+                ? removeOffline(song.id)
+                : saveOffline({ id: song.id, title: song.title, imageUrl: song.imageUrl ?? null })
+            }
+            disabled={isSavingOffline}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200 active:scale-95 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed ${
+              isCached
+                ? "bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400"
+                : "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
+            }`}
+          >
+            {isCached ? (
+              <CheckCircleIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+            ) : (
+              <CloudArrowDownIcon className={`w-4 h-4 flex-shrink-0 ${isSavingOffline ? "animate-pulse" : ""}`} aria-hidden="true" />
+            )}
+            {isSavingOffline ? "Saving…" : isCached ? "Saved Offline" : "Save Offline"}
+          </button>
         )}
 
         {/* Divider dot */}

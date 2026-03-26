@@ -60,6 +60,10 @@ function isAudioUrl(url) {
   );
 }
 
+function isProxiedAudioRequest(url) {
+  return new URL(url).pathname.startsWith("/api/audio/");
+}
+
 function isGenerateRequest(request) {
   return (
     request.method === "POST" &&
@@ -167,6 +171,31 @@ self.addEventListener("fetch", (event) => {
             headers: { "Content-Type": "application/json" },
           }
         );
+      })
+    );
+    return;
+  }
+
+  // 2a. Proxied audio requests: cache-first for explicitly-saved offline songs,
+  //     network-with-cache-fallback otherwise (enables offline playback).
+  if (isProxiedAudioRequest(url) && request.method === "GET") {
+    event.respondWith(
+      caches.open(AUDIO_CACHE).then(async (cache) => {
+        const cachedResponse = await cache.match(request);
+        if (cachedResponse) return cachedResponse;
+
+        // Not in cache — fetch from network (will succeed when online)
+        try {
+          const networkResponse = await fetch(request);
+          if (networkResponse.ok) {
+            // Store for subsequent requests (the explicit Save Offline action
+            // also stores here, so this acts as a warm-up on first play).
+            cache.put(request, networkResponse.clone());
+          }
+          return networkResponse;
+        } catch {
+          return new Response("Audio not available offline", { status: 503 });
+        }
       })
     );
     return;
