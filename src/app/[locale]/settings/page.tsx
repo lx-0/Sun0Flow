@@ -37,11 +37,20 @@ function FieldError({ error }: { error?: string }) {
 
 // ─── Profile Tab ───
 
+interface ProfileSong {
+  id: string;
+  title: string | null;
+}
+
 function ProfileTab() {
   const { data: session, update: updateSession } = useSession();
   const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [bannerUrl, setBannerUrl] = useState("");
+  const [featuredSongId, setFeaturedSongId] = useState("");
+  const [songs, setSongs] = useState<ProfileSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -53,12 +62,18 @@ function ProfileTab() {
   };
 
   useEffect(() => {
-    fetch("/api/profile")
-      .then((r) => r.json())
-      .then((data) => {
-        setDisplayName(data.name ?? "");
-        setBio(data.bio ?? "");
-        setAvatarUrl(data.avatarUrl ?? "");
+    Promise.all([
+      fetch("/api/profile").then((r) => r.json()),
+      fetch("/api/songs?limit=50").then((r) => r.json()).catch(() => ({ songs: [] })),
+    ])
+      .then(([profile, songsData]) => {
+        setDisplayName(profile.name ?? "");
+        setUsername(profile.username ?? "");
+        setBio(profile.bio ?? "");
+        setAvatarUrl(profile.avatarUrl ?? "");
+        setBannerUrl(profile.bannerUrl ?? "");
+        setFeaturedSongId(profile.featuredSongId ?? "");
+        setSongs(songsData.songs ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -71,9 +86,18 @@ function ProfileTab() {
     if (avatarUrl && !avatarUrl.startsWith("http://") && !avatarUrl.startsWith("https://")) {
       errs.avatarUrl = "Must be a valid URL starting with http:// or https://";
     }
+    if (bannerUrl && !bannerUrl.startsWith("http://") && !bannerUrl.startsWith("https://")) {
+      errs.bannerUrl = "Must be a valid URL starting with http:// or https://";
+    }
+    if (username && !/^[a-z0-9_]+$/.test(username)) {
+      errs.username = "Username may only contain lowercase letters, numbers, and underscores";
+    }
+    if (username && username.length > 30) {
+      errs.username = "Username must be 30 characters or less";
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
-  }, [displayName, bio, avatarUrl]);
+  }, [displayName, bio, avatarUrl, bannerUrl, username]);
 
   const handleSave = async () => {
     if (!validate()) return;
@@ -84,8 +108,11 @@ function ProfileTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: displayName.trim(),
+          username: username.trim().toLowerCase() || null,
           bio: bio.trim() || null,
           avatarUrl: avatarUrl.trim() || null,
+          bannerUrl: bannerUrl.trim() || null,
+          featuredSongId: featuredSongId || null,
         }),
       });
       const data = await res.json();
@@ -172,6 +199,30 @@ function ProfileTab() {
 
         <div className="border-t border-gray-200 dark:border-gray-800" />
 
+        {/* Username */}
+        <section className="space-y-3">
+          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Username</h3>
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <span className="text-sm text-gray-400 dark:text-gray-500 flex-shrink-0">/u/</span>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => { setUsername(e.target.value.toLowerCase()); setErrors((p) => ({ ...p, username: "" })); }}
+                placeholder="yourhandle"
+                maxLength={30}
+                className={`flex-1 bg-white dark:bg-gray-900 border rounded-lg px-3 py-2 text-base text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent ${
+                  errors.username ? "border-red-500" : "border-gray-300 dark:border-gray-700"
+                }`}
+              />
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500">Lowercase letters, numbers, and underscores only.</p>
+            <FieldError error={errors.username} />
+          </div>
+        </section>
+
+        <div className="border-t border-gray-200 dark:border-gray-800" />
+
         {/* Bio */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
@@ -194,6 +245,63 @@ function ProfileTab() {
           </div>
         </section>
 
+        <div className="border-t border-gray-200 dark:border-gray-800" />
+
+        {/* Profile banner */}
+        <section className="space-y-3">
+          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Profile Banner</h3>
+          {bannerUrl && (
+            <div className="w-full h-20 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+              <Image
+                src={bannerUrl}
+                alt="Banner preview"
+                width={600}
+                height={80}
+                className="w-full h-full object-cover"
+                unoptimized
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            </div>
+          )}
+          <div className="space-y-1">
+            <label className="text-xs text-gray-500 dark:text-gray-400">Banner URL</label>
+            <input
+              type="url"
+              value={bannerUrl}
+              onChange={(e) => { setBannerUrl(e.target.value); setErrors((p) => ({ ...p, bannerUrl: "" })); }}
+              placeholder="https://example.com/banner.jpg"
+              className={`w-full bg-white dark:bg-gray-900 border rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent ${
+                errors.bannerUrl ? "border-red-500" : "border-gray-300 dark:border-gray-700"
+              }`}
+            />
+            <FieldError error={errors.bannerUrl} />
+          </div>
+        </section>
+
+        <div className="border-t border-gray-200 dark:border-gray-800" />
+
+        {/* Featured song */}
+        {songs.length > 0 && (
+          <>
+            <section className="space-y-3">
+              <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Featured Song</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Pin one of your public songs to the top of your profile.</p>
+              <select
+                value={featuredSongId}
+                onChange={(e) => setFeaturedSongId(e.target.value)}
+                className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-base text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              >
+                <option value="">None</option>
+                {songs.map((s) => (
+                  <option key={s.id} value={s.id}>{s.title ?? "Untitled"}</option>
+                ))}
+              </select>
+            </section>
+
+            <div className="border-t border-gray-200 dark:border-gray-800" />
+          </>
+        )}
+
         {/* Email (read-only) */}
         <section className="space-y-3">
           <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Email</h3>
@@ -213,6 +321,17 @@ function ProfileTab() {
         >
           {saving ? "Saving..." : "Save Profile"}
         </button>
+
+        {username && (
+          <div className="text-center">
+            <Link
+              href={`/u/${username}`}
+              className="text-sm text-violet-500 hover:text-violet-400 transition-colors"
+            >
+              View public profile →
+            </Link>
+          </div>
+        )}
 
         <div className="border-t border-gray-200 dark:border-gray-800" />
 
