@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
+import { recordActivity } from "@/lib/activity";
 
 const MAX_SONGS_PER_PLAYLIST = 500;
 
@@ -13,7 +14,7 @@ export async function POST(
 
     if (authError) return authError;
 
-    // Owner or accepted collaborator can add songs
+    // Owner or accepted editor-role collaborator can add songs
     const playlist = await prisma.playlist.findFirst({
       where: {
         id: params.id,
@@ -21,7 +22,7 @@ export async function POST(
           { userId },
           {
             isCollaborative: true,
-            collaborators: { some: { userId, status: "accepted" } },
+            collaborators: { some: { userId, status: "accepted", role: "editor" } },
           },
         ],
       },
@@ -90,6 +91,17 @@ export async function POST(
         addedByUser: { select: { id: true, name: true, image: true, avatarUrl: true } },
       },
     });
+
+    // Record activity for collaborative playlists
+    if (playlist.isCollaborative) {
+      recordActivity({
+        userId,
+        type: "song_added_to_playlist",
+        songId,
+        playlistId: playlist.id,
+        metadata: { songTitle: song.title ?? undefined },
+      });
+    }
 
     return NextResponse.json({ playlistSong }, { status: 201 });
   } catch {

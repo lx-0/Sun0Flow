@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function recordActivity(params: {
   userId: string;
-  type: "song_created" | "playlist_created" | "song_favorited";
+  type: "song_created" | "playlist_created" | "song_favorited" | "song_added_to_playlist" | "song_removed_from_playlist";
   songId?: string;
   playlistId?: string;
   metadata?: Record<string, unknown>;

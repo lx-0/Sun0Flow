@@ -227,6 +227,7 @@ model PlaylistCollaborator {
   inviteToken      String    @unique @default(cuid())
   inviteExpiresAt  DateTime
   status           String    @default("pending") // pending, accepted
+  role             String    @default("editor")  // editor, viewer
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

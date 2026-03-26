@@ -29,7 +29,7 @@ export async function GET(
     const collaborators = await prisma.playlistCollaborator.findMany({
       where: { playlistId: playlist.id },
       include: {
-        user: { select: { id: true, name: true, image: true, avatarUrl: true } },
+        user: { select: { id: true, name: true, image: true, avatarUrl: true, username: true } },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -43,7 +43,9 @@ export async function GET(
   }
 }
 
-// POST /api/playlists/[id]/collaborators — generate invite link
+// POST /api/playlists/[id]/collaborators
+// Body: {} — generate a shareable invite link
+// Body: { username: string, role?: "editor"|"viewer" } — invite by username (auto-accepted)
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
@@ -67,15 +69,77 @@ export async function POST(
       );
     }
 
+    const body = await request.json().catch(() => ({}));
+    const { username, role } = body as { username?: string; role?: string };
+    const collaboratorRole = role === "viewer" ? "viewer" : "editor";
+
     const inviteExpiresAt = new Date();
     inviteExpiresAt.setDate(inviteExpiresAt.getDate() + INVITE_TTL_DAYS);
 
+    // Invite by username — look up user and auto-accept
+    if (username) {
+      if (typeof username !== "string" || username.trim().length === 0) {
+        return NextResponse.json(
+          { error: "username is required", code: "VALIDATION_ERROR" },
+          { status: 400 }
+        );
+      }
+
+      const targetUser = await prisma.user.findFirst({
+        where: { username: username.trim() },
+        select: { id: true, name: true, image: true, avatarUrl: true, username: true },
+      });
+
+      if (!targetUser) {
+        return NextResponse.json(
+          { error: "User not found", code: "NOT_FOUND" },
+          { status: 404 }
+        );
+      }
+
+      if (targetUser.id === userId) {
+        return NextResponse.json(
+          { error: "You own this playlist", code: "VALIDATION_ERROR" },
+          { status: 400 }
+        );
+      }
+
+      // Check if already a collaborator
+      const existing = await prisma.playlistCollaborator.findFirst({
+        where: { playlistId: playlist.id, userId: targetUser.id, status: "accepted" },
+      });
+      if (existing) {
+        return NextResponse.json(
+          { error: "User is already a collaborator", code: "VALIDATION_ERROR" },
+          { status: 400 }
+        );
+      }
+
+      const collaborator = await prisma.playlistCollaborator.create({
+        data: {
+          playlistId: playlist.id,
+          userId: targetUser.id,
+          inviteToken: generateInviteToken(),
+          inviteExpiresAt,
+          status: "accepted",
+          role: collaboratorRole,
+        },
+        include: {
+          user: { select: { id: true, name: true, image: true, avatarUrl: true, username: true } },
+        },
+      });
+
+      return NextResponse.json({ collaborator }, { status: 201 });
+    }
+
+    // Generate shareable invite link
     const collaborator = await prisma.playlistCollaborator.create({
       data: {
         playlistId: playlist.id,
         inviteToken: generateInviteToken(),
         inviteExpiresAt,
         status: "pending",
+        role: collaboratorRole,
       },
     });
 
@@ -86,6 +150,7 @@ export async function POST(
           inviteToken: collaborator.inviteToken,
           inviteExpiresAt: collaborator.inviteExpiresAt,
           status: collaborator.status,
+          role: collaborator.role,
         },
       },
       { status: 201 }

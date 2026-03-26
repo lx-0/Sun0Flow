@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
+import { recordActivity } from "@/lib/activity";
 
 export async function DELETE(
   request: Request,
@@ -11,7 +12,7 @@ export async function DELETE(
 
     if (authError) return authError;
 
-    // Find playlist — allow owner or collaborator
+    // Find playlist — allow owner or editor-role collaborator
     const playlist = await prisma.playlist.findFirst({
       where: {
         id: params.id,
@@ -19,7 +20,7 @@ export async function DELETE(
           { userId },
           {
             isCollaborative: true,
-            collaborators: { some: { userId, status: "accepted" } },
+            collaborators: { some: { userId, status: "accepted", role: "editor" } },
           },
         ],
       },
@@ -36,6 +37,7 @@ export async function DELETE(
           songId: params.songId,
         },
       },
+      include: { song: { select: { title: true } } },
     });
 
     if (!playlistSong) {
@@ -72,6 +74,17 @@ export async function DELETE(
         })
       )
     );
+
+    // Record activity for collaborative playlists
+    if (playlist.isCollaborative) {
+      recordActivity({
+        userId,
+        type: "song_removed_from_playlist",
+        songId: params.songId,
+        playlistId: playlist.id,
+        metadata: { songTitle: playlistSong.song?.title ?? undefined },
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch {

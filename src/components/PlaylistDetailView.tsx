@@ -56,6 +56,7 @@ interface CollaboratorUser {
   name: string | null;
   image: string | null;
   avatarUrl: string | null;
+  username?: string | null;
 }
 
 interface PlaylistSongItem {
@@ -70,7 +71,16 @@ interface PlaylistCollaboratorItem {
   id: string;
   userId: string | null;
   status: string;
+  role?: string;
   user: CollaboratorUser | null;
+}
+
+interface PlaylistActivityItem {
+  id: string;
+  type: string;
+  createdAt: string;
+  user: CollaboratorUser | null;
+  song: { id: string; title: string | null; imageUrl: string | null } | null;
 }
 
 interface PlaylistData {
@@ -320,6 +330,14 @@ export function PlaylistDetailView({
   const [isTogglingCollab, setIsTogglingCollab] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
+  const [inviteUsername, setInviteUsername] = useState("");
+  const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
+  const [isInvitingByUsername, setIsInvitingByUsername] = useState(false);
+
+  // Activity feed state
+  const [activities, setActivities] = useState<PlaylistActivityItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [showActivityFeed, setShowActivityFeed] = useState(false);
 
   // Batch selection state
   const [selectedSongIds, setSelectedSongIds] = useState<Set<string>>(new Set());
@@ -718,6 +736,50 @@ export function PlaylistDetailView({
     }
   }
 
+  async function handleInviteByUsername(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteUsername.trim() || isInvitingByUsername) return;
+    setIsInvitingByUsername(true);
+    try {
+      const res = await fetch(`/api/playlists/${playlist.id}/collaborators`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: inviteUsername.trim(), role: inviteRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error ?? "Failed to invite user", "error"); return; }
+      setCollaborators((prev) => [...prev, data.collaborator]);
+      setInviteUsername("");
+      toast(`${data.collaborator.user?.name ?? inviteUsername} added as ${inviteRole}`, "success");
+    } catch {
+      toast("Failed to invite user", "error");
+    } finally {
+      setIsInvitingByUsername(false);
+    }
+  }
+
+  async function handleLoadActivity() {
+    if (activityLoading) return;
+    setActivityLoading(true);
+    try {
+      const res = await fetch(`/api/playlists/${playlist.id}/activity`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setActivities(data.activities ?? []);
+    } catch {
+      // non-fatal
+    } finally {
+      setActivityLoading(false);
+    }
+  }
+
+  function handleToggleActivityFeed() {
+    if (!showActivityFeed && activities.length === 0) {
+      handleLoadActivity();
+    }
+    setShowActivityFeed((prev) => !prev);
+  }
+
   const totalDuration = songs.reduce(
     (sum, ps) => sum + (ps.song.duration ?? 0),
     0
@@ -910,35 +972,70 @@ export function PlaylistDetailView({
             </button>
           </div>
 
-          {/* Invite link — only shown when collaborative */}
+          {/* Invite section — only shown when collaborative */}
           {isCollaborative && (
-            <div className="space-y-2">
-              <button
-                onClick={handleGenerateInvite}
-                disabled={isGeneratingInvite}
-                className="flex items-center gap-2 text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-500 transition-colors disabled:opacity-50"
-              >
-                <UserPlusIcon className="w-4 h-4" />
-                {isGeneratingInvite ? "Generating…" : "Generate invite link"}
-              </button>
-
-              {inviteLink && (
+            <div className="space-y-3">
+              {/* Invite by username */}
+              <form onSubmit={handleInviteByUsername} className="space-y-2">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Invite by username</p>
                 <div className="flex gap-2">
                   <input
-                    readOnly
-                    aria-label="Invite link"
-                    value={inviteLink}
-                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none"
+                    type="text"
+                    aria-label="Username to invite"
+                    placeholder="@username"
+                    value={inviteUsername}
+                    onChange={(e) => setInviteUsername(e.target.value)}
+                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-500"
                   />
-                  <button
-                    onClick={handleCopyInviteLink}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors whitespace-nowrap"
+                  <select
+                    aria-label="Collaborator role"
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as "editor" | "viewer")}
+                    className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-500"
                   >
-                    <LinkIcon className="w-3.5 h-3.5" />
-                    Copy
+                    <option value="editor">Editor</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                  <button
+                    type="submit"
+                    disabled={!inviteUsername.trim() || isInvitingByUsername}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <UserPlusIcon className="w-3.5 h-3.5" />
+                    {isInvitingByUsername ? "Adding…" : "Add"}
                   </button>
                 </div>
-              )}
+              </form>
+
+              {/* Generate shareable invite link */}
+              <div className="space-y-2">
+                <button
+                  onClick={handleGenerateInvite}
+                  disabled={isGeneratingInvite}
+                  className="flex items-center gap-2 text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-500 transition-colors disabled:opacity-50"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  {isGeneratingInvite ? "Generating…" : "Generate invite link"}
+                </button>
+
+                {inviteLink && (
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      aria-label="Invite link"
+                      value={inviteLink}
+                      className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none"
+                    />
+                    <button
+                      onClick={handleCopyInviteLink}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors whitespace-nowrap"
+                    >
+                      <LinkIcon className="w-3.5 h-3.5" />
+                      Copy
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -962,7 +1059,12 @@ export function PlaylistDetailView({
                         (c.user?.name?.[0] ?? "?").toUpperCase()
                       )}
                     </div>
-                    <span className="text-sm text-gray-900 dark:text-white">{c.user?.name ?? "Unknown"}</span>
+                    <div>
+                      <span className="text-sm text-gray-900 dark:text-white">{c.user?.name ?? "Unknown"}</span>
+                      <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${c.role === "viewer" ? "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400" : "bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400"}`}>
+                        {c.role ?? "editor"}
+                      </span>
+                    </div>
                   </div>
                   <button
                     onClick={() => handleRemoveCollaborator(c.id)}
@@ -1189,6 +1291,62 @@ export function PlaylistDetailView({
           >
             <XMarkIcon className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Activity feed — collaborative playlists only */}
+      {isCollaborative && (
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+          <button
+            onClick={handleToggleActivityFeed}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <UserGroupIcon className="w-4 h-4 text-violet-500" />
+              Activity feed
+            </span>
+            <span className="text-xs text-gray-400">{showActivityFeed ? "▲" : "▼"}</span>
+          </button>
+
+          {showActivityFeed && (
+            <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3 space-y-3">
+              {activityLoading ? (
+                <p className="text-xs text-gray-400 text-center py-2">Loading…</p>
+              ) : activities.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-2">No activity yet. Start adding songs!</p>
+              ) : (
+                activities.map((a) => (
+                  <div key={a.id} className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-full bg-violet-100 dark:bg-violet-900 flex items-center justify-center text-xs font-medium text-violet-700 dark:text-violet-300 overflow-hidden flex-shrink-0 mt-0.5">
+                      {(a.user?.avatarUrl ?? a.user?.image) ? (
+                        <Image
+                          src={(a.user?.avatarUrl ?? a.user?.image)!}
+                          alt={a.user?.name ?? "User"}
+                          width={28}
+                          height={28}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        (a.user?.name?.[0] ?? "?").toUpperCase()
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-700 dark:text-gray-300">
+                        <span className="font-medium">{a.user?.name ?? "Someone"}</span>
+                        {" "}
+                        {a.type === "song_added_to_playlist" ? "added" : "removed"}
+                        {" "}
+                        <span className="font-medium">{a.song?.title ?? "a song"}</span>
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(a.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       )}
 
