@@ -530,12 +530,14 @@ model Comment {
   songId    String
   userId    String
   body      String   @db.Text
+  timestamp Float?   // seconds into the song; null = non-timestamped comment
   createdAt DateTime @default(now())
 
   song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([songId, createdAt])
+  @@index([songId, timestamp])
   @@index([userId])
 }
 

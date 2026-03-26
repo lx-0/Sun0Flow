@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ChatBubbleLeftIcon } from "@heroicons/react/24/outline";
+import { ChatBubbleLeftIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { ClockIcon } from "@heroicons/react/24/solid";
 
 interface CommentUser {
   id: string;
@@ -15,6 +16,7 @@ interface CommentUser {
 interface Comment {
   id: string;
   body: string;
+  timestamp: number | null;
   createdAt: string;
   user: CommentUser;
 }
@@ -38,6 +40,10 @@ function formatRelativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function fmtTimestamp(s: number): string {
+  return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+}
+
 function Avatar({ user }: { user: CommentUser }) {
   const initials = (user.name ?? "?").charAt(0).toUpperCase();
   if (user.image) {
@@ -58,13 +64,24 @@ function Avatar({ user }: { user: CommentUser }) {
   );
 }
 
-export function CommentsSection({ songId }: { songId: string }) {
+export function CommentsSection({
+  songId,
+  currentTime,
+  duration,
+  onSeek,
+}: {
+  songId: string;
+  currentTime?: number;
+  duration?: number;
+  onSeek?: (seconds: number) => void;
+}) {
   const { data: session } = useSession();
   const [comments, setComments] = useState<Comment[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [draft, setDraft] = useState("");
+  const [pendingTimestamp, setPendingTimestamp] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +106,17 @@ export function CommentsSection({ songId }: { songId: string }) {
     fetchComments(1);
   }, [fetchComments]);
 
+  // Capture current playback position as the pending timestamp
+  function captureTimestamp() {
+    if (currentTime !== undefined && currentTime > 0) {
+      setPendingTimestamp(currentTime);
+    }
+  }
+
+  function clearTimestamp() {
+    setPendingTimestamp(null);
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = draft.trim();
@@ -99,15 +127,25 @@ export function CommentsSection({ songId }: { songId: string }) {
       const res = await fetch(`/api/songs/${songId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: text }),
+        body: JSON.stringify({ body: text, timestamp: pendingTimestamp }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Failed to post comment");
       } else {
-        setComments((prev) => [data, ...prev]);
+        setComments((prev) => {
+          // Insert comment in sorted position (by timestamp, then date)
+          const next = [data, ...prev];
+          return next.sort((a, b) => {
+            if (a.timestamp !== null && b.timestamp !== null) return a.timestamp - b.timestamp;
+            if (a.timestamp !== null) return -1;
+            if (b.timestamp !== null) return 1;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
+        });
         setPagination((prev) => prev ? { ...prev, total: prev.total + 1 } : prev);
         setDraft("");
+        setPendingTimestamp(null);
       }
     } catch {
       setError("Network error");
@@ -115,6 +153,22 @@ export function CommentsSection({ songId }: { songId: string }) {
       setSubmitting(false);
     }
   };
+
+  const handleDelete = async (commentId: string) => {
+    try {
+      const res = await fetch(`/api/songs/${songId}/comments/${commentId}`, {
+        method: "DELETE",
+      });
+      if (res.ok || res.status === 204) {
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+        setPagination((prev) => prev ? { ...prev, total: Math.max(0, prev.total - 1) } : prev);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const canAttachTimestamp = currentTime !== undefined && duration !== undefined && duration > 0;
 
   return (
     <div className="space-y-4">
@@ -133,11 +187,37 @@ export function CommentsSection({ songId }: { songId: string }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Add a comment…"
             rows={2}
-            maxLength={1000}
+            maxLength={280}
             className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
           />
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              {pendingTimestamp !== null ? (
+                <span className="flex items-center gap-1 text-xs bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">
+                  <ClockIcon className="w-3 h-3" />
+                  {fmtTimestamp(pendingTimestamp)}
+                  <button
+                    type="button"
+                    onClick={clearTimestamp}
+                    className="ml-0.5 text-violet-400 hover:text-violet-600 dark:hover:text-violet-200"
+                    aria-label="Remove timestamp"
+                  >
+                    ×
+                  </button>
+                </span>
+              ) : canAttachTimestamp ? (
+                <button
+                  type="button"
+                  onClick={captureTimestamp}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
+                >
+                  <ClockIcon className="w-3 h-3" />
+                  {currentTime! > 0 ? `@ ${fmtTimestamp(currentTime!)}` : "Attach timestamp"}
+                </button>
+              ) : null}
+              <span className="text-xs text-gray-400 dark:text-gray-600">{draft.length}/280</span>
+            </div>
+            {error && <p className="text-xs text-red-500 flex-1">{error}</p>}
             <button
               type="submit"
               disabled={submitting || !draft.trim()}
@@ -171,13 +251,24 @@ export function CommentsSection({ songId }: { songId: string }) {
       ) : (
         <ul className="space-y-4">
           {comments.map((comment) => (
-            <li key={comment.id} className="flex gap-3">
+            <li key={comment.id} className="flex gap-3 group">
               <Avatar user={comment.user} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
                     {comment.user.name ?? "Anonymous"}
                   </span>
+                  {comment.timestamp !== null && (
+                    <button
+                      type="button"
+                      onClick={() => onSeek?.(comment.timestamp!)}
+                      className="flex items-center gap-0.5 text-xs text-violet-500 hover:text-violet-400 font-medium transition-colors"
+                      title="Jump to this moment"
+                    >
+                      <ClockIcon className="w-3 h-3" />
+                      {fmtTimestamp(comment.timestamp)}
+                    </button>
+                  )}
                   <span className="text-xs text-gray-400 dark:text-gray-500">
                     {formatRelativeTime(comment.createdAt)}
                   </span>
@@ -186,6 +277,16 @@ export function CommentsSection({ songId }: { songId: string }) {
                   {comment.body}
                 </p>
               </div>
+              {session?.user?.id === comment.user.id && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(comment.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 flex-shrink-0 self-start mt-0.5"
+                  aria-label="Delete comment"
+                >
+                  <TrashIcon className="w-3.5 h-3.5" />
+                </button>
+              )}
             </li>
           ))}
         </ul>

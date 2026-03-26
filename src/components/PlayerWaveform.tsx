@@ -68,6 +68,7 @@ export interface PlayerWaveformProps {
   isBuffering: boolean;
   onSeek: (fraction: number) => void;
   reactionTimestamps?: number[];
+  commentTimestamps?: number[];
 }
 
 export function PlayerWaveform({
@@ -77,6 +78,7 @@ export function PlayerWaveform({
   isBuffering,
   onSeek,
   reactionTimestamps,
+  commentTimestamps,
 }: PlayerWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragging = useRef(false);
@@ -89,10 +91,12 @@ export function PlayerWaveform({
   const durRef = useRef(duration);
   const bufRef = useRef(isBuffering);
   const reactionsRef = useRef<number[]>([]);
+  const commentsRef = useRef<number[]>([]);
   ctRef.current = currentTime;
   durRef.current = duration;
   bufRef.current = isBuffering;
   reactionsRef.current = reactionTimestamps ?? [];
+  commentsRef.current = commentTimestamps ?? [];
 
   const [peaks, setPeaks] = useState<Float32Array | null>(
     () => peaksCache.get(songId) ?? null
@@ -202,6 +206,22 @@ export function PlayerWaveform({
           const x = barIdx * step + barW / 2;
           ctx.beginPath();
           ctx.arc(x, h - 2, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Comment timestamp markers — violet pip at the top of each marked bar
+      const commentTs = commentsRef.current;
+      if (commentTs.length > 0 && durRef.current > 0) {
+        ctx.fillStyle = "#a78bfa"; // violet-400
+        for (const ts of commentTs) {
+          const barIdx = Math.min(
+            NUM_BARS - 1,
+            Math.max(0, Math.floor((ts / durRef.current) * NUM_BARS))
+          );
+          const x = barIdx * step + barW / 2;
+          ctx.beginPath();
+          ctx.arc(x, 2, 2.5, 0, Math.PI * 2);
           ctx.fill();
         }
       }

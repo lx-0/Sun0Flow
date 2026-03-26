@@ -18,12 +18,14 @@ export async function GET(
     const [comments, total] = await Promise.all([
       prisma.comment.findMany({
         where: { songId: params.id },
-        orderBy: { createdAt: "desc" },
+        // Timestamped comments sorted by position; untimstamped fall to end by createdAt
+        orderBy: [{ timestamp: "asc" }, { createdAt: "desc" }],
         skip,
         take,
         select: {
           id: true,
           body: true,
+          timestamp: true,
           createdAt: true,
           user: {
             select: { id: true, name: true, image: true },
@@ -93,19 +95,33 @@ export async function POST(
     const body = await request.json();
     const text = typeof body?.body === "string" ? body.body.trim() : "";
 
-    if (!text || text.length > 1000) {
+    if (!text || text.length > 280) {
       return NextResponse.json(
-        { error: "Comment body must be 1–1000 characters", code: "VALIDATION_ERROR" },
+        { error: "Comment body must be 1–280 characters", code: "VALIDATION_ERROR" },
         { status: 400 }
       );
     }
 
+    // Optional timestamp (seconds into the song)
+    let timestamp: number | null = null;
+    if (body?.timestamp !== undefined && body?.timestamp !== null) {
+      const ts = Number(body.timestamp);
+      if (!isFinite(ts) || ts < 0) {
+        return NextResponse.json(
+          { error: "Invalid timestamp", code: "VALIDATION_ERROR" },
+          { status: 400 }
+        );
+      }
+      timestamp = ts;
+    }
+
     const [comment] = await prisma.$transaction([
       prisma.comment.create({
-        data: { songId: params.id, userId, body: text },
+        data: { songId: params.id, userId, body: text, timestamp },
         select: {
           id: true,
           body: true,
+          timestamp: true,
           createdAt: true,
           user: { select: { id: true, name: true, image: true } },
         },

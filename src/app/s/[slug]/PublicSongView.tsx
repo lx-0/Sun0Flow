@@ -337,7 +337,16 @@ export function PublicSongView({
 
       {/* Comments */}
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-        <CommentsSection songId={songId} />
+        <CommentsSection
+          songId={songId}
+          currentTime={currentTime}
+          duration={audioDuration}
+          onSeek={(seconds) => {
+            if (audioRef.current && audioDuration > 0) {
+              audioRef.current.currentTime = seconds;
+            }
+          }}
+        />
       </div>
 
       {/* Branding */}
