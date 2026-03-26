@@ -165,6 +165,7 @@ model Song {
   lyricTimestamps      LyricTimestamp[]
   lyricAnnotations     LyricAnnotation[]
   playbackStates       PlaybackState[]
+  playEvents           PlayEvent[]
 
   @@index([userId, title])
   @@index([userId, prompt])
@@ -728,4 +729,17 @@ model LyricAnnotation {
 
   @@unique([songId, lineIndex])
   @@index([songId])
+}
+
+model PlayEvent {
+  id          String   @id @default(cuid())
+  songId      String
+  listenerId  String?  // null for anonymous
+  startedAt   DateTime @default(now())
+  durationSec Float?   // seconds listened; null if not recorded
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId, startedAt])
+  @@index([listenerId, startedAt])
 }
