@@ -9,7 +9,7 @@ export async function GET(request: Request) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { sunoApiKey: true },
+    select: { sunoApiKey: true, usePersonalApiKey: true },
   });
 
   if (!user) {
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     ? user.sunoApiKey.slice(0, 4) + "…" + user.sunoApiKey.slice(-4)
     : null;
 
-  return NextResponse.json({ hasKey, maskedKey });
+  return NextResponse.json({ hasKey, maskedKey, usePersonalApiKey: user.usePersonalApiKey });
 }
 
 export async function PATCH(request: Request) {
@@ -30,27 +30,49 @@ export async function PATCH(request: Request) {
 
   if (authError) return authError;
 
-  const { sunoApiKey } = await request.json();
+  const body = await request.json();
+  const { sunoApiKey, usePersonalApiKey } = body;
 
-  if (typeof sunoApiKey !== "string") {
+  // Must provide at least one field
+  if (sunoApiKey === undefined && usePersonalApiKey === undefined) {
     return NextResponse.json(
-      { error: "sunoApiKey must be a string", code: "VALIDATION_ERROR" },
+      { error: "Provide sunoApiKey or usePersonalApiKey", code: "VALIDATION_ERROR" },
       { status: 400 }
     );
   }
 
-  // Empty string means "remove key"
-  const keyValue = sunoApiKey.trim() || null;
+  const updateData: { sunoApiKey?: string | null; usePersonalApiKey?: boolean } = {};
 
-  await prisma.user.update({
+  if (sunoApiKey !== undefined) {
+    if (typeof sunoApiKey !== "string") {
+      return NextResponse.json(
+        { error: "sunoApiKey must be a string", code: "VALIDATION_ERROR" },
+        { status: 400 }
+      );
+    }
+    updateData.sunoApiKey = sunoApiKey.trim() || null;
+  }
+
+  if (usePersonalApiKey !== undefined) {
+    if (typeof usePersonalApiKey !== "boolean") {
+      return NextResponse.json(
+        { error: "usePersonalApiKey must be a boolean", code: "VALIDATION_ERROR" },
+        { status: 400 }
+      );
+    }
+    updateData.usePersonalApiKey = usePersonalApiKey;
+  }
+
+  const updated = await prisma.user.update({
     where: { id: userId },
-    data: { sunoApiKey: keyValue },
+    data: updateData,
+    select: { sunoApiKey: true, usePersonalApiKey: true },
   });
 
-  const hasKey = Boolean(keyValue);
-  const maskedKey = keyValue
-    ? keyValue.slice(0, 4) + "…" + keyValue.slice(-4)
+  const hasKey = Boolean(updated.sunoApiKey);
+  const maskedKey = updated.sunoApiKey
+    ? updated.sunoApiKey.slice(0, 4) + "…" + updated.sunoApiKey.slice(-4)
     : null;
 
-  return NextResponse.json({ hasKey, maskedKey });
+  return NextResponse.json({ hasKey, maskedKey, usePersonalApiKey: updated.usePersonalApiKey });
 }

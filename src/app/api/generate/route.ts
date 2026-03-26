@@ -5,7 +5,7 @@ import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { prisma } from "@/lib/prisma";
 import { acquireRateLimitSlot, releaseRateLimitSlot } from "@/lib/rate-limit";
-import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
+import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
 import { invalidateByPrefix } from "@/lib/cache";
@@ -40,9 +40,12 @@ export async function POST(request: Request) {
 
     if (authError) return authError;
 
-    // Atomically check and claim a rate limit slot (admins are exempt)
+    // Resolve personal API key early so we can skip rate limits/credits if active
+    const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
+
+    // Atomically check and claim a rate limit slot (admins and personal-key users are exempt)
     let rateLimitStatus;
-    if (!isAdmin) {
+    if (!isAdmin && !usingPersonalKey) {
       const { acquired, status } = await acquireRateLimitSlot(userId);
       if (!acquired) {
         const retryAfterSec = Math.max(
@@ -90,15 +93,15 @@ export async function POST(request: Request) {
       instrumental: Boolean(makeInstrumental),
     };
 
-    // Check credit balance before consuming any upstream resources
-    const creditUsage = await getMonthlyCreditUsage(userId);
-    if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
-      return insufficientCredits(
-        `Insufficient credits. You need ${CREDIT_COSTS.generate} credits but only have ${creditUsage.creditsRemaining} remaining.`
-      );
+    // Check credit balance before consuming any upstream resources (skip for personal key users)
+    if (!usingPersonalKey) {
+      const creditUsage = await getMonthlyCreditUsage(userId);
+      if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
+        return insufficientCredits(
+          `Insufficient credits. You need ${CREDIT_COSTS.generate} credits but only have ${creditUsage.creditsRemaining} remaining.`
+        );
+      }
     }
-
-    const userApiKey = await resolveUserApiKey(userId);
 
     // If no API key at all (env or user), fall back to mock for demo mode
     const hasApiKey = !!(userApiKey || SUNOAPI_KEY);
@@ -167,7 +170,7 @@ export async function POST(request: Request) {
         });
 
         // Release the rate limit slot so the failed attempt doesn't count
-        if (!isAdmin) {
+        if (!isAdmin && !usingPersonalKey) {
           await releaseRateLimitSlot(userId).catch(() => {});
         }
 
@@ -200,23 +203,25 @@ export async function POST(request: Request) {
       }
     }
 
-    // Record credit usage for this generation
-    const songId = savedSongs[0]?.id;
-    await recordCreditUsage(userId, "generate", {
-      songId,
-      creditCost: CREDIT_COSTS.generate,
-      description: `Song generation: ${generationParams.title || "Untitled"}`,
-    });
+    // Record credit usage (skip for personal key users — they consume their own quota)
+    if (!usingPersonalKey) {
+      const songId = savedSongs[0]?.id;
+      await recordCreditUsage(userId, "generate", {
+        songId,
+        creditCost: CREDIT_COSTS.generate,
+        description: `Song generation: ${generationParams.title || "Untitled"}`,
+      });
 
-    // Check if user should be warned about low credits
-    try {
-      const shouldNotify = await shouldNotifyLowCredits(userId);
-      if (shouldNotify) {
-        const usage = await getMonthlyCreditUsage(userId);
-        await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
+      // Check if user should be warned about low credits
+      try {
+        const shouldNotify = await shouldNotifyLowCredits(userId);
+        if (shouldNotify) {
+          const usage = await getMonthlyCreditUsage(userId);
+          await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
+        }
+      } catch {
+        // Non-critical — don't block generation
       }
-    } catch {
-      // Non-critical — don't block generation
     }
 
     // Rate limit slot already claimed above

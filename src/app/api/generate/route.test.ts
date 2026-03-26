@@ -63,6 +63,7 @@ vi.mock("@/lib/rate-limit", () => ({
 
 vi.mock("@/lib/sunoapi/resolve-key", () => ({
   resolveUserApiKey: vi.fn(),
+  resolveUserApiKeyWithMode: vi.fn(),
 }));
 
 vi.mock("@/lib/error-logger", () => ({
@@ -85,7 +86,7 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
-import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
+import { resolveUserApiKey, resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import {
   getMonthlyCreditUsage,
@@ -127,6 +128,7 @@ beforeEach(() => {
     status: { remaining: 5, limit: 10, resetAt: new Date().toISOString() },
   });
   vi.mocked(resolveUserApiKey).mockResolvedValue(undefined);
+  vi.mocked(resolveUserApiKeyWithMode).mockResolvedValue({ apiKey: undefined, usingPersonalKey: false });
   vi.mocked(getMonthlyCreditUsage).mockResolvedValue(DEFAULT_CREDIT_USAGE);
   vi.mocked(recordCreditUsage).mockResolvedValue(undefined as never);
   vi.mocked(shouldNotifyLowCredits).mockResolvedValue(false);

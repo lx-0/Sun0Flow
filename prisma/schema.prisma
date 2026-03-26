@@ -44,6 +44,7 @@ model User {
   image         String?
   passwordHash         String?
   sunoApiKey           String?
+  usePersonalApiKey    Boolean   @default(false)
   verificationToken    String?   @unique
   resetToken           String?   @unique
   resetTokenExpiry     DateTime?

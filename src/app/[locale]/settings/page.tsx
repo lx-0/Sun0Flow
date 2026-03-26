@@ -1905,8 +1905,10 @@ function ApiKeySection() {
   const [apiKey, setApiKey] = useState("");
   const [maskedKey, setMaskedKey] = useState<string | null>(null);
   const [hasKey, setHasKey] = useState(false);
+  const [usePersonalApiKey, setUsePersonalApiKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [togglingPersonal, setTogglingPersonal] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [status, setStatus] = useState<SunoStatus | null>(null);
   const [testing, setTesting] = useState(false);
@@ -1935,6 +1937,7 @@ function ApiKeySection() {
       .then((data) => {
         setHasKey(data.hasKey);
         setMaskedKey(data.maskedKey);
+        setUsePersonalApiKey(data.usePersonalApiKey ?? false);
         if (data.hasKey) {
           checkStatus();
         }
@@ -1979,7 +1982,7 @@ function ApiKeySection() {
       const res = await fetch("/api/profile/api-key", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sunoApiKey: "" }),
+        body: JSON.stringify({ sunoApiKey: "", usePersonalApiKey: false }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1989,12 +1992,39 @@ function ApiKeySection() {
         setMaskedKey(null);
         setApiKey("");
         setStatus(null);
+        setUsePersonalApiKey(false);
         showToast("API key removed", "success");
       }
     } catch {
       showToast("Network error", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTogglePersonalKey = async (enabled: boolean) => {
+    if (enabled && !hasKey) {
+      showToast("Enter and save your API key first", "error");
+      return;
+    }
+    setTogglingPersonal(true);
+    try {
+      const res = await fetch("/api/profile/api-key", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usePersonalApiKey: enabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error ?? "Failed to update setting", "error");
+      } else {
+        setUsePersonalApiKey(data.usePersonalApiKey);
+        showToast(data.usePersonalApiKey ? "Using personal API key" : "Using shared app key", "success");
+      }
+    } catch {
+      showToast("Network error", "error");
+    } finally {
+      setTogglingPersonal(false);
     }
   };
 
@@ -2085,6 +2115,37 @@ function ApiKeySection() {
                 {saving ? "Saving..." : "Save"}
               </button>
             </div>
+
+            <div className={`flex items-center justify-between rounded-lg px-3 py-2.5 border ${hasKey ? "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700" : "bg-gray-50 dark:bg-gray-800/30 border-gray-200 dark:border-gray-700 opacity-60"}`}>
+              <div>
+                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Use personal API key</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {usePersonalApiKey && hasKey
+                    ? "Using your personal API key — app rate limits and credits do not apply."
+                    : "When enabled, uses your key instead of the shared app key."}
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={usePersonalApiKey}
+                onClick={() => handleTogglePersonalKey(!usePersonalApiKey)}
+                disabled={togglingPersonal || (!hasKey && !usePersonalApiKey)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${usePersonalApiKey && hasKey ? "bg-violet-600" : "bg-gray-300 dark:bg-gray-600"}`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition duration-200 ease-in-out ${usePersonalApiKey && hasKey ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+
+            {usePersonalApiKey && hasKey && (
+              <div className="flex items-center gap-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg px-3 py-2">
+                <KeyIcon className="w-4 h-4 text-violet-600 dark:text-violet-400 flex-shrink-0" />
+                <span className="text-xs text-violet-700 dark:text-violet-300">
+                  Using your personal Suno API key. App rate limits and credits do not apply.
+                </span>
+              </div>
+            )}
           </>
         )}
       </section>
