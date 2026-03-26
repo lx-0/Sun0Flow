@@ -32,6 +32,7 @@ import {
   QueueListIcon,
   Squares2X2Icon,
   ListBulletIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { PlayIcon as PlayOutlineIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
@@ -39,7 +40,7 @@ import { CoverArtImage } from "./CoverArtImage";
 import type { Song } from "@prisma/client";
 import type { SongRating } from "@/lib/ratings";
 import { downloadSongFile } from "@/lib/download";
-import { exportAsZip, exportAsM3U, type ExportableSong } from "@/lib/export";
+import { exportAsZip, exportAsM3U, type ExportableSong, type AudioFormat } from "@/lib/export";
 import dynamic from "next/dynamic";
 import { useToast } from "./Toast";
 import { useQueue, type QueueSong } from "./QueueContext";
@@ -1566,8 +1567,11 @@ export function LibraryView({
   const [batchPlaylists, setBatchPlaylists] = useState<PlaylistOption[]>([]);
   const [batchDownloading, setBatchDownloading] = useState(false);
   const [batchDownloadProgress, setBatchDownloadProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [showBatchDownloadFormatMenu, setShowBatchDownloadFormatMenu] = useState(false);
+  const [batchDownloadFormat, setBatchDownloadFormat] = useState<AudioFormat>("mp3");
   const batchTagMenuRef = useRef<HTMLDivElement>(null);
   const batchPlaylistMenuRef = useRef<HTMLDivElement>(null);
+  const batchDownloadFormatMenuRef = useRef<HTMLDivElement>(null);
 
   // Close batch tag menu on outside click
   useEffect(() => {
@@ -1594,6 +1598,19 @@ export function LibraryView({
       return () => document.removeEventListener("mousedown", handleClick);
     }
   }, [showBatchPlaylistMenu]);
+
+  // Close batch download format menu on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (batchDownloadFormatMenuRef.current && !batchDownloadFormatMenuRef.current.contains(e.target as Node)) {
+        setShowBatchDownloadFormatMenu(false);
+      }
+    }
+    if (showBatchDownloadFormatMenu) {
+      document.addEventListener("mousedown", handleClick);
+      return () => document.removeEventListener("mousedown", handleClick);
+    }
+  }, [showBatchDownloadFormatMenu]);
 
   async function handleBatchTag(tagId: string) {
     setShowBatchTagMenu(false);
@@ -1658,7 +1675,8 @@ export function LibraryView({
     } catch { /* ignore */ }
   }
 
-  async function handleBatchDownload() {
+  async function handleBatchDownload(fmt: AudioFormat = batchDownloadFormat) {
+    setShowBatchDownloadFormatMenu(false);
     if (selectedSongIds.size === 0) return;
     const selectedSongs = songs
       .filter((s) => selectedSongIds.has(s.id) && s.audioUrl && s.generationStatus === "ready")
@@ -1677,10 +1695,12 @@ export function LibraryView({
     setBatchDownloading(true);
     setBatchDownloadProgress({ completed: 0, total: selectedSongs.length });
     try {
-      await exportAsZip(selectedSongs, (completed, total) => {
-        setBatchDownloadProgress({ completed, total });
-      });
-      toast(`Downloaded ${selectedSongs.length} song${selectedSongs.length !== 1 ? "s" : ""} as ZIP`, "success");
+      await exportAsZip(
+        selectedSongs,
+        (completed, total) => setBatchDownloadProgress({ completed, total }),
+        { format: fmt }
+      );
+      toast(`Downloaded ${selectedSongs.length} song${selectedSongs.length !== 1 ? "s" : ""} as ${fmt.toUpperCase()} ZIP`, "success");
       clearSelection();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Download failed", "error");
@@ -2470,20 +2490,47 @@ export function LibraryView({
             )}
           </div>
 
-          {/* Batch Download */}
-          <button
-            onClick={handleBatchDownload}
-            disabled={batchDownloading}
-            aria-label="Download selected songs as ZIP"
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 disabled:opacity-50 transition-colors min-h-[44px]"
-          >
-            <ArrowDownTrayIcon className="w-4 h-4" />
-            <span className="hidden sm:inline">
-              {batchDownloading && batchDownloadProgress
-                ? `${batchDownloadProgress.completed}/${batchDownloadProgress.total}`
-                : "Download"}
-            </span>
-          </button>
+          {/* Batch Download with format picker */}
+          <div className="relative flex-shrink-0" ref={batchDownloadFormatMenuRef}>
+            <div className="flex items-stretch">
+              <button
+                onClick={() => handleBatchDownload()}
+                disabled={batchDownloading}
+                aria-label="Download selected songs as ZIP"
+                className="flex items-center gap-1.5 pl-3 pr-2 py-2 rounded-l-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 disabled:opacity-50 transition-colors min-h-[44px]"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">
+                  {batchDownloading && batchDownloadProgress
+                    ? `${batchDownloadProgress.completed}/${batchDownloadProgress.total}`
+                    : `${batchDownloadFormat.toUpperCase()} ZIP`}
+                </span>
+              </button>
+              <button
+                onClick={() => setShowBatchDownloadFormatMenu((v) => !v)}
+                disabled={batchDownloading}
+                aria-label="Choose batch download format"
+                className="flex items-center justify-center px-1.5 py-2 rounded-r-lg bg-gray-700 hover:bg-gray-600 text-white border-l border-gray-600 disabled:opacity-50 transition-colors min-h-[44px]"
+              >
+                <ChevronDownIcon className={`w-3 h-3 transition-transform duration-150 ${showBatchDownloadFormatMenu ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+            {showBatchDownloadFormatMenu && (
+              <div className="absolute bottom-full mb-1 left-0 w-40 bg-gray-900 border border-gray-700 rounded-xl shadow-lg z-50 overflow-hidden py-1 text-sm">
+                {(["mp3", "wav", "flac"] as AudioFormat[]).map((fmt) => (
+                  <button
+                    key={fmt}
+                    onClick={() => { setBatchDownloadFormat(fmt); handleBatchDownload(fmt); }}
+                    className={`w-full text-left px-3 py-2 transition-colors ${batchDownloadFormat === fmt ? "bg-gray-700 text-white" : "hover:bg-gray-800 text-gray-300"}`}
+                  >
+                    {fmt.toUpperCase()}
+                    {fmt === "mp3" && <span className="ml-1 text-xs text-gray-500">· default</span>}
+                    {(fmt === "wav" || fmt === "flac") && <span className="ml-1 text-xs text-gray-500">· WAV source</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Compare (only when exactly 2 songs selected) */}
           {selectedSongIds.size === 2 && (() => {

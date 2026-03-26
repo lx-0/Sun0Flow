@@ -2,12 +2,25 @@
  * Client-side song download utility with progress tracking and format selection.
  */
 
+import type { AudioFormat, Mp3Quality, WavBitDepth } from "@/lib/audio-metadata";
+
+export type { AudioFormat, Mp3Quality, WavBitDepth };
+
 export interface DownloadableSong {
   id: string;
   title: string | null | undefined;
   audioUrl: string;
   duration?: number | null;
   createdAt?: Date | string;
+}
+
+export interface DownloadOptions {
+  /** Target format. Defaults to "native" (serves the source format). */
+  format?: AudioFormat | "native";
+  /** Quality hint. For MP3: kbps (128/256/320). For WAV: bit depth (16/24). */
+  quality?: Mp3Quality | WavBitDepth;
+  /** Whether to embed metadata tags. Defaults to true. */
+  metadata?: boolean;
 }
 
 /**
@@ -23,24 +36,30 @@ export function detectFormat(audioUrl: string): "mp3" | "wav" {
  *
  * @param song       Song to download.
  * @param onProgress Called with 0–100 (percent). Unknown total → pulses at 50.
- * @param options    Optional overrides (metadata embedding toggle).
+ * @param options    Format, quality, and metadata options.
  */
 export async function downloadSongFile(
   song: DownloadableSong,
   onProgress: (pct: number) => void,
-  options: { metadata?: boolean } = {}
+  options: DownloadOptions = {}
 ): Promise<void> {
   if (!song.audioUrl) throw new Error("No audio URL available");
 
   onProgress(0);
 
   const qs = new URLSearchParams();
+  if (options.format && options.format !== "native") qs.set("format", options.format);
+  if (options.quality != null) qs.set("quality", String(options.quality));
   if (options.metadata === false) qs.set("metadata", "false");
 
   const res = await fetch(
     `/api/songs/${song.id}/download${qs.toString() ? `?${qs}` : ""}`
   );
 
+  if (res.status === 422) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "Format not available for this song.");
+  }
   if (res.status === 429) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error ?? "Download rate limit exceeded. Try again later.");
@@ -55,11 +74,10 @@ export async function downloadSongFile(
 
   const reader = res.body?.getReader();
   if (!reader) {
-    // Fallback: no streaming support — load as blob directly
     onProgress(50);
     const blob = await res.blob();
     onProgress(100);
-    triggerDownload(blob, extractFilename(res) ?? buildFallbackFilename(song));
+    triggerDownload(blob, extractFilename(res) ?? buildFallbackFilename(song, options.format));
     return;
   }
 
@@ -74,7 +92,6 @@ export async function downloadSongFile(
     if (total > 0) {
       onProgress(Math.min(99, Math.round((received / total) * 100)));
     } else {
-      // Unknown total — pulse at 50 until done
       onProgress(50);
     }
   }
@@ -82,7 +99,7 @@ export async function downloadSongFile(
   const mimeType = res.headers.get("content-type") ?? "audio/mpeg";
   const blob = new Blob(chunks, { type: mimeType });
   onProgress(100);
-  triggerDownload(blob, extractFilename(res) ?? buildFallbackFilename(song));
+  triggerDownload(blob, extractFilename(res) ?? buildFallbackFilename(song, options.format));
 }
 
 /** Extract filename from Content-Disposition header */
@@ -94,7 +111,10 @@ function extractFilename(res: Response): string | null {
 }
 
 /** Fallback filename when Content-Disposition is missing */
-function buildFallbackFilename(song: DownloadableSong): string {
+function buildFallbackFilename(
+  song: DownloadableSong,
+  format?: AudioFormat | "native"
+): string {
   const title = (song.title ?? "song")
     .replace(/[^a-zA-Z0-9\s-]/g, "")
     .trim()
@@ -103,7 +123,10 @@ function buildFallbackFilename(song: DownloadableSong): string {
   const date = song.createdAt
     ? new Date(song.createdAt).toISOString().slice(0, 10)
     : new Date().toISOString().slice(0, 10);
-  const ext = detectFormat(song.audioUrl);
+  const ext =
+    format === "flac" ? "flac"
+    : format === "wav" ? "wav"
+    : detectFormat(song.audioUrl);
   return `${title}-${date}.${ext}`;
 }
 

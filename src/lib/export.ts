@@ -3,6 +3,10 @@
  * JSZip is loaded lazily to avoid bloating the initial bundle.
  */
 
+import type { AudioFormat, Mp3Quality, WavBitDepth } from "@/lib/audio-metadata";
+
+export type { AudioFormat, Mp3Quality, WavBitDepth };
+
 export interface ExportableSong {
   id: string;
   title: string | null | undefined;
@@ -10,6 +14,11 @@ export interface ExportableSong {
   tags?: string | null;
   duration?: number | null;
   createdAt?: Date | string;
+}
+
+export interface ZipExportOptions {
+  format?: AudioFormat | "native";
+  quality?: Mp3Quality | WavBitDepth;
 }
 
 /** Build a safe filename from a song title. */
@@ -22,8 +31,13 @@ function safeName(title: string | null | undefined, index: number): string {
   return base;
 }
 
-function fileExtension(url: string): string {
+function nativeExtension(url: string): string {
   return url.toLowerCase().includes(".wav") ? "wav" : "mp3";
+}
+
+function resolveExtension(url: string, format?: AudioFormat | "native"): string {
+  if (!format || format === "native") return nativeExtension(url);
+  return format; // "mp3", "wav", or "flac"
 }
 
 /**
@@ -32,7 +46,8 @@ function fileExtension(url: string): string {
  */
 export async function exportAsZip(
   songs: ExportableSong[],
-  onProgress: (completed: number, total: number) => void
+  onProgress: (completed: number, total: number) => void,
+  options: ZipExportOptions = {}
 ): Promise<void> {
   const downloadable = songs.filter((s) => s.audioUrl);
   if (downloadable.length === 0) throw new Error("No songs with audio to export");
@@ -44,7 +59,7 @@ export async function exportAsZip(
   for (let i = 0; i < downloadable.length; i++) {
     const song = downloadable[i];
     const name = safeName(song.title, i);
-    const ext = fileExtension(song.audioUrl);
+    const ext = resolveExtension(song.audioUrl, options.format);
 
     // Deduplicate filenames
     let finalName = `${name}.${ext}`;
@@ -55,7 +70,12 @@ export async function exportAsZip(
     }
     usedNames.add(finalName);
 
-    const res = await fetch(`/api/songs/${song.id}/download`);
+    const qs = new URLSearchParams();
+    if (options.format && options.format !== "native") qs.set("format", options.format);
+    if (options.quality != null) qs.set("quality", String(options.quality));
+    const url = `/api/songs/${song.id}/download${qs.toString() ? `?${qs}` : ""}`;
+
+    const res = await fetch(url);
     if (!res.ok) {
       // Skip failed downloads but continue
       onProgress(i + 1, downloadable.length);

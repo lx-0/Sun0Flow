@@ -3,9 +3,12 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { embedId3Tags, embedWavMetadata } from "@/lib/audio-metadata";
+import { wavToFlac } from "@/lib/flac-encoder";
 import type { SongMetadata } from "@/lib/audio-metadata";
 
 const DOWNLOAD_RATE_LIMIT = 50; // per hour
+
+type DownloadFormat = "mp3" | "wav" | "flac";
 
 export async function GET(
   request: Request,
@@ -34,7 +37,7 @@ export async function GET(
       );
     }
 
-    // Rate limit: 50 downloads per hour per user
+    // Rate limit: downloads per hour per user
     const { acquired, status } = await acquireRateLimitSlot(userId!, "download");
     if (!acquired) {
       return NextResponse.json(
@@ -57,7 +60,45 @@ export async function GET(
       );
     }
 
-    // Proxy the audio from the external URL (buffer for metadata embedding)
+    const url = new URL(request.url);
+    const requestedFormat = (url.searchParams.get("format") ?? "native") as DownloadFormat | "native";
+    const embedMetadata = url.searchParams.get("metadata") !== "false";
+
+    // Detect native source format
+    const sourceExt = song.audioUrl.toLowerCase().includes(".wav") ? "wav" : "mp3";
+
+    // Resolve the effective format to serve
+    let targetFormat: "mp3" | "wav" | "flac";
+    if (requestedFormat === "native" || requestedFormat === sourceExt) {
+      targetFormat = sourceExt;
+    } else if (requestedFormat === "flac") {
+      if (sourceExt !== "wav") {
+        return NextResponse.json(
+          {
+            error: "FLAC export requires a WAV source. Convert this song to WAV first.",
+            code: "FORMAT_UNAVAILABLE",
+          },
+          { status: 422 }
+        );
+      }
+      targetFormat = "flac";
+    } else if (requestedFormat === "wav") {
+      if (sourceExt !== "wav") {
+        return NextResponse.json(
+          {
+            error: "WAV export not available. Convert this song to WAV first.",
+            code: "FORMAT_UNAVAILABLE",
+          },
+          { status: 422 }
+        );
+      }
+      targetFormat = "wav";
+    } else {
+      // mp3 requested but source is wav — serve native wav
+      targetFormat = sourceExt;
+    }
+
+    // Proxy the audio from the external URL
     const upstream = await fetch(song.audioUrl);
     if (!upstream.ok) {
       return NextResponse.json(
@@ -72,30 +113,43 @@ export async function GET(
       data: { downloadCount: { increment: 1 } },
     }).catch(() => {});
 
-    const ext = song.audioUrl.toLowerCase().includes(".wav") ? "wav" : "mp3";
-    const contentType = ext === "wav" ? "audio/wav" : "audio/mpeg";
-
-    // Build safe filename
+    // Build safe filename slug
     const titleSlug = (song.title ?? "song")
       .replace(/[^a-zA-Z0-9\s-]/g, "")
       .trim()
       .replace(/\s+/g, "-")
       .toLowerCase() || "song";
-    const filename = `${titleSlug}.${ext}`;
-
-    // Check if metadata embedding is requested (default: true)
-    const url = new URL(request.url);
-    const embedMetadata = url.searchParams.get("metadata") !== "false";
 
     let audioBuffer = await upstream.arrayBuffer();
+    let contentType: string;
+    let fileExt: string;
 
-    if (embedMetadata) {
-      // Attempt to fetch cover art (fire-and-forget failure — don't block download)
+    if (targetFormat === "flac") {
+      // Convert WAV → FLAC
+      const flacBuffer = wavToFlac(new Uint8Array(audioBuffer));
+      if (!flacBuffer) {
+        return NextResponse.json(
+          { error: "FLAC conversion failed — unsupported WAV format", code: "CONVERSION_ERROR" },
+          { status: 422 }
+        );
+      }
+      audioBuffer = flacBuffer.buffer as ArrayBuffer;
+      contentType = "audio/flac";
+      fileExt = "flac";
+    } else if (targetFormat === "wav") {
+      contentType = "audio/wav";
+      fileExt = "wav";
+    } else {
+      contentType = "audio/mpeg";
+      fileExt = "mp3";
+    }
+
+    // Embed metadata (only for MP3 and WAV; FLAC metadata would require Vorbis comments)
+    if (embedMetadata && targetFormat !== "flac") {
       let coverArt: SongMetadata["coverArt"] = null;
-      if (song.imageUrl && ext === "mp3") {
+      if (song.imageUrl && targetFormat === "mp3") {
         try {
           if (song.imageUrl.startsWith("data:image/")) {
-            // SVG or other data URI — decode the base64 payload
             const commaIdx = song.imageUrl.indexOf(",");
             if (commaIdx !== -1) {
               const mimeMatch = song.imageUrl.match(/^data:([^;]+);base64,/);
@@ -105,15 +159,13 @@ export async function GET(
               coverArt = { data: new Uint8Array(binary), mimeType };
             }
           } else {
-            // External URL — fetch with timeout
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), 5000);
             const imgRes = await fetch(song.imageUrl, { signal: ctrl.signal });
             clearTimeout(timer);
             if (imgRes.ok) {
-              const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
-              const mimeType = contentType.split(";")[0].trim();
-              // Only embed images (skip SVG — players typically expect raster art)
+              const ct = imgRes.headers.get("content-type") ?? "image/jpeg";
+              const mimeType = ct.split(";")[0].trim();
               if (mimeType.startsWith("image/") && mimeType !== "image/svg+xml") {
                 const imgBuf = await imgRes.arrayBuffer();
                 coverArt = { data: new Uint8Array(imgBuf), mimeType };
@@ -137,12 +189,13 @@ export async function GET(
 
       const audioBytes = new Uint8Array(audioBuffer);
       const tagged =
-        ext === "wav"
+        targetFormat === "wav"
           ? embedWavMetadata(audioBytes, meta)
           : embedId3Tags(audioBytes, meta);
       audioBuffer = tagged.buffer as ArrayBuffer;
     }
 
+    const filename = `${titleSlug}.${fileExt}`;
     const headers = new Headers();
     headers.set("Content-Type", contentType);
     headers.set("Content-Disposition", `attachment; filename="${filename}"`);

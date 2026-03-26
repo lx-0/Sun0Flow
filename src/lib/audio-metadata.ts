@@ -248,15 +248,32 @@ export function embedWavMetadata(audioData: Uint8Array, meta: SongMetadata): Uin
 // File size estimation helpers
 // ---------------------------------------------------------------------------
 
+export type AudioFormat = "mp3" | "wav" | "flac";
+export type Mp3Quality = 128 | 256 | 320;
+export type WavBitDepth = 16 | 24;
+
 /**
  * Rough file size estimate in bytes for a given duration and format.
- * MP3 @ ~192 kbps, WAV @ 44100 Hz / 16-bit / stereo.
+ *
+ * - MP3: based on bitrate (128/256/320 kbps)
+ * - WAV: 44100 Hz / stereo at 16 or 24 bits per sample
+ * - FLAC: ~60–70% of WAV size on average (uncompressed FLAC ≈ WAV size)
  */
-export function estimateAudioBytes(durationSeconds: number, format: "mp3" | "wav"): number {
-  if (format === "wav") {
-    return Math.round(durationSeconds * 176_400); // 44100 * 2ch * 2bytes
+export function estimateAudioBytes(
+  durationSeconds: number,
+  format: AudioFormat,
+  quality?: Mp3Quality | WavBitDepth,
+): number {
+  if (format === "mp3") {
+    const kbps = (quality as Mp3Quality | undefined) ?? 192;
+    return Math.round(durationSeconds * kbps * 125); // kbps * 1000 / 8
   }
-  return Math.round(durationSeconds * 24_000); // ~192 kbps
+  if (format === "wav") {
+    const bitDepth = (quality as WavBitDepth | undefined) ?? 16;
+    return Math.round(durationSeconds * 44100 * 2 * (bitDepth / 8));
+  }
+  // FLAC: uncompressed FLAC ≈ WAV size (verbatim encoding used here)
+  return Math.round(durationSeconds * 44100 * 2 * 2); // same as WAV 16-bit
 }
 
 /** Format bytes as a human-readable string (e.g. "3.2 MB"). */

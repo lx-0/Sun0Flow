@@ -1,19 +1,20 @@
 "use client";
 
 /**
- * DownloadButton — a dropdown download button with format info and progress.
+ * DownloadButton — format/quality picker with progress tracking.
  *
- * Shows the song's native format (MP3 or WAV) with an estimated file size.
- * When a WAV URL is available, both formats are shown; for MP3-only songs,
- * only MP3 is shown (WAV requires a prior convert-wav step).
+ * Shows available download formats based on the song's native audio format:
+ *   - MP3 source: MP3 options only (WAV/FLAC require conversion first)
+ *   - WAV source: MP3 (native), WAV (native), FLAC (converted server-side)
  *
- * All downloads go through the server-side proxy which embeds metadata tags.
+ * The last-used format preference is persisted in localStorage.
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ArrowDownTrayIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { downloadSongFile, detectFormat } from "@/lib/download";
 import { estimateAudioBytes, formatBytes } from "@/lib/audio-metadata";
+import type { AudioFormat, Mp3Quality, WavBitDepth } from "@/lib/audio-metadata";
 
 export interface DownloadableSong {
   id: string;
@@ -23,12 +24,117 @@ export interface DownloadableSong {
   createdAt?: Date | string;
 }
 
+interface FormatOption {
+  format: AudioFormat;
+  quality: Mp3Quality | WavBitDepth | null;
+  label: string;
+  sublabel: string;
+  sizeEstimate: string;
+  available: boolean;
+  unavailableReason?: string;
+}
+
 interface DownloadButtonProps {
   song: DownloadableSong;
-  /** Additional CSS classes for the outer wrapper */
   className?: string;
-  /** Compact mode hides the label text */
   compact?: boolean;
+}
+
+const PREF_KEY = "sunoflow:download-pref";
+
+interface DownloadPref {
+  format: AudioFormat;
+  quality: Mp3Quality | WavBitDepth | null;
+}
+
+function loadPref(): DownloadPref | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PREF_KEY);
+    return raw ? (JSON.parse(raw) as DownloadPref) : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePref(pref: DownloadPref): void {
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify(pref));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function buildFormatOptions(nativeFormat: "mp3" | "wav", duration: number): FormatOption[] {
+  const isWav = nativeFormat === "wav";
+
+  return [
+    {
+      format: "mp3",
+      quality: 128 as Mp3Quality,
+      label: "MP3",
+      sublabel: "128 kbps · standard",
+      sizeEstimate: formatBytes(estimateAudioBytes(duration, "mp3", 128)),
+      available: true, // MP3 is always the native or fallback
+    },
+    {
+      format: "mp3",
+      quality: 256 as Mp3Quality,
+      label: "MP3",
+      sublabel: "256 kbps · high quality",
+      sizeEstimate: formatBytes(estimateAudioBytes(duration, "mp3", 256)),
+      available: true,
+    },
+    {
+      format: "mp3",
+      quality: 320 as Mp3Quality,
+      label: "MP3",
+      sublabel: "320 kbps · best quality",
+      sizeEstimate: formatBytes(estimateAudioBytes(duration, "mp3", 320)),
+      available: true,
+    },
+    {
+      format: "wav",
+      quality: 16 as WavBitDepth,
+      label: "WAV",
+      sublabel: "16-bit · lossless",
+      sizeEstimate: formatBytes(estimateAudioBytes(duration, "wav", 16)),
+      available: isWav,
+      unavailableReason: isWav ? undefined : "Requires WAV conversion",
+    },
+    {
+      format: "wav",
+      quality: 24 as WavBitDepth,
+      label: "WAV",
+      sublabel: "24-bit · studio quality",
+      sizeEstimate: formatBytes(estimateAudioBytes(duration, "wav", 24)),
+      available: isWav,
+      unavailableReason: isWav ? undefined : "Requires WAV conversion",
+    },
+    {
+      format: "flac",
+      quality: null,
+      label: "FLAC",
+      sublabel: "lossless compressed",
+      sizeEstimate: formatBytes(estimateAudioBytes(duration, "flac")),
+      available: isWav,
+      unavailableReason: isWav ? undefined : "Requires WAV conversion",
+    },
+  ];
+}
+
+function defaultOption(
+  options: FormatOption[],
+  pref: DownloadPref | null
+): FormatOption {
+  if (pref) {
+    const match = options.find(
+      (o) => o.available && o.format === pref.format && o.quality === pref.quality
+    );
+    if (match) return match;
+  }
+  // Default: first available option
+  return options.find((o) => o.available) ?? options[0];
 }
 
 export function DownloadButton({ song, className = "", compact = false }: DownloadButtonProps) {
@@ -39,27 +145,13 @@ export function DownloadButton({ song, className = "", compact = false }: Downlo
 
   const nativeFormat = detectFormat(song.audioUrl);
   const duration = song.duration ?? 0;
+  const formatOptions = buildFormatOptions(nativeFormat, duration);
 
-  const formatOptions: { format: "mp3" | "wav"; label: string; size: string; available: boolean }[] = [
-    {
-      format: "mp3",
-      label: "MP3",
-      size: formatBytes(estimateAudioBytes(duration, "mp3")),
-      available: nativeFormat === "mp3",
-    },
-    {
-      format: "wav",
-      label: "WAV",
-      size: formatBytes(estimateAudioBytes(duration, "wav")),
-      available: nativeFormat === "wav",
-    },
-  ];
+  const [selected, setSelected] = useState<FormatOption>(() =>
+    defaultOption(formatOptions, loadPref())
+  );
 
-  // At least one format is always available (the native one)
-  const availableOptions = formatOptions.filter((f) => f.available);
-  const hasMultipleFormats = availableOptions.length > 1;
-
-  // Close dropdown when clicking outside
+  // Close dropdown on outside click
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
@@ -72,12 +164,17 @@ export function DownloadButton({ song, className = "", compact = false }: Downlo
   }, [open]);
 
   const doDownload = useCallback(
-    async () => {
+    async (opt: FormatOption) => {
       if (progress !== null) return;
       setError(null);
       setOpen(false);
+      setSelected(opt);
+      savePref({ format: opt.format, quality: opt.quality });
       try {
-        await downloadSongFile(song, setProgress);
+        await downloadSongFile(song, setProgress, {
+          format: opt.format,
+          quality: opt.quality ?? undefined,
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Download failed");
         setProgress(null);
@@ -87,15 +184,22 @@ export function DownloadButton({ song, className = "", compact = false }: Downlo
   );
 
   const isDownloading = progress !== null;
+  const availableOptions = formatOptions.filter((o) => o.available);
+  const hasMultipleFormats = availableOptions.length > 1;
+
+  const progressLabel = isDownloading
+    ? progress === 100
+      ? "Done"
+      : `${progress}%`
+    : null;
 
   if (!hasMultipleFormats) {
-    // Simple single-button (no dropdown needed)
-    const opt = availableOptions[0];
+    const opt = availableOptions[0] ?? formatOptions[0];
     return (
       <div className={`flex flex-col gap-1 ${className}`}>
         <button
-          onClick={() => doDownload()}
-          disabled={isDownloading || !song.audioUrl}
+          onClick={() => doDownload(opt)}
+          disabled={isDownloading || !song.audioUrl || !opt.available}
           aria-label={isDownloading ? `Downloading ${progress}%` : "Download song"}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors
             ${isDownloading
@@ -106,15 +210,11 @@ export function DownloadButton({ song, className = "", compact = false }: Downlo
           <ArrowDownTrayIcon className="w-4 h-4 shrink-0" />
           {!compact && (
             <span>
-              {isDownloading
-                ? progress === 100
-                  ? "Done"
-                  : `${progress}%`
-                : "Download"}
+              {progressLabel ?? "Download"}
             </span>
           )}
-          {!compact && opt && duration > 0 && !isDownloading && (
-            <span className="text-violet-300 text-xs">· {opt.label} · ~{opt.size}</span>
+          {!compact && !isDownloading && duration > 0 && opt.available && (
+            <span className="text-violet-300 text-xs">· {opt.label} · ~{opt.sizeEstimate}</span>
           )}
         </button>
         {error && <p className="text-xs text-red-400">{error}</p>}
@@ -130,15 +230,14 @@ export function DownloadButton({ song, className = "", compact = false }: Downlo
     );
   }
 
-  // Multi-format dropdown
   return (
     <div className={`relative flex flex-col gap-1 ${className}`} ref={menuRef}>
       <div className="flex items-stretch">
-        {/* Primary action: download native format */}
+        {/* Primary action: download with selected format */}
         <button
-          onClick={() => doDownload()}
+          onClick={() => doDownload(selected)}
           disabled={isDownloading || !song.audioUrl}
-          aria-label={isDownloading ? `Downloading ${progress}%` : "Download song"}
+          aria-label={isDownloading ? `Downloading ${progress}%` : `Download as ${selected.label}`}
           className={`flex items-center gap-1.5 rounded-l-lg px-3 py-2 text-sm font-medium transition-colors
             ${isDownloading
               ? "cursor-wait bg-violet-700/60 text-violet-300"
@@ -148,16 +247,19 @@ export function DownloadButton({ song, className = "", compact = false }: Downlo
           <ArrowDownTrayIcon className="w-4 h-4 shrink-0" />
           {!compact && (
             <span>
-              {isDownloading
-                ? progress === 100
-                  ? "Done"
-                  : `${progress}%`
-                : "Download"}
+              {progressLabel ?? "Download"}
+            </span>
+          )}
+          {!compact && !isDownloading && (
+            <span className="text-violet-300 text-xs">
+              · {selected.label}
+              {selected.quality ? ` ${selected.quality}${selected.format === "mp3" ? " kbps" : "-bit"}` : ""}
+              {duration > 0 ? ` · ~${selected.sizeEstimate}` : ""}
             </span>
           )}
         </button>
 
-        {/* Chevron toggle */}
+        {/* Chevron toggle for format picker */}
         <button
           onClick={() => setOpen((v) => !v)}
           disabled={isDownloading}
@@ -172,22 +274,57 @@ export function DownloadButton({ song, className = "", compact = false }: Downlo
         </button>
       </div>
 
-      {/* Dropdown menu */}
+      {/* Format/quality dropdown */}
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-50 w-48 rounded-lg border border-gray-700
+        <div className="absolute top-full mt-1 left-0 z-50 w-60 rounded-lg border border-gray-700
           bg-gray-900 shadow-xl py-1 text-sm">
-          {availableOptions.map((opt) => (
-            <button
-              key={opt.format}
-              onClick={() => doDownload()}
-              className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-800 transition-colors"
-            >
-              <span className="font-medium text-white">{opt.label}</span>
-              {duration > 0 && (
-                <span className="text-gray-400 text-xs">~{opt.size}</span>
-              )}
-            </button>
-          ))}
+
+          {/* Group by format */}
+          {(["mp3", "wav", "flac"] as AudioFormat[]).map((fmt) => {
+            const opts = formatOptions.filter((o) => o.format === fmt);
+            if (opts.length === 0) return null;
+            return (
+              <div key={fmt}>
+                <div className="px-3 pt-2 pb-0.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  {fmt.toUpperCase()}
+                </div>
+                {opts.map((opt, i) => {
+                  const isSelected =
+                    selected.format === opt.format && selected.quality === opt.quality;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => opt.available ? doDownload(opt) : undefined}
+                      disabled={!opt.available}
+                      title={!opt.available ? opt.unavailableReason : undefined}
+                      className={`w-full flex items-center justify-between px-3 py-2 transition-colors
+                        ${opt.available
+                          ? isSelected
+                            ? "bg-violet-900/40 text-violet-300"
+                            : "hover:bg-gray-800 text-white"
+                          : "opacity-40 cursor-not-allowed text-gray-400"
+                        }`}
+                    >
+                      <div className="flex flex-col items-start gap-0">
+                        <span className="font-medium">{opt.sublabel}</span>
+                        {!opt.available && opt.unavailableReason && (
+                          <span className="text-xs text-gray-500">{opt.unavailableReason}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {duration > 0 && opt.available && (
+                          <span className="text-gray-400 text-xs">~{opt.sizeEstimate}</span>
+                        )}
+                        {isSelected && (
+                          <span className="text-violet-400 text-xs">✓</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       )}
 
