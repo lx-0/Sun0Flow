@@ -14,6 +14,7 @@ import { recordCreditUsage, shouldNotifyLowCredits, createLowCreditNotification,
 import { badRequest, rateLimited, internalError, insufficientCredits, ErrorCode } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
 import { recordGenerationStart, recordGenerationEnd } from "@/lib/metrics";
+import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 
 /** Map API errors to user-friendly messages */
 function userFriendlyError(error: unknown): { message: string; code: string } {
@@ -161,6 +162,22 @@ export async function POST(request: Request) {
             parentSongId: typeof parentSongId === "string" && parentSongId ? parentSongId : null,
           },
         });
+
+        // Auto-assign a placeholder cover art so songs have a visual fingerprint
+        // immediately — the Suno-returned imageUrl will overwrite this on completion.
+        try {
+          const [placeholderVariant] = generateCoverArtVariants({
+            songId: song.id,
+            title: generationParams.title,
+            tags: generationParams.style,
+          });
+          prisma.song.update({
+            where: { id: song.id },
+            data: { imageUrl: placeholderVariant.dataUrl },
+          }).catch(() => {});
+        } catch {
+          // Non-critical — generation still succeeds without a placeholder image.
+        }
 
         savedSongs = [song];
       } catch (apiError) {

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   PlayIcon,
   PauseIcon,
@@ -20,6 +19,8 @@ import { downloadSongFile } from "@/lib/download";
 import { useToast } from "./Toast";
 import { useQueue, type QueueSong } from "./QueueContext";
 import { PullToRefreshContainer } from "./PullToRefreshContainer";
+import { CoverArtImage } from "./CoverArtImage";
+import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -98,13 +99,13 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload,
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
   const hasAudio = !!song.audioUrl;
-  const coverUrl = song.imageUrl || "/default-cover.png";
+  const coverUrl = song.imageUrl || generateCoverArtVariants({ songId: song.id, title: song.title, tags: song.tags })[0].dataUrl;
 
   return (
     <div className="group relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden transition-shadow hover:shadow-lg hover:shadow-violet-500/10">
       {/* Cover art */}
       <Link href={`/library/${song.id}`} className="block relative aspect-square">
-        <Image
+        <CoverArtImage
           src={coverUrl}
           alt={song.title || "Song cover"}
           fill
