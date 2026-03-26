@@ -34,6 +34,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { PlayIcon as PlayOutlineIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
+import { CoverArtImage } from "./CoverArtImage";
 import type { Song } from "@prisma/client";
 import type { SongRating } from "@/lib/ratings";
 import { downloadSongFile } from "@/lib/download";
@@ -655,7 +656,7 @@ function SongRow({
 
         <div className="relative flex-shrink-0 w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
           {song.imageUrl ? (
-            <Image src={song.imageUrl} alt={song.title ?? "Song"} fill className="object-cover" sizes="48px" loading="lazy" placeholder="blur" blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9IiM3YzNhZWQiIGZpbGwtb3BhY2l0eT0iMC4yIi8+PC9zdmc+" />
+            <CoverArtImage src={song.imageUrl} alt={song.title ?? "Song"} fill className="object-cover" sizes="48px" loading="lazy" />
           ) : (
             <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-600" aria-hidden="true" />
           )}

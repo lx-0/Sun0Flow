@@ -15,6 +15,11 @@ export interface SongMetadata {
   genre?: string | null;
   /** Stored in the COMM (comment) tag — used for the generation prompt. */
   comment?: string | null;
+  /**
+   * Album art as a raw binary buffer plus its MIME type.
+   * Only JPEG and PNG are reliably supported by players.
+   */
+  coverArt?: { data: Uint8Array; mimeType: string } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +94,34 @@ function id3CommFrame(text: string): Uint8Array {
 }
 
 /**
+ * Build an ID3v2.3 APIC frame (Attached Picture) for album art.
+ * Layout: id(4) + size(4) + flags(2) + encoding(1) + mimeType(n) + null(1) +
+ *         picType(1) + description(1) + imageData(n)
+ */
+function id3ApicFrame(imageData: Uint8Array, mimeType: string): Uint8Array {
+  const mimeBytes = new TextEncoder().encode(mimeType);
+  // encoding(1) + mime(n) + null(1) + picType(1) + desc-null(1) + data(n)
+  const bodyLen = 1 + mimeBytes.length + 1 + 1 + 1 + imageData.length;
+  const frame = new Uint8Array(10 + bodyLen);
+  const view = new DataView(frame.buffer);
+
+  // "APIC"
+  [0x41, 0x50, 0x49, 0x43].forEach((b, i) => (frame[i] = b));
+  view.setUint32(4, bodyLen, false);
+  // flags = 0x0000
+
+  let off = 10;
+  frame[off++] = 0x00; // encoding: ISO-8859-1 (safe for binary data)
+  frame.set(mimeBytes, off);
+  off += mimeBytes.length;
+  frame[off++] = 0x00; // null-terminate MIME
+  frame[off++] = 0x03; // picture type: 0x03 = Cover (front)
+  frame[off++] = 0x00; // empty description (null-terminated)
+  frame.set(imageData, off);
+  return frame;
+}
+
+/**
  * Prepend ID3v2.3 tags to an MP3 audio buffer.
  * Returns the original buffer unchanged if no metadata is provided.
  */
@@ -101,6 +134,7 @@ export function embedId3Tags(audioData: Uint8Array, meta: SongMetadata): Uint8Ar
   if (meta.year) frames.push(id3TextFrame("TYER", String(meta.year)));
   if (meta.genre) frames.push(id3TextFrame("TCON", meta.genre));
   if (meta.comment) frames.push(id3CommFrame(meta.comment));
+  if (meta.coverArt) frames.push(id3ApicFrame(meta.coverArt.data, meta.coverArt.mimeType));
 
   if (frames.length === 0) return audioData;
 

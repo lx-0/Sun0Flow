@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -45,6 +44,8 @@ const ReportModal = dynamic(() => import("./ReportModal").then((m) => m.ReportMo
 import { TagInput } from "./TagInput";
 import { SectionEditor } from "./SectionEditor";
 import { LyricsEditor } from "./LyricsEditor";
+import { CoverArtImage } from "./CoverArtImage";
+import { CoverArtModal } from "./CoverArtModal";
 // Lazy-load below-fold recommendations to reduce initial bundle
 const RecommendationSection = dynamic(() => import("./SongRecommendations").then((m) => m.RecommendationSection), { ssr: false });
 
@@ -701,6 +702,10 @@ export function SongDetailView({
   // Section editor state
   const [sectionEditorOpen, setSectionEditorOpen] = useState(false);
 
+  // Cover art state
+  const [coverArtModalOpen, setCoverArtModalOpen] = useState(false);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(song.imageUrl ?? null);
+
   // Export/conversion state
   type ExportFormat = "wav" | "midi" | "mp4";
   type ExportStatus = "idle" | "converting" | "done" | "error";
@@ -1055,15 +1060,14 @@ export function SongDetailView({
       {/* Hero cover art with blurred background */}
       <div className="relative w-full overflow-hidden rounded-b-3xl mb-6">
         {/* Blurred background layer */}
-        {song.imageUrl && (
+        {coverImageUrl && (
           <div className="absolute inset-0">
-            <Image
-              src={song.imageUrl}
+            <CoverArtImage
+              src={coverImageUrl}
               alt=""
               fill
               className="object-cover scale-110 blur-2xl opacity-60"
               sizes="100vw"
-              aria-hidden="true"
               priority
             />
             <div className="absolute inset-0 bg-gradient-to-b from-gray-50/30 via-gray-50/50 to-gray-50 dark:from-gray-950/30 dark:via-gray-950/50 dark:to-gray-950" />
@@ -1081,10 +1085,10 @@ export function SongDetailView({
           </button>
 
           {/* Cover art */}
-          <div className="relative w-full aspect-square max-h-80 sm:max-h-[400px] rounded-2xl bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center shadow-xl ring-1 ring-black/5 dark:ring-white/10 mx-auto">
-            {song.imageUrl ? (
-              <Image
-                src={song.imageUrl}
+          <div className="relative w-full aspect-square max-h-80 sm:max-h-[400px] rounded-2xl bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center shadow-xl ring-1 ring-black/5 dark:ring-white/10 mx-auto group">
+            {coverImageUrl ? (
+              <CoverArtImage
+                src={coverImageUrl}
                 alt={song.title}
                 fill
                 className="object-cover"
@@ -1094,6 +1098,17 @@ export function SongDetailView({
             ) : (
               <MusicalNoteIcon className="w-20 h-20 text-gray-400 dark:text-gray-600" aria-hidden="true" />
             )}
+            {/* Generate Cover overlay button */}
+            <button
+              onClick={() => setCoverArtModalOpen(true)}
+              className="absolute inset-0 flex items-end justify-center pb-3 bg-black/0 group-hover:bg-black/30 transition-colors"
+              aria-label="Change cover art"
+            >
+              <span className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 px-3 py-1.5 bg-black/70 text-white text-xs font-medium rounded-full">
+                <PaintBrushIcon className="w-3.5 h-3.5" />
+                {coverImageUrl ? "Change Cover" : "Generate Cover"}
+              </span>
+            </button>
           </div>
 
           {/* Title + favorite */}
@@ -1199,7 +1214,7 @@ export function SongDetailView({
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 flex items-center justify-center">
           <button
             onClick={() =>
-              togglePlay({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics })
+              togglePlay({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: coverImageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics })
             }
             aria-label={isThisSongPlaying ? "Pause" : "Play"}
             className="flex items-center gap-2 px-6 py-3 text-sm font-medium rounded-xl bg-violet-600 hover:bg-violet-500 text-white shadow-sm transition-all duration-200 active:scale-95 min-h-[44px]"
@@ -1275,7 +1290,7 @@ export function SongDetailView({
           <>
             <button
               onClick={() => {
-                playNext({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
+                playNext({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: coverImageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
                 toast("Playing next", "success");
               }}
               className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"
@@ -1285,7 +1300,7 @@ export function SongDetailView({
             </button>
             <button
               onClick={() => {
-                addToQueue({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: song.imageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
+                addToQueue({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: coverImageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
                 toast("Added to queue", "success");
               }}
               className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"
@@ -1405,6 +1420,34 @@ export function SongDetailView({
           )}
         </div>
       )}
+
+      {/* Cover art */}
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 tracking-wide">Cover Art</h2>
+        </div>
+        <div className="flex items-center gap-3">
+          {coverImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={coverImageUrl}
+              alt="Cover art"
+              className="w-14 h-14 rounded-xl object-cover border border-gray-200 dark:border-gray-700 flex-shrink-0"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+              <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-600" aria-hidden="true" />
+            </div>
+          )}
+          <button
+            onClick={() => setCoverArtModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
+          >
+            <PaintBrushIcon className="w-4 h-4" aria-hidden="true" />
+            {coverImageUrl ? "Change Cover" : "Generate Cover"}
+          </button>
+        </div>
+      </div>
 
       {/* Variation / Remix actions */}
       <div className="space-y-2">
@@ -1779,6 +1822,17 @@ export function SongDetailView({
         </div>
       </div>
       </div>
+
+      {/* Cover Art Modal */}
+      {coverArtModalOpen && (
+        <CoverArtModal
+          songId={song.id}
+          songTitle={song.title}
+          currentImageUrl={coverImageUrl}
+          onClose={() => setCoverArtModalOpen(false)}
+          onSave={(newUrl) => setCoverImageUrl(newUrl)}
+        />
+      )}
     </div>
   );
 }

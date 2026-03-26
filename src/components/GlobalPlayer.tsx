@@ -21,7 +21,7 @@ import {
   FaceSmileIcon,
   AdjustmentsHorizontalIcon,
 } from "@heroicons/react/24/outline";
-import Image from "next/image";
+import { CoverArtImage } from "./CoverArtImage";
 import { useQueue } from "./QueueContext";
 import { UpNextPanel } from "./UpNextPanel";
 import { LyricsPanel } from "./LyricsPanel";
@@ -304,7 +304,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
           {/* Cover art — hidden on very small screens to save space */}
           <div className="relative flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden flex items-center justify-center">
             {currentSong.imageUrl ? (
-              <Image
+              <CoverArtImage
                 src={currentSong.imageUrl}
                 alt={currentSong.title ?? "Song"}
                 fill

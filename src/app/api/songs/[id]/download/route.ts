@@ -90,6 +90,41 @@ export async function GET(
     let audioBuffer = await upstream.arrayBuffer();
 
     if (embedMetadata) {
+      // Attempt to fetch cover art (fire-and-forget failure — don't block download)
+      let coverArt: SongMetadata["coverArt"] = null;
+      if (song.imageUrl && ext === "mp3") {
+        try {
+          if (song.imageUrl.startsWith("data:image/")) {
+            // SVG or other data URI — decode the base64 payload
+            const commaIdx = song.imageUrl.indexOf(",");
+            if (commaIdx !== -1) {
+              const mimeMatch = song.imageUrl.match(/^data:([^;]+);base64,/);
+              const mimeType = mimeMatch?.[1] ?? "image/jpeg";
+              const b64 = song.imageUrl.slice(commaIdx + 1);
+              const binary = Buffer.from(b64, "base64");
+              coverArt = { data: new Uint8Array(binary), mimeType };
+            }
+          } else {
+            // External URL — fetch with timeout
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 5000);
+            const imgRes = await fetch(song.imageUrl, { signal: ctrl.signal });
+            clearTimeout(timer);
+            if (imgRes.ok) {
+              const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
+              const mimeType = contentType.split(";")[0].trim();
+              // Only embed images (skip SVG — players typically expect raster art)
+              if (mimeType.startsWith("image/") && mimeType !== "image/svg+xml") {
+                const imgBuf = await imgRes.arrayBuffer();
+                coverArt = { data: new Uint8Array(imgBuf), mimeType };
+              }
+            }
+          }
+        } catch {
+          // Non-fatal — proceed without album art
+        }
+      }
+
       const meta: SongMetadata = {
         title: song.title ?? undefined,
         artist: user?.name ?? "SunoFlow User",
@@ -97,6 +132,7 @@ export async function GET(
         year: new Date(song.createdAt).getFullYear(),
         genre: song.tags ?? undefined,
         comment: song.prompt ?? undefined,
+        coverArt,
       };
 
       const audioBytes = new Uint8Array(audioBuffer);
