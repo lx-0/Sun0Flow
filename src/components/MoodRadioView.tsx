@@ -10,6 +10,7 @@ import {
 import { PlayIcon } from "@heroicons/react/24/solid";
 import { useQueue, type RadioParams } from "./QueueContext";
 import { CoverArtImage } from "./CoverArtImage";
+import { AddToPlaylistButton } from "./AddToPlaylistButton";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -193,6 +194,7 @@ export function MoodRadioView() {
               >
                 <ForwardIcon className="w-5 h-5" />
               </button>
+              <AddToPlaylistButton songId={currentSong.id} songTitle={currentSong.title ?? undefined} />
             </div>
           </div>
         ) : isRadioLoading ? (
