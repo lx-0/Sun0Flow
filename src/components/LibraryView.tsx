@@ -615,6 +615,11 @@ function SongRow({
                 {((song as Song & { variationCount?: number }).variationCount ?? 0) + 1} versions
               </span>
             )}
+            {song.source === "auto" && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">
+                Auto
+              </span>
+            )}
           </div>
           {rating && (
             <div className="mt-0.5">

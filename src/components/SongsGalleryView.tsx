@@ -145,6 +145,12 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload,
             {(song.variationCount ?? 0) + 1} versions
           </span>
         )}
+        {/* Auto-generated badge */}
+        {song.source === "auto" && (
+          <span className="absolute top-2 left-2 px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-600/90 text-white rounded-full">
+            Auto
+          </span>
+        )}
         {/* Offline badge */}
         {isCached && (
           <span className="absolute bottom-2 left-2 px-1.5 py-0.5 text-[10px] font-medium bg-green-600/90 text-white rounded-full flex items-center gap-0.5">

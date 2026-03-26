@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
 
     const params = request.nextUrl.searchParams;
     const status = params.get("status") || "";
+    const source = params.get("source") || "";
     const q = params.get("q")?.trim() || "";
     const dateFrom = params.get("dateFrom") || "";
     const dateTo = params.get("dateTo") || "";
@@ -25,6 +26,10 @@ export async function GET(request: NextRequest) {
 
     if (status && status !== "all") {
       where.generationStatus = status;
+    }
+
+    if (source && source !== "all") {
+      where.source = source;
     }
 
     if (q.length >= 2) {
@@ -67,11 +72,12 @@ export async function GET(request: NextRequest) {
           generationStatus: true,
           errorMessage: true,
           isInstrumental: true,
+          source: true,
           createdAt: true,
           updatedAt: true,
         },
       }),
-      prisma.song.count({ where: { userId, ...(status && status !== "all" ? { generationStatus: status } : {}) } }),
+      prisma.song.count({ where: { userId, ...(status && status !== "all" ? { generationStatus: status } : {}), ...(source && source !== "all" ? { source } : {}) } }),
     ]);
 
     const hasMore = songs.length > PAGE_SIZE;

@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchFeed } from "@/lib/rss";
+import { generateSong } from "@/lib/sunoapi";
+import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
+import { getMonthlyCreditUsage, recordCreditUsage, CREDIT_COSTS } from "@/lib/credits";
 import { logger } from "@/lib/logger";
-import { getMonthlyCreditUsage, CREDIT_COSTS } from "@/lib/credits";
+import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 
 /**
  * POST /api/cron/feed-auto-generate
  *
  * Checks all RSS feeds with autoGenerate=true for new items since last check.
- * Creates PendingFeedGeneration records for new items, respecting each user's
- * remaining credit budget.
+ * Directly generates one song per feed per day for matching new items.
+ * Sends a notification when generation starts.
  *
  * Protected by CRON_SECRET bearer token.
  */
 
-const MAX_PENDING_PER_USER = 20;
+const MAX_AUTO_PER_USER = 10; // max songs auto-generated per cron run per user
 
 function buildPromptFromItem(item: {
   title: string;
@@ -53,8 +56,10 @@ export async function POST(request: NextRequest) {
   }
 
   const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
 
-  // Find all feeds with autoGenerate enabled, group by userId
+  // Find all feeds with autoGenerate enabled
   const autoFeeds = await prisma.rssFeedSubscription.findMany({
     where: { autoGenerate: true },
     select: {
@@ -68,10 +73,10 @@ export async function POST(request: NextRequest) {
   });
 
   if (autoFeeds.length === 0) {
-    return NextResponse.json({ processed: 0, created: 0 });
+    return NextResponse.json({ processed: 0, generated: 0 });
   }
 
-  // Group feeds by userId to do per-user credit checks once
+  // Group feeds by userId
   const feedsByUser = new Map<string, typeof autoFeeds>();
   for (const feed of autoFeeds) {
     const list = feedsByUser.get(feed.userId) ?? [];
@@ -79,41 +84,46 @@ export async function POST(request: NextRequest) {
     feedsByUser.set(feed.userId, list);
   }
 
-  let totalCreated = 0;
+  let totalGenerated = 0;
   let totalProcessed = 0;
 
   for (const [userId, feeds] of Array.from(feedsByUser)) {
-    // Check how many pending items the user already has
-    const pendingCount = await prisma.pendingFeedGeneration.count({
-      where: { userId, status: "pending" },
-    });
+    // Resolve user's API key
+    const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
 
-    if (pendingCount >= MAX_PENDING_PER_USER) {
-      logger.info({ userId }, "feed-auto-generate: user already has max pending items, skipping");
-      continue;
+    // Check credits (skip check for personal key users)
+    if (!usingPersonalKey) {
+      const creditUsage = await getMonthlyCreditUsage(userId);
+      if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
+        logger.info({ userId, creditsRemaining: creditUsage.creditsRemaining }, "feed-auto-generate: insufficient credits, skipping user");
+        continue;
+      }
     }
 
-    // Check user's remaining credits — don't queue more than credits allow
-    const creditUsage = await getMonthlyCreditUsage(userId);
-    const creditCostPerGen = CREDIT_COSTS.generate ?? 10;
-    const maxNewFromCredits = Math.floor(creditUsage.creditsRemaining / creditCostPerGen);
-    const maxNewFromLimit = MAX_PENDING_PER_USER - pendingCount;
-    let slotsRemaining = Math.min(maxNewFromCredits, maxNewFromLimit);
-
-    if (slotsRemaining <= 0) {
-      logger.info({ userId, creditsRemaining: creditUsage.creditsRemaining }, "feed-auto-generate: insufficient credits, skipping");
-      continue;
-    }
+    let slotsRemaining = MAX_AUTO_PER_USER;
 
     for (const feed of feeds) {
       if (slotsRemaining <= 0) break;
       totalProcessed++;
 
       try {
+        // Daily limit: max 1 auto-generated song per feed per day
+        const autoToday = await prisma.song.count({
+          where: {
+            rssFeedSubscriptionId: feed.id,
+            source: "auto",
+            createdAt: { gte: todayStart },
+          },
+        });
+        if (autoToday >= 1) {
+          logger.info({ feedId: feed.id, userId }, "feed-auto-generate: daily limit reached for feed, skipping");
+          continue;
+        }
+
         const result = await fetchFeed(feed.url);
         if (result.error || result.items.length === 0) continue;
 
-        // Filter to items newer than lastCheckedAt (by pubDate if available)
+        // Filter to items newer than lastCheckedAt
         const lastChecked = feed.lastCheckedAt;
         const newItems = lastChecked
           ? result.items.filter((item) => {
@@ -121,55 +131,105 @@ export async function POST(request: NextRequest) {
               const pubDate = new Date(item.pubDate);
               return !isNaN(pubDate.getTime()) && pubDate > lastChecked;
             })
-          : result.items.slice(0, 3); // First run: take top 3 items
+          : result.items.slice(0, 1); // First run: take top item only
 
         if (newItems.length === 0) continue;
 
-        for (const item of newItems) {
-          if (slotsRemaining <= 0) break;
+        // Pick the first new item to generate from
+        const item = newItems[0];
+        const { prompt, style } = buildPromptFromItem(item);
+        if (!prompt) continue;
 
-          const { prompt, style } = buildPromptFromItem(item);
-          if (!prompt) continue;
-
-          // Deduplicate by itemTitle + userId to avoid re-queuing the same article
-          const existing = await prisma.pendingFeedGeneration.findFirst({
-            where: {
-              userId,
-              feedSubscriptionId: feed.id,
-              itemTitle: item.title.slice(0, 255),
-            },
-          });
-          if (existing) continue;
-
-          await prisma.pendingFeedGeneration.create({
-            data: {
-              userId,
-              feedSubscriptionId: feed.id,
-              feedTitle: feed.title ?? result.feedTitle,
-              itemTitle: item.title.slice(0, 255),
-              itemLink: item.link ?? null,
-              itemPubDate: item.pubDate ?? null,
-              prompt,
-              style: style || null,
-              status: "pending",
-            },
-          });
-
-          totalCreated++;
-          slotsRemaining--;
+        // Re-check credits per generation
+        if (!usingPersonalKey) {
+          const creditUsage = await getMonthlyCreditUsage(userId);
+          if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
+            logger.info({ userId }, "feed-auto-generate: insufficient credits for next generation, stopping user");
+            break;
+          }
         }
 
-        // Update lastCheckedAt for this feed
+        logger.info({ feedId: feed.id, userId, prompt: prompt.slice(0, 80) }, "feed-auto-generate: starting song generation");
+
+        let song;
+        try {
+          const genResult = await generateSong(
+            prompt,
+            { style: style || undefined, title: item.title?.slice(0, 100) || undefined },
+            userApiKey ?? undefined
+          );
+
+          song = await prisma.song.create({
+            data: {
+              userId,
+              sunoJobId: genResult.taskId,
+              prompt,
+              tags: style || null,
+              title: item.title?.slice(0, 200) || null,
+              generationStatus: "pending",
+              source: "auto",
+              rssFeedSubscriptionId: feed.id,
+            },
+          });
+
+          // Assign placeholder cover art
+          try {
+            const [placeholderVariant] = generateCoverArtVariants({
+              songId: song.id,
+              title: item.title?.slice(0, 100),
+              tags: style,
+            });
+            prisma.song.update({
+              where: { id: song.id },
+              data: { imageUrl: placeholderVariant.dataUrl },
+            }).catch(() => {});
+          } catch {
+            // Non-critical
+          }
+        } catch (genErr) {
+          logger.error({ feedId: feed.id, userId, genErr }, "feed-auto-generate: generation API call failed");
+          // Update lastCheckedAt anyway so we don't retry the same items endlessly
+          await prisma.rssFeedSubscription.update({
+            where: { id: feed.id },
+            data: { lastCheckedAt: now },
+          });
+          continue;
+        }
+
+        // Record credit usage
+        if (!usingPersonalKey) {
+          await recordCreditUsage(userId, "generate", {
+            songId: song.id,
+            creditCost: CREDIT_COSTS.generate,
+            description: `Auto-generated from feed: ${feed.title ?? feed.url}`,
+          }).catch(() => {});
+        }
+
+        // Notify user that auto-generation has started
+        await prisma.notification.create({
+          data: {
+            userId,
+            type: "generation_complete",
+            title: "Auto-generation started",
+            message: `Generating a song from "${feed.title ?? "RSS feed"}" — inspired by "${item.title?.slice(0, 80) ?? "a new item"}"`,
+            songId: song.id,
+          },
+        }).catch(() => {});
+
+        // Update lastCheckedAt
         await prisma.rssFeedSubscription.update({
           where: { id: feed.id },
           data: { lastCheckedAt: now },
         });
+
+        totalGenerated++;
+        slotsRemaining--;
       } catch (err) {
         logger.error({ feedId: feed.id, userId, err }, "feed-auto-generate: error processing feed");
       }
     }
   }
 
-  logger.info({ processed: totalProcessed, created: totalCreated }, "feed-auto-generate: complete");
-  return NextResponse.json({ processed: totalProcessed, created: totalCreated });
+  logger.info({ processed: totalProcessed, generated: totalGenerated }, "feed-auto-generate: complete");
+  return NextResponse.json({ processed: totalProcessed, generated: totalGenerated });
 }

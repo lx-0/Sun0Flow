@@ -33,6 +33,7 @@ interface GenerationEntry {
   generationStatus: string;
   errorMessage: string | null;
   isInstrumental: boolean;
+  source: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -188,6 +189,11 @@ function GenerationRow({
             {entry.isInstrumental && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-xs font-medium">
                 Instrumental
+              </span>
+            )}
+            {entry.source === "auto" && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
+                Auto
               </span>
             )}
           </div>

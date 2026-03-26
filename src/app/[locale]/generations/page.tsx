@@ -37,6 +37,7 @@ async function fetchGenerations() {
           generationStatus: true,
           errorMessage: true,
           isInstrumental: true,
+          source: true,
           createdAt: true,
           updatedAt: true,
         },
