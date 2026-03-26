@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, usePathname } from "@/i18n/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { TIER_LABELS, TIER_BADGE_COLORS, type SubscriptionTier } from "@/lib/feature-gates";
@@ -327,7 +326,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               href="/profile"
               aria-current={pathname === "/profile" ? "page" : undefined}
-              title={sidebarCollapsed ? t("profile") : undefined}
+              title={sidebarCollapsed ? tCommon("profile") : undefined}
               className={`flex items-center rounded-lg text-sm font-medium transition-colors min-h-[44px] ${sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} ${
                 pathname === "/profile"
                   ? "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
@@ -335,7 +334,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <UserCircleIcon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-              {!sidebarCollapsed && t("profile")}
+              {!sidebarCollapsed && tCommon("profile")}
             </Link>
             <Link
               href="/settings"
@@ -465,7 +464,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <UserCircleIcon className="w-5 h-5" aria-hidden="true" />
-              {t("profile")}
+              {tCommon("profile")}
             </Link>
             <Link
               href="/settings"
@@ -537,7 +536,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <NotificationBell />
               <Link
                 href="/profile"
-                aria-label={t("profile")}
+                aria-label={tCommon("profile")}
                 className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors md:hidden ${
                   pathname === "/profile" ? "text-violet-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
