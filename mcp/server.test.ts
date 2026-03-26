@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock env and prisma before importing mcp modules
 vi.mock("@/lib/env", () => ({
@@ -130,7 +130,7 @@ describe("resolveApiKeyFromEnv", () => {
     vi.mocked(prisma.apiKey.findFirst).mockResolvedValue({
       id: "key-1",
       userId: "user-abc",
-    });
+    } as never);
 
     const result = await resolveApiKeyFromEnv();
     expect(result).toBe("user-abc");
@@ -141,7 +141,7 @@ describe("resolveApiKeyFromEnv", () => {
     vi.mocked(prisma.apiKey.findFirst).mockResolvedValue({
       id: "key-1",
       userId: "user-xyz",
-    });
+    } as never);
 
     await resolveApiKeyFromEnv();
 
@@ -158,7 +158,7 @@ describe("resolveApiKeyFromEnv", () => {
     vi.mocked(prisma.apiKey.findFirst).mockResolvedValue({
       id: "key-fire",
       userId: "user-fire",
-    });
+    } as never);
 
     const result = await resolveApiKeyFromEnv();
     expect(result).toBe("user-fire");
