@@ -98,6 +98,7 @@ model User {
   playlistCollaborations PlaylistCollaborator[]
   playlistSongsAdded     PlaylistSong[]         @relation("PlaylistSongAddedBy")
   playbackState        PlaybackState?
+  generationAttempts   GenerationAttempt[]
 }
 
 model Activity {
@@ -167,6 +168,7 @@ model Song {
   lyricAnnotations     LyricAnnotation[]
   playbackStates       PlaybackState[]
   playEvents           PlayEvent[]
+  generationAttempt    GenerationAttempt?
 
   @@index([userId, title])
   @@index([userId, prompt])
@@ -743,4 +745,21 @@ model PlayEvent {
 
   @@index([songId, startedAt])
   @@index([listenerId, startedAt])
+}
+
+model GenerationAttempt {
+  id           String   @id @default(cuid())
+  userId       String
+  prompt       String
+  params       Json     // { title, style, instrumental, personaId }
+  status       String   @default("pending") // pending / complete / failed
+  songId       String?  @unique
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song? @relation(fields: [songId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, status])
 }
