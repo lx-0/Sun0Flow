@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { XMarkIcon } from "@heroicons/react/24/solid";
 
 interface LyricsPanelProps {
@@ -10,8 +10,6 @@ interface LyricsPanelProps {
 }
 
 export function LyricsPanel({ lyrics, songTitle, onClose }: LyricsPanelProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
-
   // Close on Escape key
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -21,20 +19,8 @@ export function LyricsPanel({ lyrics, songTitle, onClose }: LyricsPanelProps) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  // Close on click outside
-  useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose]);
-
   return (
     <div
-      ref={panelRef}
       role="dialog"
       aria-label="Song lyrics panel"
       className="bg-gray-900/95 border border-gray-700 rounded-t-2xl shadow-2xl overflow-hidden w-full md:max-w-[600px] md:ml-auto animate-slide-in"
