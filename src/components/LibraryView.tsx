@@ -1091,6 +1091,7 @@ export function LibraryView({
   });
   const [tempoMin, setTempoMin] = useState(searchParams.get("tempoMin") ?? "");
   const [tempoMax, setTempoMax] = useState(searchParams.get("tempoMax") ?? "");
+  const [includeVariations, setIncludeVariations] = useState(searchParams.get("includeVariations") === "true");
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
     if (typeof window === "undefined") return "list";
@@ -1200,7 +1201,7 @@ export function LibraryView({
   }, []);
 
   // ─── Sync filters → URL params ───────────────────────────────────────────
-  const hasAnyFilter = !!(debouncedSearch || statusFilter || ratingFilter || dateFrom || dateTo || tagFilter || smartFilter || sortBy !== "newest" || genreFilter.length > 0 || moodFilter.length > 0 || tempoMin || tempoMax);
+  const hasAnyFilter = !!(debouncedSearch || statusFilter || ratingFilter || dateFrom || dateTo || tagFilter || smartFilter || sortBy !== "newest" || genreFilter.length > 0 || moodFilter.length > 0 || tempoMin || tempoMax || includeVariations);
 
   useEffect(() => {
     if (!enableServerSearch) return;
@@ -1218,12 +1219,13 @@ export function LibraryView({
     if (moodFilter.length > 0) params.set("mood", moodFilter.join(","));
     if (tempoMin) params.set("tempoMin", tempoMin);
     if (tempoMax) params.set("tempoMax", tempoMax);
+    if (includeVariations) params.set("includeVariations", "true");
 
     const qs = params.toString();
     const newUrl = qs ? `${pathname}?${qs}` : pathname;
     router.replace(newUrl, { scroll: false });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, tagFilter, smartFilter, genreFilter, moodFilter, tempoMin, tempoMax, enableServerSearch]);
+  }, [debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, tagFilter, smartFilter, genreFilter, moodFilter, tempoMin, tempoMax, includeVariations, enableServerSearch]);
 
   // ─── Build filter query string (shared by initial fetch and load-more) ───
   function buildFilterParams(): URLSearchParams {
@@ -1245,6 +1247,7 @@ export function LibraryView({
     if (moodFilter.length > 0) params.set("mood", moodFilter.join(","));
     if (tempoMin) params.set("tempoMin", tempoMin);
     if (tempoMax) params.set("tempoMax", tempoMax);
+    if (includeVariations) params.set("includeVariations", "true");
     return params;
   }
 
@@ -1274,7 +1277,7 @@ export function LibraryView({
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, tagFilter, smartFilter, genreFilter, moodFilter, tempoMin, tempoMax, enableServerSearch]);
+  }, [debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, tagFilter, smartFilter, genreFilter, moodFilter, tempoMin, tempoMax, includeVariations, enableServerSearch]);
 
   // ─── Load more (next page) ──────────────────────────────────────────────
   const handleLoadMore = useCallback(() => {
@@ -1297,7 +1300,7 @@ export function LibraryView({
       .catch(() => {})
       .finally(() => setLoadingMore(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nextCursor, loadingMore, debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, tagFilter, smartFilter, genreFilter, moodFilter, tempoMin, tempoMax]);
+  }, [nextCursor, loadingMore, debouncedSearch, statusFilter, ratingFilter, dateFrom, dateTo, sortBy, tagFilter, smartFilter, genreFilter, moodFilter, tempoMin, tempoMax, includeVariations]);
 
   // ─── Clear all filters ────────────────────────────────────────────────────
   function clearAllFilters() {
@@ -1313,6 +1316,7 @@ export function LibraryView({
     setMoodFilter([]);
     setTempoMin("");
     setTempoMax("");
+    setIncludeVariations(false);
   }
 
   // ─── Song callbacks ───────────────────────────────────────────────────────
@@ -1829,7 +1833,7 @@ export function LibraryView({
   }
 
   const hasPlayableSongs = songs.some((s) => s.audioUrl && s.generationStatus === "ready");
-  const hasActiveFilters = !!(statusFilter || ratingFilter || dateFrom || dateTo || tagFilter || smartFilter || genreFilter.length > 0 || moodFilter.length > 0 || tempoMin || tempoMax);
+  const hasActiveFilters = !!(statusFilter || ratingFilter || dateFrom || dateTo || tagFilter || smartFilter || genreFilter.length > 0 || moodFilter.length > 0 || tempoMin || tempoMax || includeVariations);
 
   // ─── Virtualizer for list view ───────────────────────────────────────────
   const listScrollMarginRef = useRef(0);
@@ -2240,6 +2244,17 @@ export function LibraryView({
                 {opt.label}
               </button>
             ))}
+            <button
+              onClick={() => setIncludeVariations((v) => !v)}
+              aria-pressed={includeVariations}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors min-h-[44px] ${
+                includeVariations
+                  ? "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 ring-1 ring-violet-400"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              + Variations
+            </button>
           </div>
 
           {/* Sort + Clear row */}
