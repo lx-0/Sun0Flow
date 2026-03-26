@@ -11,12 +11,14 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
   FunnelIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/react/24/solid";
-import { HeartIcon as HeartOutlineIcon, CloudArrowDownIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
+import { HeartIcon as HeartOutlineIcon, CloudArrowDownIcon, CheckCircleIcon, QueueListIcon, ForwardIcon } from "@heroicons/react/24/outline";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
 import type { Song } from "@prisma/client";
 import { downloadSongFile } from "@/lib/download";
 import { useToast } from "./Toast";
+import { useQueue, type QueueSong } from "./QueueContext";
 import { PullToRefreshContainer } from "./PullToRefreshContainer";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -76,9 +78,25 @@ interface SongCardProps {
   isSaving: boolean;
   onSaveOffline: () => void;
   onRemoveOffline: () => void;
+  onPlayNext: () => void;
+  onAddToQueue: () => void;
 }
 
-function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload, isCached, isSaving, onSaveOffline, onRemoveOffline }: SongCardProps) {
+function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload, isCached, isSaving, onSaveOffline, onRemoveOffline, onPlayNext, onAddToQueue }: SongCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
   const hasAudio = !!song.audioUrl;
   const coverUrl = song.imageUrl || "/default-cover.png";
 
@@ -196,6 +214,36 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload,
                 )}
               </button>
             )}
+            {hasAudio && (
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => setMenuOpen((v) => !v)}
+                  aria-label="More options"
+                  aria-expanded={menuOpen}
+                  className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <EllipsisVerticalIcon className="w-4.5 h-4.5 text-gray-400" />
+                </button>
+                {menuOpen && (
+                  <div className="absolute right-0 bottom-full mb-1 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-20 overflow-hidden">
+                    <button
+                      onClick={() => { onPlayNext(); setMenuOpen(false); }}
+                      className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <ForwardIcon className="w-4 h-4 flex-shrink-0 text-gray-400" />
+                      Play Next
+                    </button>
+                    <button
+                      onClick={() => { onAddToQueue(); setMenuOpen(false); }}
+                      className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <QueueListIcon className="w-4 h-4 flex-shrink-0 text-gray-400" />
+                      Add to Queue
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -208,6 +256,7 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload,
 export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
   const { toast } = useToast();
   const { cachedIds, saving, saveOffline, removeOffline } = useOfflineCache();
+  const { queue, currentIndex, isPlaying: globalIsPlaying, playQueue, togglePlay, addToQueue, playNext } = useQueue();
 
   // State
   const [songs, setSongs] = useState<SongWithMeta[]>(initialSongs);
@@ -217,20 +266,6 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
   const [selectedMoods, setSelectedMoods] = useState<Set<string>>(new Set());
   const [dateFilter, setDateFilter] = useState<number>(-1); // days, -1 = all
   const [offlineOnly, setOfflineOnly] = useState(false);
-  const [playingSongId, setPlayingSongId] = useState<string | null>(null);
-
-  // Audio ref
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, []);
 
   // Filter songs
   const filtered = useMemo(() => {
@@ -285,33 +320,57 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
     return result;
   }, [songs, search, selectedStyles, selectedMoods, dateFilter, offlineOnly, cachedIds]);
 
-  // Play/pause toggle
+  // Map a SongWithMeta to the QueueSong shape
+  const toQueueSong = useCallback((song: SongWithMeta): QueueSong => ({
+    id: song.id,
+    title: song.title,
+    audioUrl: song.audioUrl!,
+    imageUrl: song.imageUrl ?? null,
+    duration: song.duration ?? null,
+    lyrics: song.lyrics ?? null,
+  }), []);
+
+  // Play/pause toggle — uses the global queue
   const handlePlayToggle = useCallback(
     (song: SongWithMeta) => {
-      if (playingSongId === song.id) {
-        // Pause
-        audioRef.current?.pause();
-        setPlayingSongId(null);
+      if (!song.audioUrl) {
+        toast("Could not play audio", "error");
         return;
       }
-
-      // Play new song
-      if (audioRef.current) {
-        audioRef.current.pause();
+      const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
+      if (currentSong?.id === song.id) {
+        // Toggle play/pause for the current song
+        togglePlay();
+        return;
       }
-      const url = song.audioUrl;
-      if (!url) return;
-
-      const audio = new Audio(url);
-      audio.volume = 0.7;
-      audio.play().catch(() => {
-        toast("Could not play audio", "error");
-      });
-      audio.onended = () => setPlayingSongId(null);
-      audioRef.current = audio;
-      setPlayingSongId(song.id);
+      // Build a play queue from the currently-filtered songs in display order
+      const playable = filtered.filter((s) => !!s.audioUrl);
+      const idx = playable.findIndex((s) => s.id === song.id);
+      if (idx >= 0) {
+        playQueue(playable.map(toQueueSong), idx, "Songs");
+      }
     },
-    [playingSongId, toast]
+    [currentIndex, queue, togglePlay, filtered, playQueue, toQueueSong, toast]
+  );
+
+  // Play Next
+  const handlePlayNext = useCallback(
+    (song: SongWithMeta) => {
+      if (!song.audioUrl) return;
+      playNext(toQueueSong(song));
+      toast("Playing next", "success");
+    },
+    [playNext, toQueueSong, toast]
+  );
+
+  // Add to Queue
+  const handleAddToQueue = useCallback(
+    (song: SongWithMeta) => {
+      if (!song.audioUrl) return;
+      addToQueue(toQueueSong(song));
+      toast("Added to queue", "success");
+    },
+    [addToQueue, toQueueSong, toast]
   );
 
   // Favorite toggle
@@ -570,7 +629,7 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
             <SongCard
               key={song.id}
               song={song}
-              isPlaying={playingSongId === song.id}
+              isPlaying={queue[currentIndex]?.id === song.id && globalIsPlaying}
               onPlayToggle={() => handlePlayToggle(song)}
               onFavoriteToggle={() => handleFavoriteToggle(song)}
               onDownload={() => handleDownload(song)}
@@ -578,6 +637,8 @@ export function SongsGalleryView({ initialSongs }: SongsGalleryViewProps) {
               isSaving={saving.has(song.id)}
               onSaveOffline={() => saveOffline({ id: song.id, title: song.title, imageUrl: song.imageUrl })}
               onRemoveOffline={() => removeOffline(song.id)}
+              onPlayNext={() => handlePlayNext(song)}
+              onAddToQueue={() => handleAddToQueue(song)}
             />
           ))}
         </div>
