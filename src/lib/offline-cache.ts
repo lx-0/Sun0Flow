@@ -74,7 +74,14 @@ export async function cacheSong(song: {
 
   const clone = response.clone();
   const cache = await caches.open(AUDIO_CACHE);
-  await cache.put(url, response);
+  try {
+    await cache.put(url, response);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "QuotaExceededError") {
+      throw new Error("Storage is full. Remove some offline songs to free up space.");
+    }
+    throw err;
+  }
 
   // Measure size from the cloned body
   let size = 0;

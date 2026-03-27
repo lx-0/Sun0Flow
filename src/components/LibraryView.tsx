@@ -33,6 +33,7 @@ import {
   Squares2X2Icon,
   ListBulletIcon,
   ChevronDownIcon,
+  SignalSlashIcon,
 } from "@heroicons/react/24/outline";
 import { PlayIcon as PlayOutlineIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
@@ -51,6 +52,8 @@ import { RecentlyPlayed } from "./RecentlyPlayed";
 import { LowCreditsBanner } from "./LowCreditsBanner";
 import { AddToPlaylistButton } from "./AddToPlaylistButton";
 import { ShareButton } from "./ShareButton";
+import { useOfflineCache } from "@/hooks/useOfflineCache";
+import { formatBytes } from "@/lib/offline-cache";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -411,8 +414,13 @@ interface SongRowProps {
   isSelected: boolean;
   selectionMode: boolean;
   searchQuery?: string;
+  isCached: boolean;
+  isSaving: boolean;
+  isOnline: boolean;
   onTogglePlay: (song: Song) => void;
   onDownload: (song: Song) => void;
+  onSaveOffline: (song: Song) => void;
+  onRemoveOffline: (songId: string) => void;
   onSeek: (pct: number) => void;
   onUpdate: (updated: Song) => void;
   onToggleFavorite: (song: Song) => void;
@@ -439,8 +447,13 @@ function SongRow({
   isSelected,
   selectionMode,
   searchQuery = "",
+  isCached,
+  isSaving,
+  isOnline,
   onTogglePlay,
   onDownload,
+  onSaveOffline,
+  onRemoveOffline,
   onSeek,
   onUpdate,
   onToggleFavorite,
@@ -589,6 +602,18 @@ function SongRow({
                 {formatTime(song.duration)}
               </span>
             )}
+            {!isOnline && !isCached && hasAudio && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 flex-shrink-0">
+                <SignalSlashIcon className="w-3 h-3" aria-hidden="true" />
+                Unavailable offline
+              </span>
+            )}
+            {isCached && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 flex-shrink-0" title="Available offline">
+                <CheckIcon className="w-3 h-3" aria-hidden="true" />
+                Offline
+              </span>
+            )}
             {!isPending && !isFailed && ((song as Song & { variationCount?: number }).variationCount ?? 0) > 0 && (
               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-[10px] font-medium">
                 {((song as Song & { variationCount?: number }).variationCount ?? 0) + 1} versions
@@ -701,6 +726,32 @@ function SongRow({
         >
           <ArrowDownTrayIcon className="w-5 h-5" aria-hidden="true" />
         </button>
+
+        {hasAudio && (
+          <button
+            onClick={() => isCached ? onRemoveOffline(song.id) : onSaveOffline(song)}
+            disabled={isSaving}
+            aria-label={isCached ? "Remove from offline cache" : isSaving ? "Saving for offline…" : "Save for offline playback"}
+            className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+              isCached
+                ? "bg-emerald-100 dark:bg-emerald-900/40 hover:bg-red-100 dark:hover:bg-red-900/40 text-emerald-600 dark:text-emerald-400 hover:text-red-500 dark:hover:text-red-400"
+                : isSaving
+                  ? "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                  : "bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
+            }`}
+          >
+            {isSaving ? (
+              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : isCached ? (
+              <CheckIcon className="w-5 h-5" aria-hidden="true" />
+            ) : (
+              <CloudArrowDownIcon className="w-5 h-5" aria-hidden="true" />
+            )}
+          </button>
+        )}
 
         <AddToPlaylistButton songId={song.id} />
 
@@ -1025,6 +1076,21 @@ export function LibraryView({
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
   const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  // ─── Offline cache ────────────────────────────────────────────────────────
+  const { cachedIds, stats: offlineStats, saving: offlineSaving, saveOffline, removeOffline, clearAll: clearOffline } = useOfflineCache();
+  const [isOnline, setIsOnline] = useState(true);
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   // Selection state
   const [selectedSongIds, setSelectedSongIds] = useState<Set<string>>(new Set());
@@ -1830,6 +1896,19 @@ export function LibraryView({
               {selectedSongIds.size === songs.length ? "Deselect all" : "Select all"}
             </button>
           )}
+          {offlineStats.count > 0 && (
+            <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <CheckIcon className="w-3.5 h-3.5 text-emerald-500" aria-hidden="true" />
+              <span>{offlineStats.count} offline · {formatBytes(offlineStats.totalBytes)}</span>
+              <button
+                onClick={clearOffline}
+                className="text-red-500 hover:text-red-400 transition-colors"
+                aria-label="Clear all offline songs"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Header actions */}
@@ -2343,8 +2422,13 @@ export function LibraryView({
                   isSelected={selectedSongIds.has(song.id)}
                   selectionMode={selectionMode}
                   searchQuery={debouncedSearch}
+                  isCached={cachedIds.has(song.id)}
+                  isSaving={offlineSaving.has(song.id)}
+                  isOnline={isOnline}
                   onTogglePlay={handleTogglePlay}
                   onDownload={handleDownload}
+                  onSaveOffline={(s) => saveOffline({ id: s.id, title: s.title, imageUrl: s.imageUrl })}
+                  onRemoveOffline={removeOffline}
                   onSeek={handleSeek}
                   onUpdate={handleSongUpdate}
                   onToggleFavorite={handleToggleFavorite}
