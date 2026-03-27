@@ -12,6 +12,7 @@ import {
   FireIcon,
   TrophyIcon,
   GlobeAltIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/solid";
 import { FollowButton } from "@/components/FollowButton";
 import { AddToPlaylistButton } from "@/components/AddToPlaylistButton";
@@ -110,6 +111,27 @@ function FilterPill({
     >
       {label}
     </button>
+  );
+}
+
+function ActiveFilterChip({
+  label,
+  onRemove,
+}: {
+  label: string;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 text-xs font-medium rounded-full bg-violet-100 dark:bg-violet-900/50 border border-violet-300 dark:border-violet-600 text-violet-700 dark:text-violet-300">
+      {label}
+      <button
+        onClick={onRemove}
+        aria-label={`Remove ${label} filter`}
+        className="flex items-center justify-center w-4 h-4 rounded-full hover:bg-violet-200 dark:hover:bg-violet-800 transition-colors"
+      >
+        <XMarkIcon className="w-3 h-3" />
+      </button>
+    </span>
   );
 }
 
@@ -503,6 +525,30 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
               )}
             </div>
 
+            {/* Active filter chips */}
+            {browseFilterCount > 0 && (
+              <div className="flex flex-wrap gap-2" aria-label="Active filters">
+                {tag && (
+                  <ActiveFilterChip
+                    label={`Genre: ${tag}`}
+                    onRemove={() => setTag("")}
+                  />
+                )}
+                {mood && (
+                  <ActiveFilterChip
+                    label={`Mood: ${mood}`}
+                    onRemove={() => setMood("")}
+                  />
+                )}
+                {tempoPreset && (
+                  <ActiveFilterChip
+                    label={`Tempo: ${tempoPreset}`}
+                    onRemove={() => setTempoPreset("")}
+                  />
+                )}
+              </div>
+            )}
+
             {/* Genre filter */}
             <section>
               <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
@@ -641,6 +687,24 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
                 </button>
               )}
             </div>
+
+            {/* Active filter chips for trending/popular */}
+            {trendingFilterCount > 0 && (
+              <div className="flex flex-wrap gap-2" aria-label="Active filters">
+                {trendingGenre && (
+                  <ActiveFilterChip
+                    label={`Genre: ${trendingGenre}`}
+                    onRemove={() => setTrendingGenre("")}
+                  />
+                )}
+                {trendingMood && (
+                  <ActiveFilterChip
+                    label={`Mood: ${trendingMood}`}
+                    onRemove={() => setTrendingMood("")}
+                  />
+                )}
+              </div>
+            )}
 
             {/* Genre filter for trending/popular */}
             <section>
