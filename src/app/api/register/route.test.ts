@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 import { POST } from "./route";
 
 vi.mock("@/lib/env", () => ({
@@ -47,8 +48,8 @@ vi.mock("bcryptjs", () => ({
 
 import { prisma } from "@/lib/prisma";
 
-function makeRequest(body: Record<string, unknown>): Request {
-  return new Request("http://localhost/api/register", {
+function makeRequest(body: Record<string, unknown>): NextRequest {
+  return new NextRequest("http://localhost/api/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -125,7 +126,7 @@ describe("POST /api/register", () => {
 
 describe("POST /api/register — malformed input and XSS edge cases", () => {
   it("returns 500 when request body is malformed JSON", async () => {
-    const req = new Request("http://localhost/api/register", {
+    const req = new NextRequest("http://localhost/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{ invalid json ;;; }",
@@ -140,7 +141,7 @@ describe("POST /api/register — malformed input and XSS edge cases", () => {
   });
 
   it("returns 500 when request body is completely empty", async () => {
-    const req = new Request("http://localhost/api/register", {
+    const req = new NextRequest("http://localhost/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "",
