@@ -154,6 +154,40 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // Service worker — must never be cached by CDN or browser.
+        // Browsers check for SW updates on every navigation; if the SW file
+        // is cached, users won't receive updates and the SW lifecycle breaks.
+        source: "/sw.js",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, max-age=0",
+          },
+        ],
+      },
+      {
+        // PWA manifest — short no-cache TTL so browsers/OS always revalidate.
+        // Cached manifests can prevent name, icon, or theme updates from
+        // reaching installed PWA users.
+        source: "/manifest.json",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache",
+          },
+        ],
+      },
+      {
+        // Offline fallback page — should always reflect the latest HTML.
+        source: "/offline.html",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache",
+          },
+        ],
+      },
     ];
   },
 };
