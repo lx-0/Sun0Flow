@@ -13,6 +13,7 @@ import {
   TrophyIcon,
   GlobeAltIcon,
   XMarkIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/solid";
 import { FollowButton } from "@/components/FollowButton";
 import { AddToPlaylistButton } from "@/components/AddToPlaylistButton";
@@ -82,7 +83,32 @@ interface TrendingPagination {
   hasMore: boolean;
 }
 
-type Tab = "browse" | "trending" | "popular";
+type Tab = "for_you" | "browse" | "trending" | "popular";
+
+interface FeedSong {
+  id: string;
+  title: string | null;
+  tags: string | null;
+  imageUrl: string | null;
+  audioUrl: string | null;
+  duration: number | null;
+  rating: number | null;
+  playCount: number;
+  publicSlug: string | null;
+  createdAt: string;
+  creatorDisplayName: string;
+  creatorUsername: string | null;
+  creatorUserId: string;
+  reason: "recommended" | "followed_artist" | "trending" | "new_release";
+  reasonLabel: string;
+}
+
+interface FeedPagination {
+  page: number;
+  totalPages: number;
+  total: number;
+  hasMore: boolean;
+}
 
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest" },
@@ -159,6 +185,7 @@ function ActiveFilterChip({
 }
 
 const TABS: { value: Tab; label: string; icon: React.ElementType }[] = [
+  { value: "for_you", label: "For You", icon: SparklesIcon },
   { value: "browse", label: "Browse", icon: GlobeAltIcon },
   { value: "trending", label: "Trending", icon: FireIcon },
   { value: "popular", label: "Popular", icon: TrophyIcon },
@@ -171,7 +198,7 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
   // Tab state
   const [tab, setTab] = useState<Tab>(() => {
     const t = searchParams.get("tab");
-    return (t === "trending" || t === "popular" || t === "browse") ? t : "browse";
+    return (t === "trending" || t === "popular" || t === "browse" || t === "for_you") ? t : "for_you";
   });
 
   // Browse tab state
@@ -197,6 +224,18 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
     offset: 0,
     hasMore: false,
   });
+
+  // For You feed state
+  const [feedSongs, setFeedSongs] = useState<FeedSong[]>([]);
+  const [feedPagination, setFeedPagination] = useState<FeedPagination>({
+    page: 1,
+    totalPages: 1,
+    total: 0,
+    hasMore: false,
+  });
+  const [feedTag, setFeedTag] = useState(searchParams.get("feedTag") || "");
+  const [feedMood, setFeedMood] = useState(searchParams.get("feedMood") || "");
+  const feedSentinelRef = useRef<HTMLDivElement>(null);
   const [trendingOffset, setTrendingOffset] = useState(0);
   const [trendingGenre, setTrendingGenre] = useState("");
   const [trendingMood, setTrendingMood] = useState("");
@@ -230,17 +269,20 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
     if (searchQuery) {
       params.set("q", searchQuery);
     } else {
-      if (tab !== "browse") params.set("tab", tab);
+      if (tab !== "for_you") params.set("tab", tab);
       if (tab === "browse") {
         if (sortBy !== "newest") params.set("sortBy", sortBy);
         if (tag) params.set("tag", tag);
         if (mood) params.set("mood", mood);
         if (tempoPreset) params.set("tempo", tempoPreset);
+      } else if (tab === "for_you") {
+        if (feedTag) params.set("feedTag", feedTag);
+        if (feedMood) params.set("feedMood", feedMood);
       }
     }
     const qs = params.toString();
     router.replace(qs ? `${basePath}?${qs}` : basePath, { scroll: false });
-  }, [tab, sortBy, tag, mood, tempoPreset, searchQuery, router, basePath]);
+  }, [tab, sortBy, tag, mood, tempoPreset, feedTag, feedMood, searchQuery, router, basePath]);
 
   const tempoRange = TEMPO_PRESETS.find((p) => p.label === tempoPreset);
 
@@ -308,6 +350,30 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
     []
   );
 
+  // Fetch personalized feed
+  const fetchFeed = useCallback(
+    async (page: number, tagVal: string, moodVal: string, append = false) => {
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      try {
+        const p = new URLSearchParams({ page: String(page) });
+        if (tagVal) p.set("tag", tagVal);
+        if (moodVal) p.set("mood", moodVal);
+        const res = await fetch(`/api/discover?${p}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setFeedSongs((prev) => (append ? [...prev, ...data.feed] : data.feed));
+        setFeedPagination(data.pagination);
+      } catch {
+        // keep existing state
+      } finally {
+        if (append) setLoadingMore(false);
+        else setLoading(false);
+      }
+    },
+    []
+  );
+
   // Fetch search results from /api/songs/public
   const fetchSearch = useCallback(
     async (q: string, offset: number, append = false) => {
@@ -361,6 +427,13 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
     setTrendingOffset(0);
     fetchTrending(tab, trendingGenre, trendingMood, 0);
   }, [tab, trendingGenre, trendingMood, fetchTrending]);
+
+  // Fetch on "for_you" tab + filter changes
+  useEffect(() => {
+    if (tab !== "for_you") return;
+    setFeedSongs([]);
+    fetchFeed(1, feedTag, feedMood);
+  }, [tab, feedTag, feedMood, fetchFeed]);
 
   // Load genre and mood tag lists
   useEffect(() => {
@@ -461,6 +534,23 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
     fetchTrending,
   ]);
 
+  // Infinite scroll for "for_you" feed
+  useEffect(() => {
+    if (tab !== "for_you") return;
+    const sentinel = feedSentinelRef.current;
+    if (!sentinel || !feedPagination.hasMore || loadingMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          fetchFeed(feedPagination.page + 1, feedTag, feedMood, true);
+        }
+      },
+      { rootMargin: "300px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [tab, feedPagination.hasMore, feedPagination.page, loadingMore, feedTag, feedMood, fetchFeed]);
+
   // Infinite scroll for search results
   useEffect(() => {
     if (!searchQuery) return;
@@ -552,6 +642,8 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
   const totalCount =
     tab === "browse"
       ? pagination.total
+      : tab === "for_you"
+      ? feedPagination.total
       : trendingPagination.total;
 
   return (
@@ -569,7 +661,9 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
               </Link>
               <h1 className="text-xl font-bold mt-1">Discover</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Explore {totalCount} publicly shared songs
+                {tab === "for_you"
+                  ? "Your personalized discover feed"
+                  : `Explore ${totalCount} publicly shared songs`}
               </p>
             </div>
             <Link
@@ -658,6 +752,98 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
             )}
             {searchPagination.hasMore && (
               <ScrollSentinel ref={searchSentinelRef} loading={loadingMore} />
+            )}
+          </>
+        )}
+
+        {!searchQuery && tab === "for_you" && (
+          <>
+            {/* Feed genre/mood filters */}
+            <div className="flex flex-col gap-4">
+              <section>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  Genre
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <FilterPill
+                    label="All Genres"
+                    active={feedTag === ""}
+                    onClick={() => setFeedTag("")}
+                  />
+                  {loadingFilters
+                    ? Array.from({ length: 8 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-[44px] w-16 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse"
+                        />
+                      ))
+                    : genreTags.map((g) => (
+                        <FilterPill
+                          key={g}
+                          label={g}
+                          active={feedTag === g}
+                          onClick={() => setFeedTag(feedTag === g ? "" : g)}
+                        />
+                      ))}
+                </div>
+              </section>
+
+              <section>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  Mood
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <FilterPill
+                    label="Any Mood"
+                    active={feedMood === ""}
+                    onClick={() => setFeedMood("")}
+                  />
+                  {loadingFilters
+                    ? Array.from({ length: 5 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-[44px] w-16 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse"
+                        />
+                      ))
+                    : moodTags.map((m) => (
+                        <FilterPill
+                          key={m}
+                          label={m}
+                          active={feedMood === m}
+                          onClick={() => setFeedMood(feedMood === m ? "" : m)}
+                        />
+                      ))}
+                </div>
+              </section>
+            </div>
+
+            {/* Feed song grid */}
+            {loading ? (
+              <SongGridSkeleton />
+            ) : feedSongs.length === 0 ? (
+              <div className="text-center py-16">
+                <SparklesIcon className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                  No songs to show yet. Try a different filter or check back later.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                {feedSongs.map((song) => (
+                  <FeedCard
+                    key={song.id}
+                    song={song}
+                    isPlaying={playingSongId === song.id}
+                    onPlayToggle={() => handlePlayToggle(song.id, song.audioUrl)}
+                    onTagClick={(t) => setFeedTag(t)}
+                    onMoodClick={(m) => setFeedMood(m)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {feedPagination.hasMore && (
+              <ScrollSentinel ref={feedSentinelRef} loading={loadingMore} />
             )}
           </>
         )}
@@ -1106,6 +1292,161 @@ function parseSongTags(tagsStr: string | null): {
     }
   }
   return { genres: genres.slice(0, 3), moods: moods.slice(0, 2) };
+}
+
+const REASON_STYLES: Record<
+  string,
+  { bg: string; text: string }
+> = {
+  recommended: {
+    bg: "bg-violet-600",
+    text: "text-white",
+  },
+  followed_artist: {
+    bg: "bg-emerald-600",
+    text: "text-white",
+  },
+  trending: {
+    bg: "bg-orange-500",
+    text: "text-white",
+  },
+  new_release: {
+    bg: "bg-sky-600",
+    text: "text-white",
+  },
+};
+
+function FeedCard({
+  song,
+  isPlaying,
+  onPlayToggle,
+  onTagClick,
+  onMoodClick,
+}: {
+  song: FeedSong;
+  isPlaying: boolean;
+  onPlayToggle: () => void;
+  onTagClick: (tag: string) => void;
+  onMoodClick: (mood: string) => void;
+}) {
+  const coverUrl = song.imageUrl || "/default-cover.png";
+  const href = song.publicSlug ? `/s/${song.publicSlug}` : "#";
+  const { genres, moods } = parseSongTags(song.tags);
+  const reasonStyle = REASON_STYLES[song.reason] ?? REASON_STYLES.new_release;
+
+  return (
+    <div className="group relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden transition-shadow hover:shadow-lg hover:shadow-violet-500/10">
+      <Link href={href} className="block relative aspect-square">
+        <Image
+          src={coverUrl}
+          alt={song.title || "Song cover"}
+          fill
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+          className="object-cover"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+          {song.audioUrl && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onPlayToggle();
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity w-14 h-14 rounded-full bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center shadow-lg min-h-[44px] min-w-[44px]"
+              aria-label={isPlaying ? "Pause" : "Play preview"}
+            >
+              {isPlaying ? (
+                <PauseIcon className="w-7 h-7" />
+              ) : (
+                <PlayIcon className="w-7 h-7 ml-0.5" />
+              )}
+            </button>
+          )}
+        </div>
+        {song.duration && (
+          <span className="absolute bottom-2 right-2 px-1.5 py-0.5 text-xs font-medium bg-black/70 text-white rounded">
+            {formatDuration(song.duration)}
+          </span>
+        )}
+        {isPlaying && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 bg-violet-600 text-white text-xs font-medium rounded-full">
+            <span className="flex gap-0.5">
+              <span className="w-0.5 h-3 bg-white rounded-full animate-pulse" />
+              <span className="w-0.5 h-2 bg-white rounded-full animate-pulse [animation-delay:150ms]" />
+              <span className="w-0.5 h-3.5 bg-white rounded-full animate-pulse [animation-delay:300ms]" />
+            </span>
+            Playing
+          </div>
+        )}
+        {/* Reason badge */}
+        <span
+          className={`absolute top-2 right-2 px-2 py-0.5 text-[10px] font-semibold rounded-full ${reasonStyle.bg} ${reasonStyle.text} truncate max-w-[120px]`}
+          title={song.reasonLabel}
+        >
+          {song.reasonLabel}
+        </span>
+      </Link>
+
+      <div className="p-3">
+        <Link href={href}>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
+            {song.title || "Untitled"}
+          </h3>
+        </Link>
+        <div className="flex items-center justify-between mt-0.5">
+          {song.creatorUsername ? (
+            <Link href={`/u/${song.creatorUsername}`} className="text-xs text-gray-500 dark:text-gray-400 truncate hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
+              {song.creatorDisplayName}
+            </Link>
+          ) : (
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+              {song.creatorDisplayName}
+            </p>
+          )}
+          <div className="flex items-center flex-shrink-0">
+            <AddToPlaylistButton songId={song.id} variant="icon" />
+            <FollowButton userId={song.creatorUserId} />
+          </div>
+        </div>
+
+        {(genres.length > 0 || moods.length > 0) && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {genres.map((g) => (
+              <button
+                key={g}
+                onClick={() => onTagClick(g)}
+                className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/60 transition-colors"
+                title={`Filter by genre: ${g}`}
+              >
+                {g}
+              </button>
+            ))}
+            {moods.map((m) => (
+              <button
+                key={m}
+                onClick={() => onMoodClick(m)}
+                className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-pink-50 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 hover:bg-pink-100 dark:hover:bg-pink-900/60 transition-colors"
+                title={`Filter by mood: ${m}`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+          {song.rating !== null && (
+            <span className="flex items-center gap-0.5">
+              <span className="text-yellow-500">&#9733;</span>
+              {song.rating}
+            </span>
+          )}
+          {song.playCount > 0 && <span>{song.playCount} plays</span>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DiscoverCard({
