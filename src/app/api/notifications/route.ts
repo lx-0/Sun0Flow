@@ -61,6 +61,7 @@ const VALID_TYPES = [
   "payment_failed",
   "song_comment",
   "new_follower",
+  "new_song_from_following",
   "playlist_invite",
 ];
 

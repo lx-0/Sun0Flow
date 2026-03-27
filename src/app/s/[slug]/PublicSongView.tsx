@@ -7,6 +7,7 @@ import { PlayIcon, PauseIcon, MusicalNoteIcon, FlagIcon, ShareIcon, SparklesIcon
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import { useSession } from "next-auth/react";
+import { FollowButton } from "@/components/FollowButton";
 import type { ReactionItem } from "@/components/ReactionTimeline";
 import { track } from "@/lib/analytics";
 
@@ -247,16 +248,21 @@ export function PublicSongView({
           <div className="text-center space-y-1.5">
             <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">{title}</h1>
             {creatorName && (
-              creatorUsername ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  by{" "}
-                  <Link href={`/u/${creatorUsername}`} className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors">
-                    {creatorName}
-                  </Link>
-                </p>
-              ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400">by {creatorName}</p>
-              )
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                {creatorUsername ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    by{" "}
+                    <Link href={`/u/${creatorUsername}`} className="hover:text-violet-500 dark:hover:text-violet-400 transition-colors">
+                      {creatorName}
+                    </Link>
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">by {creatorName}</p>
+                )}
+                {songOwnerId && (
+                  <FollowButton userId={songOwnerId} />
+                )}
+              </div>
             )}
             {tags && (
               <p className="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">{tags}</p>
