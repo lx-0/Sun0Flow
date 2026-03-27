@@ -176,6 +176,7 @@ model Song {
   playEvents           PlayEvent[]
   viewEvents           SongView[]
   generationAttempt    GenerationAttempt?
+  songEmbedding        SongEmbedding?
 
   @@index([userId, title])
   @@index([userId, prompt])
@@ -814,4 +815,20 @@ model InspirationDigest {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt(sort: Desc)])
+}
+
+// Stores OpenAI embedding vectors for songs to power semantic recommendations.
+// One row per song; updated whenever the song's metadata changes significantly.
+model SongEmbedding {
+  id        String   @id @default(cuid())
+  songId    String   @unique
+  embedding Json     // float[] — text-embedding-3-small (1536 dims)
+  model     String   @default("text-embedding-3-small")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId])
+  @@index([updatedAt])
 }
