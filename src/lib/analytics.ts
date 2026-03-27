@@ -5,17 +5,24 @@
  * - Only initializes when NEXT_PUBLIC_POSTHOG_KEY is set (production gating)
  * - No PII: never include email, name, or user ID in event properties
  * - All calls are fire-and-forget; never await analytics
+ *
+ * posthog-js is loaded lazily via dynamic import so it is excluded from the
+ * initial JS bundle. The library (~100 KB) only downloads after the app mounts
+ * and only when NEXT_PUBLIC_POSTHOG_KEY is set.
  */
 
-import posthog from "posthog-js";
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let posthogInstance: any = null;
 let initialized = false;
 
-export function initAnalytics() {
+export async function initAnalytics() {
   if (initialized) return;
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com";
   if (!key) return;
+
+  const { default: posthog } = await import("posthog-js");
+  posthogInstance = posthog;
 
   posthog.init(key, {
     api_host: host,
@@ -33,11 +40,11 @@ export function initAnalytics() {
 }
 
 export function track(event: string, properties?: Record<string, unknown>) {
-  if (!initialized) return;
-  posthog.capture(event, properties);
+  if (!initialized || !posthogInstance) return;
+  posthogInstance.capture(event, properties);
 }
 
 export function pageView(url: string) {
-  if (!initialized) return;
-  posthog.capture("$pageview", { $current_url: url });
+  if (!initialized || !posthogInstance) return;
+  posthogInstance.capture("$pageview", { $current_url: url });
 }
