@@ -66,11 +66,13 @@ function Avatar({ user }: { user: CommentUser }) {
 
 export function CommentsSection({
   songId,
+  songOwnerId,
   currentTime,
   duration,
   onSeek,
 }: {
   songId: string;
+  songOwnerId?: string;
   currentTime?: number;
   duration?: number;
   onSeek?: (seconds: number) => void;
@@ -187,7 +189,7 @@ export function CommentsSection({
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Add a comment…"
             rows={2}
-            maxLength={280}
+            maxLength={500}
             className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
           />
           <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -215,7 +217,7 @@ export function CommentsSection({
                   {currentTime! > 0 ? `@ ${fmtTimestamp(currentTime!)}` : "Attach timestamp"}
                 </button>
               ) : null}
-              <span className="text-xs text-gray-400 dark:text-gray-600">{draft.length}/280</span>
+              <span className="text-xs text-gray-400 dark:text-gray-600">{draft.length}/500</span>
             </div>
             {error && <p className="text-xs text-red-500 flex-1">{error}</p>}
             <button
@@ -277,7 +279,7 @@ export function CommentsSection({
                   {comment.body}
                 </p>
               </div>
-              {session?.user?.id === comment.user.id && (
+              {(session?.user?.id === comment.user.id || session?.user?.id === songOwnerId) && (
                 <button
                   type="button"
                   onClick={() => handleDelete(comment.id)}

@@ -19,8 +19,7 @@ export async function GET(
     const [comments, total] = await Promise.all([
       prisma.comment.findMany({
         where: { songId: params.id },
-        // Timestamped comments sorted by position; untimstamped fall to end by createdAt
-        orderBy: [{ timestamp: "asc" }, { createdAt: "desc" }],
+        orderBy: [{ createdAt: "desc" }],
         skip,
         take,
         select: {
@@ -96,10 +95,27 @@ export async function POST(
     const body = await request.json();
     const text = typeof body?.body === "string" ? body.body.trim() : "";
 
-    if (!text || text.length > 280) {
+    if (!text || text.length > 500) {
       return NextResponse.json(
-        { error: "Comment body must be 1–280 characters", code: "VALIDATION_ERROR" },
+        { error: "Comment body must be 1–500 characters", code: "VALIDATION_ERROR" },
         { status: 400 }
+      );
+    }
+
+    // Duplicate text protection: reject same text by same user on same song within 1 minute
+    const dupeCheck = await prisma.comment.findFirst({
+      where: {
+        songId: params.id,
+        userId,
+        body: text,
+        createdAt: { gte: new Date(Date.now() - COMMENT_WINDOW_MS) },
+      },
+      select: { id: true },
+    });
+    if (dupeCheck) {
+      return NextResponse.json(
+        { error: "Duplicate comment. Please wait before posting the same text again.", code: "DUPLICATE_COMMENT" },
+        { status: 429 }
       );
     }
 

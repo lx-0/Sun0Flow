@@ -146,6 +146,7 @@ export default async function PublicSongPage({
           tags={song.tags}
           creatorName={song.user.name}
           creatorUsername={song.user.username}
+          songOwnerId={song.userId}
           prompt={song.prompt}
           createdAt={song.createdAt.toISOString()}
         />

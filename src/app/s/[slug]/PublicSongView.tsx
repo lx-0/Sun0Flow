@@ -35,6 +35,7 @@ interface PublicSongViewProps {
   tags: string | null;
   creatorName: string | null;
   creatorUsername?: string | null;
+  songOwnerId?: string | null;
   prompt: string | null;
   createdAt: string;
 }
@@ -50,6 +51,7 @@ export function PublicSongView({
   tags,
   creatorName,
   creatorUsername,
+  songOwnerId,
   prompt,
   createdAt,
 }: PublicSongViewProps) {
@@ -525,6 +527,7 @@ export function PublicSongView({
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
         <CommentsSection
           songId={songId}
+          songOwnerId={songOwnerId ?? undefined}
           currentTime={currentTime}
           duration={audioDuration}
           onSeek={(seconds) => {

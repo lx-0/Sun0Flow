@@ -15,10 +15,16 @@ export async function DELETE(
       );
     }
 
-    const comment = await prisma.comment.findUnique({
-      where: { id: params.commentId },
-      select: { id: true, userId: true, songId: true },
-    });
+    const [comment, song] = await Promise.all([
+      prisma.comment.findUnique({
+        where: { id: params.commentId },
+        select: { id: true, userId: true, songId: true },
+      }),
+      prisma.song.findUnique({
+        where: { id: params.id },
+        select: { userId: true },
+      }),
+    ]);
 
     if (!comment || comment.songId !== params.id) {
       return NextResponse.json(
@@ -27,7 +33,10 @@ export async function DELETE(
       );
     }
 
-    if (comment.userId !== session.user.id) {
+    const isCommentOwner = comment.userId === session.user.id;
+    const isSongOwner = song?.userId === session.user.id;
+
+    if (!isCommentOwner && !isSongOwner) {
       return NextResponse.json(
         { error: "Forbidden", code: "FORBIDDEN" },
         { status: 403 }
