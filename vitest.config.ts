@@ -19,6 +19,11 @@ export default defineConfig({
         "src/app/api/credits/route.ts",
         "src/app/api/health/route.ts",
         "src/app/api/register/route.ts",
+        "src/app/api/auth/forgot-password/route.ts",
+        "src/app/api/auth/reset-password/route.ts",
+        "src/app/api/auth/verify-email/route.ts",
+        "src/app/api/auth/resend-verification/route.ts",
+        "src/app/api/auth/change-password/route.ts",
       ],
       exclude: [
         "src/lib/prisma.ts",
