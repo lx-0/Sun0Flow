@@ -61,6 +61,10 @@ export async function POST(req: NextRequest) {
       name: user.name,
       email: user.email,
       picture: user.image,
+      // Include onboardingCompleted so the JWT callback propagates it to the
+      // session without needing a DB read (the callback only reads DB on
+      // sign-in or trigger==="update", not on normal session access)
+      onboardingCompleted: true,
     },
     secret,
     salt: cookieName,
