@@ -47,6 +47,15 @@ const TOUR_STEPS: TourStep[] = [
     position: "bottom",
   },
   {
+    id: "prompt-tips",
+    title: "Tips for Better Results",
+    description:
+      "Get the most out of SunoFlow: (1) Add a genre + mood — \"upbeat jazz, happy\". (2) Include instruments — \"piano, drums, bass\". (3) Specify tempo — \"slow ballad\" or \"fast-paced\". (4) Avoid vague words — be specific about the feeling you want.",
+    targetSelector: "[data-tour='generate-prompt']",
+    requiredPath: "/generate",
+    position: "bottom",
+  },
+  {
     id: "library",
     title: "Your Music Library",
     description:
