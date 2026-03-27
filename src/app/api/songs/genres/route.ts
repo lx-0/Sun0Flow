@@ -2,22 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
 import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
+import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
 
-// Simple in-memory IP rate limiter (shared pattern with /discover)
-const ipHits = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const entry = ipHits.get(ip);
-  if (!entry || now > entry.resetAt) {
-    ipHits.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return false;
-  }
-  entry.count++;
-  return entry.count > RATE_LIMIT_MAX;
-}
 
 const FALLBACK_GENRES = [
   "Pop", "Rock", "Hip-Hop", "Electronic", "Jazz",
@@ -40,7 +28,8 @@ export async function GET(request: NextRequest) {
       request.headers.get("x-real-ip") ||
       "unknown";
 
-    if (isRateLimited(ip)) {
+    const { acquired } = await acquireAnonRateLimitSlot(ip, "genres", RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+    if (!acquired) {
       return NextResponse.json(
         { error: "Too many requests", code: "RATE_LIMIT" },
         { status: 429, headers: { "Retry-After": "60" } }

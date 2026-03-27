@@ -847,3 +847,14 @@ model SongEmbedding {
   @@index([songId])
   @@index([updatedAt])
 }
+
+// Rate limit entries for anonymous/IP-based limiting (no user FK).
+// Used for unauthenticated endpoints like /api/register where no userId exists.
+model AnonRateLimitEntry {
+  id        String   @id @default(cuid())
+  key       String   // hashed IP, email hash, or other anonymous identifier
+  action    String
+  createdAt DateTime @default(now())
+
+  @@index([key, action, createdAt])
+}

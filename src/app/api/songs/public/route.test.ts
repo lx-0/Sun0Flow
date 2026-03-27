@@ -6,8 +6,12 @@ vi.mock("@/lib/env", () => ({
   get DATABASE_URL() { return "postgres://test:test@localhost:5432/test"; },
   get AUTH_SECRET() { return "test-secret"; },
   get NEXTAUTH_URL() { return "http://localhost:3000"; },
+  get RATE_LIMIT_MAX_GENERATIONS() { return 10; },
   env: {},
 }));
+
+const mockAnonFindMany = vi.fn().mockResolvedValue([]);
+const mockAnonCreate = vi.fn().mockResolvedValue({ id: "rl-1" });
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -15,6 +19,17 @@ vi.mock("@/lib/prisma", () => ({
       findMany: vi.fn(),
       count: vi.fn(),
     },
+    anonRateLimitEntry: {
+      findMany: (...args: unknown[]) => mockAnonFindMany(...args),
+      create: (...args: unknown[]) => mockAnonCreate(...args),
+    },
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        anonRateLimitEntry: {
+          findMany: (...args: unknown[]) => mockAnonFindMany(...args),
+          create: (...args: unknown[]) => mockAnonCreate(...args),
+        },
+      }),
   },
 }));
 

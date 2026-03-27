@@ -2,12 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { CacheControl } from "@/lib/cache";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
+import { rateLimited } from "@/lib/api-error";
+
+// 60 search requests per user per minute
+const SEARCH_LIMIT = 60;
+const SEARCH_WINDOW_MS = 60 * 1000;
 
 export async function GET(request: NextRequest) {
   try {
     const { userId, error: authError } = await resolveUser(request);
 
     if (authError) return authError;
+
+    const { acquired, status: rlStatus } = await acquireRateLimitSlot(userId, "search", SEARCH_LIMIT, SEARCH_WINDOW_MS);
+    if (!acquired) {
+      return rateLimited("Search rate limit exceeded. Please slow down.", {
+        rateLimit: rlStatus,
+      });
+    }
 
     const q = request.nextUrl.searchParams.get("q")?.trim() || "";
     if (!q) {

@@ -11,12 +11,26 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
+const mockAnonFindMany = vi.fn().mockResolvedValue([]);
+const mockAnonCreate = vi.fn().mockResolvedValue({ id: "rl-1" });
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: {
       findUnique: vi.fn(),
       create: vi.fn(),
     },
+    anonRateLimitEntry: {
+      findMany: (...args: unknown[]) => mockAnonFindMany(...args),
+      create: (...args: unknown[]) => mockAnonCreate(...args),
+    },
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        anonRateLimitEntry: {
+          findMany: (...args: unknown[]) => mockAnonFindMany(...args),
+          create: (...args: unknown[]) => mockAnonCreate(...args),
+        },
+      }),
   },
 }));
 

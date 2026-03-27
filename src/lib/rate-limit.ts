@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { prisma } from "./prisma";
 import { RATE_LIMIT_MAX_GENERATIONS } from "@/lib/env";
 import { TIER_LIMITS } from "@/lib/billing";
@@ -11,6 +12,7 @@ const ACTION_LIMITS: Record<string, number> = {
   report: 10,
   password_reset: 3,
   verification_email: 3,
+  search: 60,
 };
 
 /**
@@ -102,19 +104,78 @@ export async function releaseRateLimitSlot(
 }
 
 /**
+ * Hash a raw key (IP address, email, etc.) so we never store PII in the table.
+ */
+export function hashRateLimitKey(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+/**
+ * Atomically check-and-increment an anonymous (non-user) rate limit slot.
+ * Used for unauthenticated endpoints (e.g., /api/register) where no userId exists.
+ *
+ * @param rawKey   Raw identifier (IP, email) — will be SHA-256-hashed before storage.
+ * @param action   Action label (e.g., "register").
+ * @param limit    Maximum number of requests allowed in the window.
+ * @param windowMs Window duration in milliseconds.
+ */
+export async function acquireAnonRateLimitSlot(
+  rawKey: string,
+  action: string,
+  limit: number,
+  windowMs: number
+): Promise<{ acquired: boolean; status: RateLimitStatus }> {
+  const key = hashRateLimitKey(rawKey);
+  const windowStart = new Date(Date.now() - windowMs);
+
+  return prisma.$transaction(
+    async (tx) => {
+      const entries = await tx.anonRateLimitEntry.findMany({
+        where: { key, action, createdAt: { gte: windowStart } },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      });
+
+      const count = entries.length;
+      const resetAt =
+        count > 0
+          ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
+          : new Date(Date.now() + windowMs).toISOString();
+
+      if (count >= limit) {
+        return { acquired: false, status: { remaining: 0, limit, resetAt } };
+      }
+
+      await tx.anonRateLimitEntry.create({ data: { key, action } });
+
+      return {
+        acquired: true,
+        status: { remaining: Math.max(0, limit - count - 1), limit, resetAt },
+      };
+    },
+    { isolationLevel: "Serializable" }
+  );
+}
+
+/**
  * Atomically check-and-increment the rate limit in a single transaction.
  * Returns { acquired: true, status } if a slot was claimed, or
  * { acquired: false, status } if the limit was already reached.
  *
  * Uses SERIALIZABLE isolation to prevent TOCTOU races: concurrent requests
  * that both read "1 slot remaining" will serialize — only one succeeds.
+ *
+ * @param windowMsOverride  Override the default 1-hour window (e.g., 60_000 for 1 minute).
  */
 export async function acquireRateLimitSlot(
   userId: string,
-  action = "generate"
+  action = "generate",
+  limitOverride?: number,
+  windowMsOverride?: number
 ): Promise<{ acquired: boolean; status: RateLimitStatus }> {
-  const limit = await resolveLimit(userId, action);
-  const windowStart = new Date(Date.now() - WINDOW_MS);
+  const limit = limitOverride ?? (await resolveLimit(userId, action));
+  const windowMs = windowMsOverride ?? WINDOW_MS;
+  const windowStart = new Date(Date.now() - windowMs);
 
   return prisma.$transaction(
     async (tx) => {
@@ -130,8 +191,8 @@ export async function acquireRateLimitSlot(
         // Limit reached — do not insert
         const resetAt =
           count > 0
-            ? new Date(entries[0].createdAt.getTime() + WINDOW_MS).toISOString()
-            : new Date(Date.now() + WINDOW_MS).toISOString();
+            ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
+            : new Date(Date.now() + windowMs).toISOString();
         return {
           acquired: false,
           status: { remaining: 0, limit, resetAt },
@@ -144,8 +205,8 @@ export async function acquireRateLimitSlot(
       const remaining = Math.max(0, limit - count - 1);
       const resetAt =
         count > 0
-          ? new Date(entries[0].createdAt.getTime() + WINDOW_MS).toISOString()
-          : new Date(Date.now() + WINDOW_MS).toISOString();
+          ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
+          : new Date(Date.now() + windowMs).toISOString();
 
       return {
         acquired: true,

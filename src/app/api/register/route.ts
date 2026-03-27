@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -6,9 +6,32 @@ import { prisma } from "@/lib/prisma";
 import { sendVerificationEmail, sendWelcomeEmail } from "@/lib/email";
 import { stripHtml } from "@/lib/sanitize";
 import { ensureFreeSubscription } from "@/lib/billing";
+import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
+import { rateLimited } from "@/lib/api-error";
 
-export async function POST(request: Request) {
+// 5 registration attempts per IP per 15 minutes
+const REGISTER_LIMIT = 5;
+const REGISTER_WINDOW_MS = 15 * 60 * 1000;
+
+export async function POST(request: NextRequest) {
   try {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+
+    const { acquired, status: rlStatus } = await acquireAnonRateLimitSlot(
+      ip,
+      "register",
+      REGISTER_LIMIT,
+      REGISTER_WINDOW_MS
+    );
+    if (!acquired) {
+      return rateLimited("Too many registration attempts. Please try again later.", {
+        rateLimit: rlStatus,
+      });
+    }
+
     const { name, email, password } = await request.json();
 
     if (!email || !password) {

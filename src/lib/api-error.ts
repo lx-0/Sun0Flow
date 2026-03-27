@@ -68,12 +68,23 @@ export const notFound = (msg = "Not found") =>
 /** 429 — rate limit exceeded */
 export const rateLimited = (
   msg: string,
-  details?: Record<string, unknown>,
+  details?: Record<string, unknown> & { rateLimit?: { limit: number; remaining: number; resetAt: string } },
   headers?: HeadersInit
 ) => {
   const body: ApiErrorBody = { error: msg, code: ErrorCode.RATE_LIMIT };
   if (details) body.details = details;
-  return NextResponse.json(body, { status: 429, headers });
+  const allHeaders: Record<string, string> = { ...(headers as Record<string, string>) };
+  if (details?.rateLimit) {
+    const { limit, remaining, resetAt } = details.rateLimit;
+    allHeaders["X-RateLimit-Limit"] = String(limit);
+    allHeaders["X-RateLimit-Remaining"] = String(remaining);
+    allHeaders["X-RateLimit-Reset"] = resetAt;
+    if (!allHeaders["Retry-After"] && resetAt) {
+      const retryAfterSec = Math.max(1, Math.ceil((new Date(resetAt).getTime() - Date.now()) / 1000));
+      allHeaders["Retry-After"] = String(retryAfterSec);
+    }
+  }
+  return NextResponse.json(body, { status: 429, headers: allHeaders });
 };
 
 /** 500 — internal server error (never expose internals) */

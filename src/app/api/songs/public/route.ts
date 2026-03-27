@@ -4,24 +4,10 @@ import { Prisma } from "@prisma/client";
 import { logServerError } from "@/lib/error-logger";
 import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
 import { rateLimited } from "@/lib/api-error";
+import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
 
-// In-memory IP rate limiter — 100 req/min for unauthenticated public endpoint
-const ipHits = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 100;
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const entry = ipHits.get(ip);
-
-  if (!entry || now > entry.resetAt) {
-    ipHits.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return false;
-  }
-
-  entry.count++;
-  return entry.count > RATE_LIMIT_MAX;
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,7 +17,8 @@ export async function GET(request: NextRequest) {
       request.headers.get("x-real-ip") ||
       "unknown";
 
-    if (isRateLimited(ip)) {
+    const { acquired } = await acquireAnonRateLimitSlot(ip, "public_songs", RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+    if (!acquired) {
       return rateLimited("Too many requests. Try again in a minute.", undefined, {
         "Retry-After": "60",
       });
