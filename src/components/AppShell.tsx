@@ -44,6 +44,7 @@ import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 const KeyboardShortcutsModal = dynamic(() => import("./KeyboardShortcutsModal").then((m) => m.KeyboardShortcutsModal), { ssr: false });
 import { NotificationBell } from "./NotificationBell";
 import { SearchBar } from "./SearchBar";
+import { SubscriptionStatusBadge } from "./SubscriptionStatusBadge";
 import { EmailVerificationBanner } from "./EmailVerificationBanner";
 const ResumePlaybackPrompt = dynamic(
   () => import("./ResumePlaybackPrompt").then((m) => m.ResumePlaybackPrompt),
@@ -531,6 +532,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {session?.user && (
             <div className="flex items-center gap-3">
+              {/* Subscription status — desktop */}
+              <div className="hidden md:flex">
+                <SubscriptionStatusBadge />
+              </div>
+              {/* Subscription status — mobile (compact) */}
+              <div className="flex md:hidden">
+                <SubscriptionStatusBadge compact />
+              </div>
               <button
                 onClick={cycleTheme}
                 aria-label={themeLabels[(theme as ThemeOption) ?? "system"]}
