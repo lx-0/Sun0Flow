@@ -13,10 +13,9 @@ import { encode } from "next-auth/jwt";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
-const PLAYWRIGHT_TEST = process.env.PLAYWRIGHT_TEST === "true";
-
 export async function POST(req: NextRequest) {
-  if (!PLAYWRIGHT_TEST) {
+  // Read at request time (not module-load time) to survive Turbopack static analysis
+  if (process.env.PLAYWRIGHT_TEST !== "true") {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 

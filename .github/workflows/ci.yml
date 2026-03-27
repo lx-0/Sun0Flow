@@ -82,6 +82,7 @@ jobs:
         run: pnpm test:e2e
         env:
           AUTH_URL: http://localhost:3200
+          PLAYWRIGHT_TEST: "true"
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
