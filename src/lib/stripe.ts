@@ -46,3 +46,16 @@ export const TOPUP_PACKAGES = [
 ];
 
 export type TopupPackageId = "credits_10" | "credits_25" | "credits_50";
+
+/**
+ * Returns true if the minimum required Stripe environment variables are set.
+ * Safe to call server-side; does not throw.
+ */
+export function isStripeConfigured(): boolean {
+  return !!(
+    process.env.STRIPE_SECRET_KEY &&
+    process.env.STRIPE_PRICE_STARTER &&
+    process.env.STRIPE_PRICE_PRO &&
+    process.env.STRIPE_PRICE_STUDIO
+  );
+}

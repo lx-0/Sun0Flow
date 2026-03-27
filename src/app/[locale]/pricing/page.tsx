@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { CheckIcon, XMarkIcon } from "@heroicons/react/24/solid";
-import { SparklesIcon } from "@heroicons/react/24/outline";
+import { SparklesIcon, ClockIcon } from "@heroicons/react/24/outline";
 import { track } from "@/lib/analytics";
 
 interface Tier {
@@ -118,11 +118,13 @@ function TierCard({
   annual,
   onUpgrade,
   loading,
+  stripeConfigured,
 }: {
   tier: Tier;
   annual: boolean;
   onUpgrade: (id: string, annual: boolean) => void;
   loading: string | null;
+  stripeConfigured: boolean;
 }) {
   const { data: session } = useSession();
   const currentTier =
@@ -208,6 +210,14 @@ function TierCard({
         >
           {tier.cta}
         </Link>
+      ) : !stripeConfigured ? (
+        <div
+          className="w-full text-center py-2 px-4 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1.5 cursor-default"
+          title="Subscriptions are not yet available"
+        >
+          <ClockIcon className="w-4 h-4" />
+          Coming soon
+        </div>
       ) : (
         <button
           onClick={handleCta}
@@ -240,6 +250,14 @@ export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stripeConfigured, setStripeConfigured] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/billing/status")
+      .then((r) => r.json())
+      .then((d) => setStripeConfigured(d.stripeConfigured ?? true))
+      .catch(() => {/* keep optimistic default */});
+  }, []);
 
   async function handleUpgrade(tier: string, isAnnual: boolean) {
     setLoading(tier);
@@ -313,6 +331,15 @@ export default function PricingPage() {
           </span>
         </div>
 
+        {!stripeConfigured && (
+          <div className="mb-8 max-w-xl mx-auto p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-400 text-center flex items-center justify-center gap-2">
+            <ClockIcon className="w-4 h-4 flex-shrink-0" />
+            <span>
+              <strong>Subscriptions coming soon.</strong> Paid plans are not yet available — check back shortly.
+            </span>
+          </div>
+        )}
+
         {error && (
           <div className="mb-8 max-w-md mx-auto p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400 text-center">
             {error}
@@ -328,6 +355,7 @@ export default function PricingPage() {
               annual={annual}
               onUpgrade={handleUpgrade}
               loading={loading}
+              stripeConfigured={stripeConfigured}
             />
           ))}
         </div>

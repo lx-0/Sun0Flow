@@ -13,6 +13,7 @@ import {
   ArrowDownTrayIcon,
   XMarkIcon,
   PlusCircleIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
 import {
   TIER_LABELS,
@@ -225,6 +226,7 @@ export default function BillingPage() {
   const [selectedTopup, setSelectedTopup] = useState<TopupPackageId>("credits_10");
   const [error, setError] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [stripeConfigured, setStripeConfigured] = useState(true);
 
   const successParam = searchParams.get("success");
   const cancelledParam = searchParams.get("cancelled");
@@ -233,16 +235,21 @@ export default function BillingPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [subRes, creditRes, invoiceRes] = await Promise.all([
+      const [subRes, creditRes, invoiceRes, statusRes] = await Promise.all([
         fetch("/api/billing/subscription"),
         fetch("/api/credits"),
         fetch("/api/billing/invoices"),
+        fetch("/api/billing/status"),
       ]);
       if (subRes.ok) setSub(await subRes.json());
       if (creditRes.ok) setCredits(await creditRes.json());
       if (invoiceRes.ok) {
         const data = await invoiceRes.json();
         setInvoices(data.invoices ?? []);
+      }
+      if (statusRes.ok) {
+        const data = await statusRes.json();
+        setStripeConfigured(data.stripeConfigured ?? true);
       }
     } catch {
       // keep existing state
@@ -485,19 +492,29 @@ export default function BillingPage() {
                     >
                       Change Plan
                     </Link>
-                    <button
-                      onClick={handleManage}
-                      disabled={portalLoading}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-60"
-                    >
-                      {portalLoading ? (
-                        <ArrowPathIcon className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <CreditCardIcon className="w-4 h-4" />
-                      )}
-                      Manage subscription
-                    </button>
-                    {!sub?.cancelAtPeriodEnd && (
+                    {stripeConfigured ? (
+                      <button
+                        onClick={handleManage}
+                        disabled={portalLoading}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-60"
+                      >
+                        {portalLoading ? (
+                          <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <CreditCardIcon className="w-4 h-4" />
+                        )}
+                        Manage subscription
+                      </button>
+                    ) : (
+                      <div
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-default"
+                        title="Billing portal is not yet available"
+                      >
+                        <ClockIcon className="w-4 h-4" />
+                        Billing portal coming soon
+                      </div>
+                    )}
+                    {stripeConfigured && !sub?.cancelAtPeriodEnd && (
                       <button
                         onClick={() => setShowCancelDialog(true)}
                         className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -583,37 +600,46 @@ export default function BillingPage() {
                 credits are depleted and are valid for 1 year.
               </p>
 
-              <div className="grid grid-cols-3 gap-2">
-                {TOPUP_PACKAGES.map((pkg) => (
+              {stripeConfigured ? (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TOPUP_PACKAGES.map((pkg) => (
+                      <button
+                        key={pkg.id}
+                        onClick={() => setSelectedTopup(pkg.id)}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm transition-colors ${
+                          selectedTopup === pkg.id
+                            ? "border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300"
+                            : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-violet-300 dark:hover:border-violet-700"
+                        }`}
+                      >
+                        <span className="font-semibold">{pkg.label}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{pkg.priceLabel}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
                   <button
-                    key={pkg.id}
-                    onClick={() => setSelectedTopup(pkg.id)}
-                    className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm transition-colors ${
-                      selectedTopup === pkg.id
-                        ? "border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300"
-                        : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-violet-300 dark:hover:border-violet-700"
-                    }`}
+                    onClick={handleTopup}
+                    disabled={topupLoading}
+                    className="inline-flex items-center justify-center gap-2 w-full px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-60"
                   >
-                    <span className="font-semibold">{pkg.label}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{pkg.priceLabel}</span>
+                    {topupLoading ? (
+                      <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <PlusCircleIcon className="w-4 h-4" />
+                    )}
+                    {topupLoading ? "Redirecting…" : `Buy ${TOPUP_PACKAGES.find((p) => p.id === selectedTopup)?.label}`}
                   </button>
-                ))}
-              </div>
-
-              {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-              <button
-                onClick={handleTopup}
-                disabled={topupLoading}
-                className="inline-flex items-center justify-center gap-2 w-full px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-60"
-              >
-                {topupLoading ? (
-                  <ArrowPathIcon className="w-4 h-4 animate-spin" />
-                ) : (
-                  <PlusCircleIcon className="w-4 h-4" />
-                )}
-                {topupLoading ? "Redirecting…" : `Buy ${TOPUP_PACKAGES.find((p) => p.id === selectedTopup)?.label}`}
-              </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
+                  <ClockIcon className="w-4 h-4 flex-shrink-0" />
+                  Credit top-ups are coming soon.
+                </div>
+              )}
             </div>
 
             {/* Invoice history */}
