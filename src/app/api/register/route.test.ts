@@ -108,3 +108,58 @@ describe("POST /api/register", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("POST /api/register — malformed input and XSS edge cases", () => {
+  it("returns 500 when request body is malformed JSON", async () => {
+    const req = new Request("http://localhost/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{ invalid json ;;; }",
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+    const data = await res.json();
+    expect(data.code).toBe("INTERNAL_ERROR");
+    // Must not expose internal error message
+    expect(data.error).not.toContain("SyntaxError");
+  });
+
+  it("returns 500 when request body is completely empty", async () => {
+    const req = new Request("http://localhost/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "",
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+  });
+
+  it("sanitizes XSS in name field and creates user successfully", async () => {
+    const res = await POST(makeRequest({
+      email: "xss-test@example.com",
+      password: "password123",
+      name: '<script>alert("xss")</script>Alice',
+    }));
+
+    expect(res.status).toBe(201);
+    // Confirm the user was created with a sanitized name (no HTML tags)
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: expect.not.stringContaining("<script>"),
+        }),
+      })
+    );
+  });
+
+  it("returns consistent error format (error + code) for all 4xx responses", async () => {
+    const res = await POST(makeRequest({ password: "password123" })); // missing email
+    const data = await res.json();
+    expect(data).toHaveProperty("error");
+    expect(data).toHaveProperty("code");
+    expect(typeof data.error).toBe("string");
+    expect(typeof data.code).toBe("string");
+  });
+});

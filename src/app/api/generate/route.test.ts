@@ -369,3 +369,74 @@ describe("POST /api/generate", () => {
     expect(createLowCreditNotification).toHaveBeenCalledWith("user-1", 50, 500);
   });
 });
+
+describe("POST /api/generate — malformed input edge cases", () => {
+  it("returns 500 when request body is malformed JSON", async () => {
+    const req = new Request("http://localhost/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{ this is not valid json ::::",
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+    const data = await res.json();
+    expect(data.code).toBe("INTERNAL_ERROR");
+    // Internal error details must not leak to the client
+    expect(data.error).not.toContain("SyntaxError");
+  });
+
+  it("returns 500 when request body is empty (no JSON)", async () => {
+    const req = new Request("http://localhost/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "",
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+  });
+
+  it("sanitizes XSS payload in prompt and proceeds with generation", async () => {
+    vi.mocked(generateSong).mockResolvedValue({ taskId: "task-xss" });
+
+    const xssPrompt = '<script>alert("xss")</script>pop upbeat music';
+    const res = await POST(makeRequest({ ...DEFAULT_BODY, prompt: xssPrompt }));
+
+    // Route should NOT reject the request; it strips HTML and continues
+    expect(res.status).toBe(201);
+    // The song should be created with the stripped prompt
+    expect(prisma.song.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          prompt: expect.not.stringContaining("<script>"),
+        }),
+      })
+    );
+  });
+
+  it("sanitizes XSS payload in title and proceeds with generation", async () => {
+    vi.mocked(generateSong).mockResolvedValue({ taskId: "task-xss-title" });
+
+    const res = await POST(
+      makeRequest({ ...DEFAULT_BODY, title: '<img src=x onerror=alert(1)>My Song' })
+    );
+
+    expect(res.status).toBe(201);
+    expect(prisma.song.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: expect.not.stringContaining("<img"),
+        }),
+      })
+    );
+  });
+
+  it("rejects an explicitly empty prompt regardless of HTML content", async () => {
+    // The route validates prompt before stripping — empty string is rejected
+    const res = await POST(makeRequest({ ...DEFAULT_BODY, prompt: "" }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.code).toBe("VALIDATION_ERROR");
+  });
+});

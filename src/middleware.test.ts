@@ -244,3 +244,63 @@ describe("middleware — security headers", () => {
     expect(res.headers.get("strict-transport-security")).toContain("max-age=");
   });
 });
+
+describe("middleware — user-based rate limiting", () => {
+  it("returns 429 when POST /api/generate exceeds 10 req/min per user", async () => {
+    // Use a unique userId to avoid interference with other tests
+    const userId = "rl-gen-test-user-429";
+    vi.mocked(getToken).mockResolvedValue({ id: userId, sub: userId } as never);
+
+    // Exhaust the generate bucket (limit = 10)
+    for (let i = 0; i < 10; i++) {
+      await middleware(makeRequest("http://localhost/api/generate", { method: "POST" }));
+    }
+
+    const res = await middleware(makeRequest("http://localhost/api/generate", { method: "POST" }));
+    expect(res.status).toBe(429);
+    const data = await res.json();
+    expect(data.code).toBe("RATE_LIMITED");
+  });
+
+  it("returns Retry-After and X-RateLimit-Limit headers when generate limit exceeded", async () => {
+    const userId = "rl-gen-test-user-headers";
+    vi.mocked(getToken).mockResolvedValue({ id: userId, sub: userId } as never);
+
+    for (let i = 0; i < 10; i++) {
+      await middleware(makeRequest("http://localhost/api/generate", { method: "POST" }));
+    }
+
+    const res = await middleware(makeRequest("http://localhost/api/generate", { method: "POST" }));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBeTruthy();
+    expect(res.headers.get("x-ratelimit-limit")).toBe("10");
+    expect(res.headers.get("x-ratelimit-remaining")).toBe("0");
+  });
+
+  it("does not rate limit admin users on POST /api/generate", async () => {
+    const userId = "rl-admin-exempt-user";
+    vi.mocked(getToken).mockResolvedValue({ id: userId, sub: userId, isAdmin: true } as never);
+
+    // Make 11 requests — should all pass because admin is exempt
+    for (let i = 0; i < 11; i++) {
+      const res = await middleware(makeRequest("http://localhost/api/generate", { method: "POST" }));
+      expect(res.status).not.toBe(429);
+    }
+  });
+
+  it("returns 429 with RATE_LIMITED code when general API limit exceeded", async () => {
+    const userId = "rl-api-test-user-429";
+    vi.mocked(getToken).mockResolvedValue({ id: userId, sub: userId } as never);
+
+    // Exhaust the general API bucket (limit = 100)
+    for (let i = 0; i < 100; i++) {
+      await middleware(makeRequest("http://localhost/api/songs"));
+    }
+
+    const res = await middleware(makeRequest("http://localhost/api/songs"));
+    expect(res.status).toBe(429);
+    const data = await res.json();
+    expect(data.code).toBe("RATE_LIMITED");
+    expect(data.error).toContain("Too many requests");
+  });
+});
