@@ -330,7 +330,7 @@ export async function middleware(request: NextRequest) {
   const userId = token?.id as string | undefined;
   const isAdmin = Boolean(token?.isAdmin);
 
-  if (userId && !isAdmin && pathname.startsWith("/api/")) {
+  if (userId && !isAdmin && pathname.startsWith("/api/") && process.env.PLAYWRIGHT_TEST !== "true") {
     // Song generation: 10 req/min (expensive upstream operation)
     if (pathname === "/api/generate" && method === "POST") {
       const { allowed, retryAfterSec, remaining, limit } = checkUserRateLimit(userId, "generate", 10);

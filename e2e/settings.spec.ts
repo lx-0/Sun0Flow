@@ -44,7 +44,7 @@ test.describe("Settings Page", () => {
     await expect(page.getByText("Appearance")).toBeVisible({ timeout: 3000 });
     await expect(page.getByRole("button", { name: "Light" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Dark" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "System" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "System" }).first()).toBeVisible();
   });
 });
 

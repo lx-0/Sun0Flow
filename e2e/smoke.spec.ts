@@ -23,6 +23,8 @@ test("/mashup page loads without crash", async ({ page }) => {
 
 test.describe("Error Scenarios", () => {
   test("404 page renders for invalid routes", async ({ page }) => {
+    // Must be authenticated — middleware redirects unauthenticated requests to /login
+    await loginViaUI(page, errorEmail, DEFAULT_PASSWORD);
     const response = await page.goto("/this-route-does-not-exist-e2e-test");
     // Next.js renders not-found.tsx with a 404 status
     expect(response?.status()).toBe(404);
@@ -31,6 +33,8 @@ test.describe("Error Scenarios", () => {
   });
 
   test("404 page has navigation links back to app", async ({ page }) => {
+    // Must be authenticated — middleware redirects unauthenticated requests to /login
+    await loginViaUI(page, errorEmail, DEFAULT_PASSWORD);
     await page.goto("/invalid-route-xyz-abc");
     await expect(page.getByRole("link", { name: "Go Home" })).toBeVisible();
   });

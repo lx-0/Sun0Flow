@@ -134,7 +134,7 @@ test.describe("Library — States", () => {
     await page.goto("/library");
 
     await expect(
-      page.getByText("No songs in your library yet.")
+      page.getByText("No songs yet")
     ).toBeVisible({ timeout: 5000 });
   });
 

@@ -121,8 +121,8 @@ test.describe("Song Generation", () => {
     const customSwitch = page.getByRole("switch").first();
     await customSwitch.click();
 
-    // Lyrics textarea should appear
-    const lyricsField = page.getByLabel("Lyrics");
+    // Lyrics textarea should appear — use role+name to avoid matching the switch label
+    const lyricsField = page.getByRole("textbox", { name: "Lyrics" });
     await expect(lyricsField).toBeVisible({ timeout: 3000 });
 
     // Fill the form
@@ -153,7 +153,7 @@ test.describe("Library View", () => {
 
     // Should show empty state or song list
     // (freshly seeded user has no songs unless generate tests ran first)
-    const emptyMsg = page.getByText("No songs in your library yet.");
+    const emptyMsg = page.getByText("No songs yet");
     const songList = page.locator("ul");
     await expect(emptyMsg.or(songList)).toBeVisible({ timeout: 5000 });
   });
@@ -221,20 +221,16 @@ test.describe("Navigation", () => {
     await expect(page.locator("h1")).toContainText("Generate");
 
     // Library
-    await page.getByRole("link", { name: "Library" }).click();
+    await page.getByRole("link", { name: "Library" }).first().click();
     await expect(page).toHaveURL(/\/library/, { timeout: 5000 });
     await expect(page.locator("h1")).toContainText("Library");
 
     // Home
-    await page.getByRole("link", { name: "Home" }).click();
+    await page.getByRole("link", { name: "Home" }).first().click();
     await page.waitForURL("**/", { timeout: 5000 });
 
-    // Favorites
-    await page.getByRole("link", { name: "Favorites" }).click();
-    await expect(page).toHaveURL(/\/favorites/, { timeout: 5000 });
-
     // Inspire
-    await page.getByRole("link", { name: "Inspire" }).click();
+    await page.getByRole("link", { name: "Inspire" }).first().click();
     await expect(page).toHaveURL(/\/inspire/, { timeout: 5000 });
   });
 

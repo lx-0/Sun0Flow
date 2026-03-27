@@ -206,13 +206,18 @@ test.describe("Generation — Rate Limiting", () => {
   test("shows error when rate limited", async ({ page }) => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
 
+    const resetAt = new Date(Date.now() + 300000).toISOString();
     await page.route("**/api/generate", async (route) => {
       await route.fulfill({
         status: 429,
         contentType: "application/json",
         body: JSON.stringify({
           error: "Rate limit exceeded.",
-          resetAt: new Date(Date.now() + 300000).toISOString(),
+          code: "RATE_LIMIT",
+          details: {
+            resetAt,
+            rateLimit: { remaining: 0, limit: 10, resetAt },
+          },
         }),
       });
     });

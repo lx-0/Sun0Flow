@@ -30,7 +30,7 @@ test.describe("Playlists — List & Create", () => {
 
     await expect(page.locator("h1")).toContainText("Playlists");
     await expect(
-      page.getByText("No playlists yet. Create one to organize your songs.")
+      page.getByText("No playlists yet")
     ).toBeVisible({ timeout: 5000 });
   });
 
@@ -99,7 +99,7 @@ test.describe("Playlists — Detail & Edit", () => {
 
     // Should show empty state
     await expect(
-      page.getByText("No songs in this playlist yet.")
+      page.getByText("No songs yet")
     ).toBeVisible({ timeout: 5000 });
   });
 
@@ -241,7 +241,7 @@ test.describe("Playlists — Song Management", () => {
 
     // Since real playlist is empty, verify the empty state message instead
     await expect(
-      page.getByText("No songs in this playlist yet")
+      page.getByText("No songs yet")
     ).toBeVisible({ timeout: 5000 });
   });
 });
