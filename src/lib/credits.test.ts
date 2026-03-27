@@ -21,6 +21,7 @@ vi.mock("@/lib/billing", () => ({
 
 const mockCreditUsageCreate = vi.fn();
 const mockCreditUsageAggregate = vi.fn();
+const mockCreditTopUpAggregate = vi.fn();
 const mockNotificationFindFirst = vi.fn();
 const mockNotificationCreate = vi.fn();
 const mockQueryRaw = vi.fn();
@@ -32,6 +33,9 @@ vi.mock("@/lib/prisma", () => ({
     creditUsage: {
       create: (...args: unknown[]) => mockCreditUsageCreate(...args),
       aggregate: (...args: unknown[]) => mockCreditUsageAggregate(...args),
+    },
+    creditTopUp: {
+      aggregate: (...args: unknown[]) => mockCreditTopUpAggregate(...args),
     },
     notification: {
       findFirst: (...args: unknown[]) => mockNotificationFindFirst(...args),
@@ -65,6 +69,8 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-03-26T12:00:00Z")); // within 30-day grace window
   // Default: user created before billing cutoff → grace budget = 500
   mockUserFindUnique.mockResolvedValue({ createdAt: new Date("2026-01-01") });
+  // Default: no top-up credits
+  mockCreditTopUpAggregate.mockResolvedValue({ _sum: { credits: 0 } });
 });
 
 afterEach(() => {
