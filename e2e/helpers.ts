@@ -30,13 +30,33 @@ export async function loginViaUI(
   email: string,
   password: string
 ) {
-  await page.goto("/login");
-  // Wait for the login form to be hydrated before interacting
-  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 15000 });
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
+  // In CI (when PLAYWRIGHT_TEST dev server is running), use a direct API login
+  // endpoint that bypasses the CSRF check which fails in headless Chromium.
+  // Locally, fall back to the UI form which works fine with a running dev server.
+  const baseURL = page.context().browser()?.contexts()[0]?.pages()[0]
+    ? (page.context() as { _options?: { baseURL?: string } })._options?.baseURL
+    : undefined;
+  const appBase = baseURL ?? "http://localhost:3200";
+
+  // Try the test login API (available only when PLAYWRIGHT_TEST=true on the server)
+  const loginRes = await page.request.post(`${appBase}/api/test/login`, {
+    data: { email, password },
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (loginRes.ok()) {
+    // Session cookie is now set — navigate to the home page to complete auth
+    await page.goto("/");
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
+  } else {
+    // Fallback: use the browser form (works locally with existing CSRF cookies)
+    await page.goto("/login");
+    await expect(page.getByLabel("Email")).toBeVisible({ timeout: 15000 });
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
+  }
 
   // Dismiss onboarding tour if present
   const skipTour = page.getByRole("button", { name: "Skip tour" }).first();

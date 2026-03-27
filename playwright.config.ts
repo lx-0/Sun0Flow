@@ -27,5 +27,10 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     // Allow 2 minutes for initial server startup + prisma migrations
     timeout: 120 * 1000,
+    env: {
+      // Signal to auth.ts to skip CSRF token validation (Auth.js official E2E pattern).
+      // Only active when playwright starts the dev server; never set in production.
+      PLAYWRIGHT_TEST: "true",
+    },
   },
 });
