@@ -40,6 +40,14 @@ interface PublicProfile {
   isFollowing: boolean;
 }
 
+interface Milestone {
+  type: string;
+  label: string;
+  description: string;
+  emoji: string;
+  earnedAt: string;
+}
+
 interface Song {
   id: string;
   title: string | null;
@@ -518,6 +526,41 @@ function LikedSongsTab({ username }: { username: string }) {
   );
 }
 
+// ─── Milestone Badges ──────────────────────────────────────────────────────────
+
+function MilestoneBadges({ username }: { username: string }) {
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/u/${username}/milestones`)
+      .then((r) => r.json())
+      .then((d) => setMilestones(d.milestones ?? []))
+      .catch(() => {});
+  }, [username]);
+
+  if (milestones.length === 0) return null;
+
+  return (
+    <div className="mb-4">
+      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+        Badges
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {milestones.map((m) => (
+          <div
+            key={m.type}
+            title={m.description}
+            className="flex items-center gap-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300"
+          >
+            <span>{m.emoji}</span>
+            <span>{m.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tabs ──────────────────────────────────────────────────────────────────────
 
 type Tab = "songs" | "playlists" | "liked";
@@ -665,6 +708,9 @@ export function PublicProfileView({ profile: initialProfile }: { profile: Public
             <FeaturedSongCard song={profile.featuredSong} />
           </div>
         )}
+
+        {/* Milestone badges */}
+        <MilestoneBadges username={profile.username} />
 
         {/* Tabs */}
         <TabBar active={activeTab} onChange={setActiveTab} />

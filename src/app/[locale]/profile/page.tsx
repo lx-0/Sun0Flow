@@ -16,6 +16,7 @@ import {
   XMarkIcon,
   ExclamationTriangleIcon,
   ClockIcon,
+  FireIcon,
 } from "@heroicons/react/24/outline";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -338,6 +339,130 @@ function MyPlaylistsSection() {
   );
 }
 
+// ─── Streak Section ───────────────────────────────────────────────────────────
+
+interface StreakData {
+  currentStreak: number;
+  longestStreak: number;
+  lastActiveDate: string | null;
+}
+
+function StreakSection() {
+  const [streak, setStreak] = useState<StreakData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/streaks")
+      .then((r) => r.json())
+      .then((d) => setStreak(d.streak))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="space-y-3">
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Daily Streak</h3>
+        <div className="h-20 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />
+      </section>
+    );
+  }
+
+  if (!streak) return null;
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Daily Streak</h3>
+      <div className="flex items-center gap-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-orange-100 dark:bg-orange-900/30 flex-shrink-0">
+          <FireIcon className="w-7 h-7 text-orange-500" />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-bold text-gray-900 dark:text-white">
+              {streak.currentStreak}
+            </span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              day{streak.currentStreak !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Best: {streak.longestStreak} day{streak.longestStreak !== 1 ? "s" : ""}
+          </p>
+        </div>
+        {streak.currentStreak === 0 && (
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Generate or play a song to start your streak!
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── Milestones Section ───────────────────────────────────────────────────────
+
+interface Milestone {
+  type: string;
+  label: string;
+  description: string;
+  emoji: string;
+  earnedAt: string;
+}
+
+function MilestonesSection() {
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/milestones")
+      .then((r) => r.json())
+      .then((d) => setMilestones(d.milestones ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="space-y-3">
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Badges</h3>
+        <div className="grid grid-cols-3 gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-20 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (milestones.length === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+        Badges{" "}
+        <span className="text-xs font-normal text-gray-400 dark:text-gray-500">
+          ({milestones.length})
+        </span>
+      </h3>
+      <div className="flex flex-wrap gap-3">
+        {milestones.map((m) => (
+          <div
+            key={m.type}
+            title={`${m.description} — earned ${new Date(m.earnedAt).toLocaleDateString()}`}
+            className="flex flex-col items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 w-24"
+          >
+            <span className="text-2xl">{m.emoji}</span>
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">
+              {m.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ─── Change Password ──────────────────────────────────────────────────────────
 
 function ChangePasswordSection() {
@@ -551,6 +676,10 @@ function ProfileContent() {
       <ProfileHeader />
       <div className="border-t border-gray-200 dark:border-gray-800" />
       <AccountStats />
+      <div className="border-t border-gray-200 dark:border-gray-800" />
+      <StreakSection />
+      <div className="border-t border-gray-200 dark:border-gray-800" />
+      <MilestonesSection />
       <div className="border-t border-gray-200 dark:border-gray-800" />
       <MyPlaylistsSection />
       <div className="border-t border-gray-200 dark:border-gray-800" />

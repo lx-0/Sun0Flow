@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { broadcast } from "@/lib/event-bus";
+import { checkFirstFollowerMilestone } from "@/lib/streaks";
 
 export async function POST(
   _request: Request,
@@ -73,6 +74,9 @@ export async function POST(
       } catch {
         // Non-critical
       }
+
+      // Check first-follower milestone (fire-and-forget)
+      checkFirstFollowerMilestone(followingId).catch(() => {});
     }
 
     return NextResponse.json({ following: true });

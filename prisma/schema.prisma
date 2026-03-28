@@ -101,6 +101,8 @@ model User {
   playbackState        PlaybackState?
   generationAttempts   GenerationAttempt[]
   inspirationDigests   InspirationDigest[]
+  streak               UserStreak?
+  milestones           UserMilestone[]
 
   @@index([lastLoginAt])
   @@index([createdAt])
@@ -846,6 +848,34 @@ model SongEmbedding {
 
   @@index([songId])
   @@index([updatedAt])
+}
+
+// ─── Engagement: Streaks & Milestones ─────────────────────────────────────────
+
+// Tracks a user's daily active streak.
+// lastActiveDate is stored as a UTC date string "YYYY-MM-DD".
+model UserStreak {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastActiveDate String?  // "YYYY-MM-DD" UTC; null = never active
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// One row per earned milestone; milestones are never deleted.
+model UserMilestone {
+  id       String   @id @default(cuid())
+  userId   String
+  type     String   // see MILESTONE_TYPES in src/lib/streaks.ts
+  earnedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
 }
 
 // Rate limit entries for anonymous/IP-based limiting (no user FK).

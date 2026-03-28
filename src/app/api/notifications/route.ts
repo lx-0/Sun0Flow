@@ -63,6 +63,7 @@ const VALID_TYPES = [
   "new_follower",
   "new_song_from_following",
   "playlist_invite",
+  "milestone_earned",
 ];
 
 // POST /api/notifications — create a notification for current user

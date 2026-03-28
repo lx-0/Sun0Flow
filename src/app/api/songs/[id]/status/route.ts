@@ -9,6 +9,7 @@ import { broadcast } from "@/lib/event-bus";
 import { sendGenerationCompleteEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { recordActivity } from "@/lib/activity";
+import { recordDailyActivity, checkSongMilestones, checkStreakMilestones } from "@/lib/streaks";
 import crypto from "crypto";
 
 const MAX_POLL_ATTEMPTS = 60;
@@ -161,6 +162,12 @@ export async function GET(
 
       // Record activity for the primary song
       recordActivity({ userId: song.userId, type: "song_created", songId: id });
+
+      // Update streak and check milestones (fire-and-forget)
+      recordDailyActivity(song.userId)
+        .then((newStreak) => checkStreakMilestones(song.userId, newStreak))
+        .catch(() => {});
+      checkSongMilestones(song.userId).catch(() => {});
 
       // Update linked queue item
       await prisma.generationQueueItem.updateMany({
