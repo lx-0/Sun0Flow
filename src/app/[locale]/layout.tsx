@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import nextDynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations } from "next-intl/server";
@@ -8,17 +7,8 @@ import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import { SessionProvider } from "@/components/SessionProvider";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { PostHogProvider } from "@/components/PostHogProvider";
+import { ClientOnlyComponents } from "@/components/ClientOnlyComponents";
 import { routing } from "@/i18n/routing";
-// Lazy-load the PWA install prompt — only shown when install conditions are met
-const PwaInstallPrompt = nextDynamic(
-  () => import("@/components/PwaInstallPrompt").then((m) => m.PwaInstallPrompt),
-  { ssr: false }
-);
-// Lazy-load the push notification prompt — shown after onboarding for unenrolled users
-const PushNotificationPrompt = nextDynamic(
-  () => import("@/components/PushNotificationPrompt").then((m) => m.PushNotificationPrompt),
-  { ssr: false }
-);
 import "../globals.css";
 
 const geistSans = localFont({
@@ -122,8 +112,7 @@ export default async function LocaleLayout({
           <PostHogProvider>
             <ServiceWorkerRegistrar />
             <OfflineIndicator />
-            <PwaInstallPrompt />
-            <PushNotificationPrompt />
+            <ClientOnlyComponents />
             <SessionProvider>
               {children}
             </SessionProvider>

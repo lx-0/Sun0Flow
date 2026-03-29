@@ -1,14 +1,68 @@
+import { createRequire } from "module";
+import { fileURLToPath } from "url";
+import path from "path";
 import createNextIntlPlugin from "next-intl/plugin";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
+// @babel/runtime-corejs3 references core-js-pure paths that were removed in
+// core-js-pure >= 3.38.0. Stub them with local files that return native
+// browser globals so the build succeeds without downgrading core-js-pure.
+// @babel/runtime-corejs3 references specific core-js-pure paths that map to
+// named native globals. The generic catch-all (noop) handles anything else.
+const corejs3Stubs = {
+  "core-js-pure/features/weak-map/index.js": path.resolve(__dirname, "src/lib/core-js-stubs/weak-map.js"),
+  "core-js-pure/features/symbol/index.js": path.resolve(__dirname, "src/lib/core-js-stubs/symbol.js"),
+  "core-js-pure/features/symbol/iterator.js": path.resolve(__dirname, "src/lib/core-js-stubs/symbol-iterator.js"),
+  "core-js-pure/features/object/define-property.js": path.resolve(__dirname, "src/lib/core-js-stubs/object-define-property.js"),
+  "core-js-pure/features/object/get-own-property-descriptor.js": path.resolve(__dirname, "src/lib/core-js-stubs/object-get-own-property-descriptor.js"),
+  "core-js-pure/features/instance/bind.js": path.resolve(__dirname, "src/lib/core-js-stubs/instance-bind.js"),
+  "core-js-pure/features/object/assign.js": path.resolve(__dirname, "src/lib/core-js-stubs/object-assign.js"),
+};
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
   // Enable gzip/brotli compression for all responses
   compress: true,
-  experimental: {
-    serverComponentsExternalPackages: ["@prisma/client", "bcryptjs"],
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "node-cron"],
+  experimental: {},
+  webpack(config, { isServer, webpack: wp }) {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      ...corejs3Stubs,
+    };
+
+    // Catch-all: redirect any remaining core-js-pure/features/* imports that
+    // are not covered by the explicit aliases above to a noop stub.
+    // @babel/runtime-corejs3 generates these for polyfills that modern runtimes
+    // already have natively (WeakMap, Symbol, Object.*, etc.).
+    config.plugins.push(
+      new wp.NormalModuleReplacementPlugin(
+        /core-js-pure\/features\//,
+        (resource) => {
+          const stubsDir = path.resolve(__dirname, "src/lib/core-js-stubs");
+          const alreadyStubbed = Object.values(corejs3Stubs).some(
+            (abs) => resource.request.endsWith(path.basename(abs))
+          );
+          if (!alreadyStubbed) {
+            resource.request = path.join(stubsDir, "noop.js");
+          }
+        }
+      )
+    );
+
+    // node-cron uses Node.js built-ins (child_process, stream) that are not
+    // available in the edge runtime. Mark it as external so webpack skips
+    // bundling it; it is resolved at runtime by the Node.js server.
+    if (isServer) {
+      config.externals = [
+        ...(Array.isArray(config.externals) ? config.externals : [config.externals]),
+        "node-cron",
+      ];
+    }
+    return config;
   },
   images: {
     remotePatterns: [
