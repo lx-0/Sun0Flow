@@ -21,6 +21,7 @@ export async function GET() {
         total: metrics.generation.total,
         completed: metrics.generation.completed,
         failed: metrics.generation.failed,
+        lastSuccessfulGenerationAt: metrics.generation.lastCompletedAt,
       },
       jobs: jobs.map((j) => ({
         name: j.name,

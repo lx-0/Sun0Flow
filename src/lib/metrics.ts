@@ -33,6 +33,8 @@ interface GenerationStats {
   processingTimeSamples: number[];
   /** Current queue depth (active generations in flight) */
   queueDepth: number;
+  /** ISO timestamp of the last successful generation, null if none since startup */
+  lastCompletedAt: string | null;
 }
 
 interface CacheStats {
@@ -57,6 +59,7 @@ interface MetricsSnapshot {
     completed: number;
     failed: number;
     queueDepth: number;
+    lastCompletedAt: string | null;
     processingTime: { p50: number; p95: number; p99: number } | null;
   };
   cache: CacheStats;
@@ -93,6 +96,7 @@ function initMetrics() {
       failed: 0,
       processingTimeSamples: [] as number[],
       queueDepth: 0,
+      lastCompletedAt: null,
     } satisfies GenerationStats,
     cache: { hits: 0, misses: 0 } satisfies CacheCounters,
     resetAt: new Date().toISOString(),
@@ -190,6 +194,7 @@ export function recordGenerationEnd(
   state.generation.queueDepth = Math.max(0, state.generation.queueDepth - 1);
   if (success) {
     state.generation.completed++;
+    state.generation.lastCompletedAt = new Date().toISOString();
   } else {
     state.generation.failed++;
   }
@@ -239,6 +244,7 @@ export function getMetricsSnapshot(): MetricsSnapshot {
       completed: gen.completed,
       failed: gen.failed,
       queueDepth: gen.queueDepth,
+      lastCompletedAt: gen.lastCompletedAt,
       processingTime:
         genSorted.length > 0
           ? {
