@@ -698,7 +698,7 @@ export function GenerateForm() {
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
               You have {creditInfo.creditsRemaining} of {creditInfo.budget} credits remaining this month ({creditInfo.usagePercent}% used).
-              Check your <a href="/analytics" className="underline font-medium hover:text-amber-900 dark:hover:text-amber-200">usage dashboard</a> for details.
+              Check your <Link href="/analytics" className="underline font-medium hover:text-amber-900 dark:hover:text-amber-200">usage dashboard</Link> for details.
             </p>
           </div>
         </div>

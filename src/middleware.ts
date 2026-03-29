@@ -210,7 +210,7 @@ export async function middleware(request: NextRequest) {
     pathnameWithoutLocale === "/" ||
     publicPaths.some((p) => pathnameWithoutLocale.startsWith(p) || pathname.startsWith(p));
 
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? request.ip ?? "unknown";
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
   // ── Body size guard (API routes only) ────────────────────────────────────
   // Check the Content-Length header. Clients that omit it are not blocked here

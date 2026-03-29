@@ -364,9 +364,9 @@ export function PublicSongView({
             ) : (
               isPlaying && (
                 <p className="text-xs text-gray-400 dark:text-gray-500">
-                  <a href="/auth/signin" className="underline hover:text-violet-500 transition-colors">
+                  <Link href="/auth/signin" className="underline hover:text-violet-500 transition-colors">
                     Log in
-                  </a>{" "}
+                  </Link>{" "}
                   to react
                 </p>
               )

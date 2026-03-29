@@ -402,12 +402,12 @@ function FooterSection() {
             <Link href="/pricing" className="hover:text-gray-900 dark:hover:text-white transition-colors">
               Pricing
             </Link>
-            <a href="/terms" className="hover:text-gray-900 dark:hover:text-white transition-colors">
+            <Link href="/terms" className="hover:text-gray-900 dark:hover:text-white transition-colors">
               Terms
-            </a>
-            <a href="/privacy" className="hover:text-gray-900 dark:hover:text-white transition-colors">
+            </Link>
+            <Link href="/privacy" className="hover:text-gray-900 dark:hover:text-white transition-colors">
               Privacy
-            </a>
+            </Link>
             <a href="mailto:hello@sunoflow.app" className="hover:text-gray-900 dark:hover:text-white transition-colors">
               Contact
             </a>
