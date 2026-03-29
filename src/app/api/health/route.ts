@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getMetricsSnapshot } from "@/lib/metrics";
+import { getSchedulerStatus } from "@/lib/scheduler";
 
 const startedAt = Date.now();
 
@@ -9,6 +10,7 @@ export async function GET() {
   try {
     await prisma.$queryRaw`SELECT 1`;
     const metrics = getMetricsSnapshot();
+    const jobs = getSchedulerStatus();
     return NextResponse.json({
       status: "ok",
       timestamp: new Date().toISOString(),
@@ -20,6 +22,20 @@ export async function GET() {
         completed: metrics.generation.completed,
         failed: metrics.generation.failed,
       },
+      jobs: jobs.map((j) => ({
+        name: j.name,
+        schedule: j.schedule,
+        running: j.running,
+        nextRun: j.nextRun,
+        lastRun: j.lastRun
+          ? {
+              startedAt: j.lastRun.startedAt,
+              durationMs: j.lastRun.durationMs,
+              success: j.lastRun.success,
+              ...(j.lastRun.error ? { error: j.lastRun.error } : {}),
+            }
+          : null,
+      })),
     });
   } catch {
     return NextResponse.json(
