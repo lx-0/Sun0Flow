@@ -1,0 +1,53 @@
+name: Deploy to Production
+
+on:
+  # Manual trigger — deploy a specific SHA or HEAD of main
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Git SHA to deploy (leave blank for HEAD of main)"
+        required: false
+        default: ""
+
+  # Tag-based trigger — push a semver tag to deploy (e.g. git tag v1.2.3 && git push --tags)
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    # GitHub Environment with required reviewers acts as the manual approval gate.
+    # Configure protection rules at: Settings → Environments → production
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Show deploy target
+        run: |
+          echo "Deploying SHA: ${{ inputs.sha || github.sha }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Event: ${{ github.event_name }}"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to production
+        id: deploy
+        run: railway up --detach --service SunoFlow
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PRODUCTION }}
+
+      - name: Write deploy summary
+        if: always()
+        run: |
+          echo "## Production Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: SunoFlow (production)" >> $GITHUB_STEP_SUMMARY
+          echo "- **SHA**: \`${{ inputs.sha || github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY

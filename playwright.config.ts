@@ -21,16 +21,20 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    command: "NODE_ENV=development npm run dev -- --port 3200",
-    url: process.env.BASE_URL ?? "http://localhost:3200",
-    reuseExistingServer: !process.env.CI,
-    // Allow 2 minutes for initial server startup + prisma migrations
-    timeout: 120 * 1000,
-    env: {
-      // Signal to auth.ts to skip CSRF token validation (Auth.js official E2E pattern).
-      // Only active when playwright starts the dev server; never set in production.
-      PLAYWRIGHT_TEST: "true",
-    },
-  },
+  // Skip local server when PLAYWRIGHT_REMOTE=true (e.g. running E2E against a deployed staging env).
+  // In that case BASE_URL must point to the remote service.
+  webServer: process.env.PLAYWRIGHT_REMOTE
+    ? undefined
+    : {
+        command: "NODE_ENV=development npm run dev -- --port 3200",
+        url: process.env.BASE_URL ?? "http://localhost:3200",
+        reuseExistingServer: !process.env.CI,
+        // Allow 2 minutes for initial server startup + prisma migrations
+        timeout: 120 * 1000,
+        env: {
+          // Signal to auth.ts to skip CSRF token validation (Auth.js official E2E pattern).
+          // Only active when playwright starts the dev server; never set in production.
+          PLAYWRIGHT_TEST: "true",
+        },
+      },
 });

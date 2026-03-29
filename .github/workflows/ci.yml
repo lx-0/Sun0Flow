@@ -104,11 +104,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  deploy:
-    name: Deploy to Railway
+  deploy-staging:
+    name: Deploy to Staging
     needs: [qa, secrets-scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment: staging
 
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +117,59 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Deploy
-        run: railway up --detach --service SunoFlow
+      - name: Deploy to staging
+        run: railway up --detach --service SunoFlow-staging
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
+
+      - name: Write deploy summary
+        run: |
+          echo "## Staging Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: SunoFlow-staging" >> $GITHUB_STEP_SUMMARY
+          echo "- **SHA**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: ${{ vars.STAGING_URL }}" >> $GITHUB_STEP_SUMMARY
+
+  e2e-staging:
+    name: E2E Tests (Staging)
+    needs: [deploy-staging]
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run E2E tests against staging
+        run: pnpm test:e2e
+        env:
+          BASE_URL: ${{ vars.STAGING_URL }}
+          PLAYWRIGHT_REMOTE: "true"
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-staging
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Write E2E summary
+        if: always()
+        run: |
+          echo "## Staging E2E Results" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: ${{ vars.STAGING_URL }}" >> $GITHUB_STEP_SUMMARY
