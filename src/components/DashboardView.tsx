@@ -277,7 +277,7 @@ export function DashboardView({ userName }: { userName?: string | null }) {
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-sm font-medium"
               >
                 {t.tag}
-                <span className="text-xs text-violet-400 dark:text-violet-500">{t.count}</span>
+                <span className="text-xs text-violet-600 dark:text-violet-300">{t.count}</span>
               </span>
             ))}
           </div>
@@ -384,7 +384,7 @@ export function DashboardView({ userName }: { userName?: string | null }) {
                     </div>
                   </div>
                   {song.rating != null && (
-                    <span className="text-xs text-yellow-500 flex-shrink-0">{song.rating}★</span>
+                    <span className="text-xs text-amber-700 dark:text-amber-400 flex-shrink-0">{song.rating}★</span>
                   )}
                 </Link>
               ))

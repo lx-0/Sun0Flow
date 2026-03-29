@@ -477,8 +477,9 @@ export function LyricsEditor({
                           value={annotationDraft}
                           onChange={(e) => setAnnotationDraft(e.target.value)}
                           placeholder="Add a note about this line…"
+                          aria-label="Line annotation"
                           rows={2}
-                          className="w-full bg-transparent text-xs text-gray-800 dark:text-gray-200 placeholder-gray-400 resize-none focus:outline-none"
+                          className="w-full bg-transparent text-xs text-gray-800 dark:text-gray-200 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded"
                         />
                         <div className="flex items-center gap-2">
                           <button
@@ -632,7 +633,7 @@ function EditingView({
         rows={14}
         autoFocus
         placeholder="Enter lyrics…"
-        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:border-violet-500 transition-colors font-mono leading-relaxed"
+        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors font-mono leading-relaxed"
       />
       <div className="flex items-center gap-2">
         <button

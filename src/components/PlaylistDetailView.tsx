@@ -1024,7 +1024,7 @@ export function PlaylistDetailView({
                       readOnly
                       aria-label="Invite link"
                       value={inviteLink}
-                      className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none"
+                      className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     />
                     <button
                       onClick={handleCopyInviteLink}
@@ -1123,7 +1123,7 @@ export function PlaylistDetailView({
                     readOnly
                     aria-label="Share link"
                     value={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${slug}`}
-                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none"
+                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                   />
                   <button
                     onClick={handleCopyLink}
@@ -1142,7 +1142,7 @@ export function PlaylistDetailView({
                     readOnly
                     aria-label="Embed code"
                     value={`<iframe src="${typeof window !== "undefined" ? window.location.origin : ""}/embed/playlist/${slug}" width="400" height="500" frameborder="0" allow="autoplay"></iframe>`}
-                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none font-mono"
+                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono"
                   />
                   <button
                     onClick={handleCopyEmbed}

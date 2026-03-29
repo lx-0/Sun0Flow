@@ -485,8 +485,9 @@ export function PublicSongView({
               <textarea
                 readOnly
                 rows={3}
+                aria-label="Embed code"
                 value={getEmbedCode()}
-                className="w-full text-xs font-mono bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 resize-none text-gray-700 dark:text-gray-300 focus:outline-none"
+                className="w-full text-xs font-mono bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 resize-none text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                 onClick={(e) => (e.target as HTMLTextAreaElement).select()}
               />
             </div>
