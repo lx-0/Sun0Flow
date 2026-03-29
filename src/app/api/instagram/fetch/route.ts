@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveUser } from "@/lib/auth-resolver";
 import { fetchInstagramPost, isValidInstagramUrl } from "@/lib/instagram";
 
 export async function POST(req: NextRequest) {
+  const { error: authError } = await resolveUser(req);
+  if (authError) return authError;
   let body: unknown;
   try {
     body = await req.json();
