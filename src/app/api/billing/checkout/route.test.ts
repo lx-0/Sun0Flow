@@ -20,6 +20,7 @@ vi.mock("@/lib/auth-resolver", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
+    subscription: { findUnique: vi.fn() },
   },
 }));
 
@@ -31,10 +32,20 @@ vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
+vi.mock("@/lib/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
 const mockSessionCreate = vi.fn();
+const mockSubscriptionsRetrieve = vi.fn();
+const mockSubscriptionsUpdate = vi.fn();
 vi.mock("@/lib/stripe", () => ({
   default: vi.fn(() => ({
     checkout: { sessions: { create: mockSessionCreate } },
+    subscriptions: {
+      retrieve: mockSubscriptionsRetrieve,
+      update: mockSubscriptionsUpdate,
+    },
   })),
   STRIPE_PRICES: {
     get starter() { return "price_starter_test"; },
@@ -60,6 +71,7 @@ function makeRequest(body: Record<string, unknown>): Request {
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(resolveUser).mockResolvedValue({
     userId: "user-1",
     isApiKey: false,
@@ -70,8 +82,14 @@ beforeEach(() => {
     email: "user@example.com",
     name: "Test User",
   } as never);
+  // Default: no existing paid subscription (free user)
+  vi.mocked(prisma.subscription.findUnique).mockResolvedValue(null as never);
   vi.mocked(getOrCreateStripeCustomer).mockResolvedValue("cus_test_123");
   mockSessionCreate.mockResolvedValue({ url: "https://checkout.stripe.com/session_abc" });
+  mockSubscriptionsRetrieve.mockResolvedValue({
+    items: { data: [{ id: "si_item_123", price: { id: "price_starter_test" } }] },
+  });
+  mockSubscriptionsUpdate.mockResolvedValue({});
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -159,6 +177,96 @@ describe("POST /api/billing/checkout", () => {
       expect(res.status).toBe(500);
       const data = await res.json();
       expect(data.code).toBe("INTERNAL_ERROR");
+    });
+  });
+
+  describe("upgrade/downgrade for existing paid subscribers", () => {
+    const activePaidSub = {
+      stripeSubscriptionId: "sub_existing_123",
+      stripeCustomerId: "cus_existing_123",
+      stripePriceId: "price_starter_test",
+      status: "active",
+    };
+
+    it("updates subscription inline when user has active paid plan and tier differs", async () => {
+      vi.mocked(prisma.subscription.findUnique).mockResolvedValue(activePaidSub as never);
+
+      const res = await POST(makeRequest({ tier: "pro" }) as never);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.url).toContain("/settings/billing?success=1");
+
+      // Should NOT create a new checkout session
+      expect(mockSessionCreate).not.toHaveBeenCalled();
+
+      // Should retrieve and update the existing subscription
+      expect(mockSubscriptionsRetrieve).toHaveBeenCalledWith("sub_existing_123");
+      expect(mockSubscriptionsUpdate).toHaveBeenCalledWith(
+        "sub_existing_123",
+        expect.objectContaining({
+          items: [{ id: "si_item_123", price: "price_pro_test" }],
+          proration_behavior: "create_prorations",
+        })
+      );
+    });
+
+    it("returns 400 when user is already on the requested plan", async () => {
+      vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
+        ...activePaidSub,
+        stripePriceId: "price_pro_test",
+      } as never);
+
+      const res = await POST(makeRequest({ tier: "pro" }) as never);
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.code).toBe("SAME_PLAN");
+    });
+
+    it("creates a new checkout session for trialing users upgrading", async () => {
+      vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
+        ...activePaidSub,
+        status: "trialing",
+        stripePriceId: "price_starter_test",
+      } as never);
+
+      const res = await POST(makeRequest({ tier: "studio" }) as never);
+      expect(res.status).toBe(200);
+      // Inline update path used (no new checkout session)
+      expect(mockSessionCreate).not.toHaveBeenCalled();
+      expect(mockSubscriptionsUpdate).toHaveBeenCalled();
+    });
+
+    it("creates a new checkout session when user is on free plan", async () => {
+      vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
+        stripeSubscriptionId: "free_sub_user-1",
+        stripeCustomerId: "free_user-1",
+        stripePriceId: "free",
+        status: "active",
+      } as never);
+
+      const res = await POST(makeRequest({ tier: "starter" }) as never);
+      expect(res.status).toBe(200);
+      expect(mockSessionCreate).toHaveBeenCalled();
+      expect(mockSubscriptionsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("creates a new checkout session when no subscription record exists", async () => {
+      vi.mocked(prisma.subscription.findUnique).mockResolvedValue(null as never);
+
+      const res = await POST(makeRequest({ tier: "pro" }) as never);
+      expect(res.status).toBe(200);
+      expect(mockSessionCreate).toHaveBeenCalled();
+      expect(mockSubscriptionsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 when subscription item is missing during upgrade", async () => {
+      vi.mocked(prisma.subscription.findUnique).mockResolvedValue(activePaidSub as never);
+      mockSubscriptionsRetrieve.mockResolvedValue({ items: { data: [] } });
+
+      const res = await POST(makeRequest({ tier: "pro" }) as never);
+      expect(res.status).toBe(500);
+      const data = await res.json();
+      expect(data.code).toBe("SUBSCRIPTION_ERROR");
     });
   });
 });

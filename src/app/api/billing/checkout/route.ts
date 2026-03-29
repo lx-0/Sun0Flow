@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { STRIPE_PRICES } from "@/lib/stripe";
 import { getOrCreateStripeCustomer } from "@/lib/billing";
 import { logServerError } from "@/lib/error-logger";
+import { logger } from "@/lib/logger";
 import getStripe from "@/lib/stripe";
 
 const VALID_TIERS = ["starter", "pro", "studio"] as const;
@@ -17,7 +18,9 @@ const PRICE_MAP: Record<PaidTier, () => string> = {
 
 // POST /api/billing/checkout
 // Body: { tier: "starter" | "pro" | "studio" }
-// Returns: { url: string } — the Stripe Checkout session URL.
+// For new subscribers: returns { url: string } — the Stripe Checkout session URL.
+// For existing paid subscribers: performs an inline subscription update (upgrade/downgrade)
+//   and returns { url: string } pointing to the billing success page.
 export async function POST(request: NextRequest) {
   try {
     const { userId, error: authError } = await resolveUser(request);
@@ -41,6 +44,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const appUrl = process.env.NEXTAUTH_URL ?? process.env.APP_URL ?? "http://localhost:3000";
+
+    // Check if the user already has an active paid subscription
+    const existingSub = await prisma.subscription.findUnique({
+      where: { userId },
+      select: { stripeSubscriptionId: true, stripeCustomerId: true, stripePriceId: true, status: true },
+    });
+
+    const isActivePaidSub =
+      existingSub &&
+      !existingSub.stripeSubscriptionId.startsWith("free_") &&
+      !existingSub.stripeCustomerId.startsWith("free_") &&
+      (existingSub.status === "active" || existingSub.status === "trialing");
+
+    if (isActivePaidSub) {
+      // Upgrade/downgrade: update the existing subscription's price inline.
+      // Stripe handles proration automatically.
+      if (existingSub.stripePriceId === priceId) {
+        return NextResponse.json(
+          { error: "Already subscribed to this plan", code: "SAME_PLAN" },
+          { status: 400 }
+        );
+      }
+
+      const stripe = getStripe();
+      const stripeSub = await stripe.subscriptions.retrieve(existingSub.stripeSubscriptionId);
+      const itemId = stripeSub.items.data[0]?.id;
+
+      if (!itemId) {
+        return NextResponse.json(
+          { error: "Could not find subscription item to update", code: "SUBSCRIPTION_ERROR" },
+          { status: 500 }
+        );
+      }
+
+      await stripe.subscriptions.update(existingSub.stripeSubscriptionId, {
+        items: [{ id: itemId, price: priceId }],
+        proration_behavior: "create_prorations",
+        metadata: { userId },
+      });
+
+      logger.info({ userId, newPriceId: priceId, subscriptionId: existingSub.stripeSubscriptionId }, "billing-checkout: plan changed inline");
+
+      // The customer.subscription.updated webhook will sync the DB.
+      // Return the billing success URL so the client redirects.
+      return NextResponse.json({ url: `${appUrl}/settings/billing?success=1` });
+    }
+
+    // New subscription: create a Stripe Checkout session.
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { email: true, name: true },
@@ -56,7 +108,6 @@ export async function POST(request: NextRequest) {
     const customerId = await getOrCreateStripeCustomer(userId, user.email, user.name);
 
     const stripe = getStripe();
-    const appUrl = process.env.NEXTAUTH_URL ?? process.env.APP_URL ?? "http://localhost:3000";
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
