@@ -2,8 +2,9 @@
  * Structured error logger.
  *
  * Server-side calls go through pino (JSON to stdout).
- * Client-side calls fall back to window.fetch → /api/error-report.
+ * Client-side calls fall back to window.fetch → /api/error-report + Sentry.captureException().
  */
+import * as Sentry from "@sentry/nextjs";
 import { logger } from "@/lib/logger";
 
 function extractErrorInfo(error: unknown): { message: string; stack?: string } {
@@ -46,12 +47,16 @@ export function logError(
     error: stack ? { message, stack } : message,
   };
 
-  // Server-side: structured pino log; client-side: console fallback + report
+  // Server-side: structured pino log; client-side: console fallback + report + Sentry
   if (typeof window === "undefined") {
     logger.error(entry, "client-error");
   } else {
     console.error("[SunoFlow Error]", entry);
     reportToServer(source, error, route);
+    Sentry.captureException(error instanceof Error ? error : new Error(String(error)), {
+      tags: { source },
+      extra: { route: entry.route },
+    });
   }
 }
 

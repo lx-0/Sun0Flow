@@ -23,7 +23,7 @@ async function sendEmail(payload: EmailPayload): Promise<void> {
 
   if (!apiKey || !secretKey) {
     // Dev fallback: log to structured logger when Mailjet keys are not configured
-    logger.info({ to: payload.to, subject: payload.subject }, "email: dev-mode (no Mailjet keys) — skipping send");
+    logger.info({ toDomain: payload.to.split("@")[1], subject: payload.subject }, "email: dev-mode (no Mailjet keys) — skipping send");
     return;
   }
 

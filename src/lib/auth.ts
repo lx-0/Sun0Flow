@@ -45,7 +45,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
 
         if (!user || !user.passwordHash) {
-          logger.warn({ email }, "auth: credentials sign-in failed — user not found");
+          logger.warn({ emailDomain: email.split("@")[1] }, "auth: credentials sign-in failed — user not found");
           return null;
         }
 
