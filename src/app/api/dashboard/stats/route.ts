@@ -46,10 +46,14 @@ async function handleGET(request: NextRequest) {
             _avg: { rating: true },
             _count: { rating: true },
           }),
-          prisma.song.findMany({
-            where: { userId, tags: { not: null } },
-            select: { tags: true },
-          }),
+          prisma.$queryRaw<Array<{ tag: string; count: bigint }>>`
+            SELECT trim(lower(unnest(string_to_array(tags, ',')))) AS tag, COUNT(*)::bigint AS count
+            FROM "Song"
+            WHERE "userId" = ${userId} AND tags IS NOT NULL AND tags <> ''
+            GROUP BY 1
+            ORDER BY count DESC
+            LIMIT 5
+          `,
           prisma.song.findMany({
             where: { userId, generationStatus: "ready" },
             orderBy: { createdAt: "desc" },
@@ -65,20 +69,9 @@ async function handleGET(request: NextRequest) {
           }),
         ]);
 
-        const tagCounts: Record<string, number> = {};
-        for (const song of topTags) {
-          if (!song.tags) continue;
-          for (const raw of song.tags.split(",")) {
-            const tag = raw.trim().toLowerCase();
-            if (tag) {
-              tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-            }
-          }
-        }
-        const topTagsList = Object.entries(tagCounts)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([tag, count]) => ({ tag, count }));
+        const topTagsList = topTags
+          .filter((r) => r.tag)
+          .map((r) => ({ tag: r.tag, count: Number(r.count) }));
 
         return {
           totalSongs,

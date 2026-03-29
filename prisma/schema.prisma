@@ -207,6 +207,8 @@ model Song {
   @@index([userId, source])
   @@index([rssFeedSubscriptionId, source, createdAt])
   @@index([generationStatus, createdAt])
+  @@index([userId, isFavorite])
+  @@index([userId, downloadCount])
 }
 
 model Playlist {
@@ -733,6 +735,7 @@ model PlayHistory {
 
   @@index([userId, playedAt(sort: Desc)])
   @@index([songId])
+  @@index([userId, songId, playedAt(sort: Desc)])
 }
 
 model LyricTimestamp {

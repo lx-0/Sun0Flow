@@ -18,39 +18,41 @@ export async function GET(request: Request) {
     const rawLimit = parseInt(searchParams.get("limit") ?? String(DEFAULT_LIMIT), 10);
     const limit = Math.min(Math.max(1, isNaN(rawLimit) ? DEFAULT_LIMIT : rawLimit), MAX_HISTORY);
 
-    const items = await prisma.playHistory.findMany({
-      where: { userId },
-      orderBy: { playedAt: "desc" },
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      include: {
-        song: {
-          select: {
-            id: true,
-            title: true,
-            imageUrl: true,
-            audioUrl: true,
-            duration: true,
-            lyrics: true,
-            generationStatus: true,
-            archivedAt: true,
+    const [items, [{ count: rawTotal }]] = await Promise.all([
+      prisma.playHistory.findMany({
+        where: { userId },
+        orderBy: { playedAt: "desc" },
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        include: {
+          song: {
+            select: {
+              id: true,
+              title: true,
+              imageUrl: true,
+              audioUrl: true,
+              duration: true,
+              lyrics: true,
+              generationStatus: true,
+              archivedAt: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(*)::bigint as count FROM "PlayHistory" WHERE "userId" = ${userId}
+      `,
+    ]);
 
     const hasMore = items.length > limit;
     const sliced = hasMore ? items.slice(0, limit) : items;
     const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
-
-    const [total] = await prisma.$queryRaw<[{ count: bigint }]>`
-      SELECT COUNT(*)::bigint as count FROM "PlayHistory" WHERE "userId" = ${userId}
-    `;
+    const total = rawTotal;
 
     return NextResponse.json({
       items: sliced,
       nextCursor,
-      total: Number(total.count),
+      total: Number(total),
     });
   } catch (error) {
     logServerError("GET /api/history", error, { route: "/api/history" });

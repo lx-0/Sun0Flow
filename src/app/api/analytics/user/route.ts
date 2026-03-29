@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     totalPlaylists,
     ratingAgg,
     userRatingAgg,
-    allSongsForGenres,
+    genreRows,
     topSongs,
     dailyGenerations,
   ] = await Promise.all([
@@ -40,11 +40,15 @@ export async function GET(request: Request) {
       _count: { value: true },
     }),
 
-    // All songs with tags for genre breakdown
-    prisma.song.findMany({
-      where: { userId, tags: { not: null } },
-      select: { tags: true },
-    }),
+    // Genre breakdown via SQL aggregation (avoids fetching all song rows into JS)
+    prisma.$queryRaw<Array<{ genre: string; count: bigint }>>`
+      SELECT trim(lower(unnest(string_to_array(tags, ',')))) AS genre, COUNT(*)::bigint AS count
+      FROM "Song"
+      WHERE "userId" = ${userId} AND tags IS NOT NULL AND tags <> ''
+      GROUP BY 1
+      ORDER BY count DESC
+      LIMIT 10
+    `,
 
     // Most-played/downloaded songs
     prisma.song.findMany({
@@ -72,21 +76,9 @@ export async function GET(request: Request) {
     `,
   ]);
 
-  // Genre breakdown from comma-separated tags
-  const genreCounts: Record<string, number> = {};
-  for (const song of allSongsForGenres) {
-    if (!song.tags) continue;
-    for (const raw of song.tags.split(",")) {
-      const genre = raw.trim().toLowerCase();
-      if (genre) {
-        genreCounts[genre] = (genreCounts[genre] || 0) + 1;
-      }
-    }
-  }
-  const genreBreakdown = Object.entries(genreCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([genre, count]) => ({ genre, count }));
+  const genreBreakdown = genreRows
+    .filter((r) => r.genre)
+    .map((r) => ({ genre: r.genre, count: Number(r.count) }));
 
   // Fill in missing dates for chart
   const chartData: Array<{ date: string; count: number }> = [];
