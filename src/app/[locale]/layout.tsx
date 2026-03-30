@@ -8,6 +8,7 @@ import { SessionProvider } from "@/components/SessionProvider";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { PostHogProvider } from "@/components/PostHogProvider";
 import { ClientOnlyComponents } from "@/components/ClientOnlyComponents";
+import { OnboardingProvider } from "@/components/OnboardingTour";
 import { routing } from "@/i18n/routing";
 import "../globals.css";
 
@@ -124,8 +125,10 @@ export default async function LocaleLayout({
             <ServiceWorkerRegistrar />
             <OfflineIndicator />
             <SessionProvider>
-              <ClientOnlyComponents />
-              {children}
+              <OnboardingProvider>
+                <ClientOnlyComponents />
+                {children}
+              </OnboardingProvider>
             </SessionProvider>
           </PostHogProvider>
         </NextIntlClientProvider>
