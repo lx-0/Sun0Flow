@@ -14,6 +14,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useToast } from "./Toast";
 import { track } from "@/lib/analytics";
+import { InAppFeedbackWidget, hasFeedbackBeenSubmitted } from "./InAppFeedbackWidget";
 
 interface PlaylistItem {
   id: string;
@@ -75,6 +76,7 @@ export function PlaylistsView({
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [feedbackPlaylistId, setFeedbackPlaylistId] = useState<string | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -104,6 +106,9 @@ export function PlaylistsView({
       setShowCreate(false);
       track("playlist_created");
       toast("Playlist created", "success");
+      if (!hasFeedbackBeenSubmitted("playlist_creation", data.playlist.id)) {
+        setFeedbackPlaylistId(data.playlist.id);
+      }
     } catch {
       toast("Failed to create playlist", "error");
     } finally {
@@ -324,6 +329,13 @@ export function PlaylistsView({
             </li>
           ))}
         </ul>
+      )}
+      {feedbackPlaylistId && (
+        <InAppFeedbackWidget
+          source="playlist_creation"
+          entityId={feedbackPlaylistId}
+          onClose={() => setFeedbackPlaylistId(null)}
+        />
       )}
     </div>
   );

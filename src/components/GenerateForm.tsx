@@ -16,6 +16,7 @@ import dynamic from "next/dynamic";
 // Lazy-load confetti — only shown after generation success, not needed on initial render
 const Confetti = dynamic(() => import("./Confetti").then((m) => m.Confetti), { ssr: false });
 import { UpgradeModal, shouldShowUpgradeModal } from "./UpgradeModal";
+import { InAppFeedbackWidget, hasFeedbackBeenSubmitted } from "./InAppFeedbackWidget";
 
 interface PersonaOption {
   id: string;
@@ -148,6 +149,10 @@ export function GenerateForm() {
   // Track completed song IDs so we only process next once per completion
   const processedCompletionsRef = useRef<Set<string>>(new Set());
 
+  // In-app feedback widget after song generation
+  const [feedbackWidget, setFeedbackWidget] = useState<{ songId: string } | null>(null);
+  const feedbackShownRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     const readyCount = trackedSongs.filter((s) => s.status === "ready").length;
     if (readyCount > prevReadyCountRef.current) {
@@ -175,6 +180,15 @@ export function GenerateForm() {
             trackSong(result.song.id, result.song.title);
           }
         });
+      }
+      // Show feedback widget once per completed song (ready only)
+      if (
+        song.status === "ready" &&
+        !feedbackShownRef.current.has(song.songId) &&
+        !hasFeedbackBeenSubmitted("song_generation", song.songId)
+      ) {
+        feedbackShownRef.current.add(song.songId);
+        setFeedbackWidget({ songId: song.songId });
       }
     }
   }, [trackedSongs, onGenerationComplete, trackSong]);
@@ -1502,6 +1516,15 @@ export function GenerateForm() {
       {/* Upgrade modal — shown when user has no credits and tries to generate */}
       {showUpgradeModal && (
         <UpgradeModal trigger="no_credits" onClose={() => setShowUpgradeModal(false)} />
+      )}
+
+      {/* In-app feedback widget — shown after song generation completes */}
+      {feedbackWidget && (
+        <InAppFeedbackWidget
+          source="song_generation"
+          entityId={feedbackWidget.songId}
+          onClose={() => setFeedbackWidget(null)}
+        />
       )}
     </div>
   );
