@@ -14,18 +14,18 @@ export function ApiKeyWizard() {
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-
-  // Sync localStorage dismissal after mount to avoid SSR/client render mismatch
-  useEffect(() => {
-    try {
-      if (localStorage.getItem("sunoflow-apikey-wizard-dismissed") === "true") {
-        setDismissed(true);
+  const [dismissed, setDismissed] = useState(() => {
+    // Read synchronously on first render to prevent the wizard from flashing
+    // before the useEffect fires (which caused DOM detachment in E2E tests).
+    if (typeof window !== "undefined") {
+      try {
+        return localStorage.getItem("sunoflow-apikey-wizard-dismissed") === "true";
+      } catch {
+        // localStorage unavailable
       }
-    } catch {
-      // localStorage unavailable
     }
-  }, []);
+    return false;
+  });
 
   // Don't show if user already has a key, hasn't loaded yet, or wizard was dismissed
   if (!user || user.hasSunoApiKey || dismissed) return null;

@@ -7,6 +7,13 @@ import {
 } from "./helpers";
 
 test.describe("Register", () => {
+  // Clear any session cookies before each test so a logged-in state from the
+  // "happy path" test (which auto-signs-in after registration) does not leak
+  // into subsequent tests that expect an unauthenticated browser.
+  test.beforeEach(async ({ page }) => {
+    await page.context().clearCookies();
+  });
+
   test("happy path — register and redirect to authenticated page", async ({
     page,
   }) => {
@@ -89,6 +96,10 @@ test.describe("Register", () => {
 test.describe("Login", () => {
   let seededEmail: string;
   const seededPassword = "SeededPass123!";
+
+  test.beforeEach(async ({ page }) => {
+    await page.context().clearCookies();
+  });
 
   test.beforeAll(async ({ baseURL }) => {
     // Seed a user for login tests
@@ -183,6 +194,10 @@ test.describe("Logout", () => {
 // ─── Password Reset Request ──────────────────────────────────────────────────
 
 test.describe("Password Reset", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.context().clearCookies();
+  });
+
   test("forgot password page renders and accepts email submission", async ({
     page,
   }) => {

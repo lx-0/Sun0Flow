@@ -63,7 +63,7 @@ test.describe("Song Generation", () => {
     await page.goto("/generate");
 
     // Verify the generate page renders
-    await expect(page.locator("h1")).toContainText("Generate");
+    await expect(page.locator("h1").first().first()).toContainText("Generate");
     await expect(
       page.getByText("Create a new song with AI")
     ).toBeVisible();
@@ -146,7 +146,7 @@ test.describe("Library View", () => {
     await page.goto("/library");
 
     // Verify the library page renders
-    await expect(page.locator("h1")).toContainText("Library");
+    await expect(page.locator("h1").first()).toContainText("Library");
 
     // Should show song count
     await expect(page.getByText(/\d+ songs/)).toBeVisible();
@@ -218,12 +218,12 @@ test.describe("Navigation", () => {
     // Generate
     await page.getByRole("link", { name: "Generate" }).first().click();
     await expect(page).toHaveURL(/\/generate/, { timeout: 5000 });
-    await expect(page.locator("h1")).toContainText("Generate");
+    await expect(page.locator("h1").first()).toContainText("Generate");
 
     // Library
     await page.getByRole("link", { name: "Library" }).first().click();
     await expect(page).toHaveURL(/\/library/, { timeout: 5000 });
-    await expect(page.locator("h1")).toContainText("Library");
+    await expect(page.locator("h1").first()).toContainText("Library");
 
     // Home
     await page.getByRole("link", { name: "Home" }).first().click();

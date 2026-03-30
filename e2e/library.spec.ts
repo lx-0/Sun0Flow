@@ -27,10 +27,10 @@ test.describe("Library — Search", () => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
 
     await page.goto("/library");
-    await expect(page.locator("h1")).toContainText("Library");
+    await expect(page.locator("h1").first()).toContainText("Library");
 
     // Type in search — the search input may have different aria-labels
-    const searchInput = page.getByPlaceholder(/Search songs/i);
+    const searchInput = page.getByLabel("Search songs");
     await searchInput.fill("Sunset");
 
     // Verify the search input has value
@@ -42,7 +42,7 @@ test.describe("Library — Search", () => {
 
     await page.goto("/library");
 
-    const searchInput = page.getByPlaceholder(/Search songs/i);
+    const searchInput = page.getByLabel("Search songs");
     await searchInput.fill("something");
     await expect(searchInput).toHaveValue("something");
 

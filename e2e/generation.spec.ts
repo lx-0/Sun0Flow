@@ -153,7 +153,7 @@ test.describe("Generation — Form Validation", () => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
     await page.goto("/generate");
 
-    await expect(page.locator("h1")).toContainText("Generate");
+    await expect(page.locator("h1").first()).toContainText("Generate");
     await expect(
       page.getByText("Create a new song with AI")
     ).toBeVisible();

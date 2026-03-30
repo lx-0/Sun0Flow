@@ -28,7 +28,7 @@ test.describe("Playlists — List & Create", () => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
     await page.goto("/playlists");
 
-    await expect(page.locator("h1")).toContainText("Playlists");
+    await expect(page.locator("h1").first()).toContainText("Playlists");
     await expect(
       page.getByText("No playlists yet")
     ).toBeVisible({ timeout: 5000 });
@@ -131,7 +131,7 @@ test.describe("Playlists — Detail & Edit", () => {
     await page.getByRole("button", { name: "Save" }).click();
 
     // Verify new name is displayed
-    await expect(page.locator("h1")).toContainText("Renamed Playlist", {
+    await expect(page.locator("h1").first()).toContainText("Renamed Playlist", {
       timeout: 5000,
     });
   });
@@ -152,7 +152,7 @@ test.describe("Playlists — Song Management", () => {
 
     // Go to library first
     await page.goto("/library");
-    await expect(page.locator("h1")).toContainText("Library");
+    await expect(page.locator("h1").first()).toContainText("Library");
 
     // Set up mocks after page load (SSR already completed with real data)
     const songs = [mockSong({ id: "add-to-pl-1", title: "Playlist Song" })];
@@ -189,7 +189,7 @@ test.describe("Playlists — Song Management", () => {
     });
 
     // Trigger a client-side fetch by typing in search (this triggers the mocked API)
-    const searchInput = page.getByPlaceholder(/Search songs/i);
+    const searchInput = page.getByLabel("Search songs");
     await searchInput.fill("Playlist");
     await expect(page.getByText("Playlist Song")).toBeVisible({ timeout: 8000 });
 
