@@ -2,10 +2,10 @@
 
 ## Environments
 
-| Environment | Railway Service   | Trigger                              |
-|-------------|-------------------|--------------------------------------|
-| Staging     | SunoFlow-staging  | Auto — push to `main`                |
-| Production  | SunoFlow          | Manual — `workflow_dispatch` or `v*` tag |
+| Environment | Railway Service   | URL                                                  | Trigger                              |
+|-------------|-------------------|------------------------------------------------------|--------------------------------------|
+| Staging     | SunoFlow-staging  | https://sunoflow-staging.up.railway.app              | Auto — push to `main`                |
+| Production  | SunoFlow          | https://sunoflow-production.up.railway.app           | Manual — `workflow_dispatch` or `v*` tag |
 
 ## Normal Deploy Flow
 
