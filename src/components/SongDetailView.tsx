@@ -1230,6 +1230,16 @@ export function SongDetailView({
     track("song_link_copied", { songId: song.id, source: "song_detail" });
   }
 
+  function handleShareOnX() {
+    if (!publicSlug) return;
+    const url = `${window.location.origin}/s/${publicSlug}`;
+    const songTitle = song.title ?? "Check out this song";
+    const tweetText = `${songTitle} — listen on SunoFlow`;
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(url)}`;
+    window.open(twitterUrl, "_blank", "noopener,noreferrer");
+    track("song_shared", { songId: song.id, source: "song_detail", method: "twitter" });
+  }
+
   // Fetch child stem tracks for a completed split_stem song and merge them in
   async function loadChildStems(parentStemId: string) {
     try {
@@ -1716,6 +1726,18 @@ export function SongDetailView({
           >
             <ShareIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             Share
+          </button>
+        )}
+        {isPublic && (
+          <button
+            onClick={handleShareOnX}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"
+            aria-label="Share on X (Twitter)"
+          >
+            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+            Share on X
           </button>
         )}
 

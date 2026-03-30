@@ -96,6 +96,15 @@ export function PublicSongView({
     }
   }, [title, toast, songId]);
 
+  const handleShareOnX = useCallback(() => {
+    const url = window.location.href;
+    const songTitle = title ?? "Check out this song";
+    const tweetText = `${songTitle} — listen on SunoFlow`;
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(url)}`;
+    window.open(twitterUrl, "_blank", "noopener,noreferrer");
+    track("song_shared", { songId, source: "public_page", method: "twitter" });
+  }, [title, songId]);
+
   function getEmbedCode() {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://sunoflow.app";
     const src = `${origin}/embed/${songId}?theme=${embedTheme}`;
@@ -394,6 +403,16 @@ export function PublicSongView({
         >
           <ShareIcon className="w-3.5 h-3.5" aria-hidden="true" />
           Share
+        </button>
+        <button
+          onClick={handleShareOnX}
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 active:scale-95 min-h-[44px]"
+          aria-label="Share on X (Twitter)"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+          </svg>
+          Share on X
         </button>
         <button
           onClick={() => setEmbedOpen(true)}
