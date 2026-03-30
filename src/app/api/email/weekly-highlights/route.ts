@@ -18,10 +18,11 @@ export async function POST(request: NextRequest) {
   const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
 
-  // Find opted-in, active users (active in the last 30 days)
+  // Find opted-in weekly digest users who are active in the last 30 days.
+  // Only "weekly" frequency users — daily/monthly handled by separate cron schedules.
   const users = await prisma.user.findMany({
     where: {
-      emailWeeklyHighlights: true,
+      emailDigestFrequency: "weekly",
       email: { not: null },
       isDisabled: false,
       lastLoginAt: { gte: thirtyDaysAgo },

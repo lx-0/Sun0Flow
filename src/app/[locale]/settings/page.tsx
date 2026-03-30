@@ -713,6 +713,10 @@ function PreferencesTab() {
 
         <div className="border-t border-gray-200 dark:border-gray-800" />
 
+        <QuietHoursSection />
+
+        <div className="border-t border-gray-200 dark:border-gray-800" />
+
         <PlaybackDefaultsSection />
 
         <div className="border-t border-gray-200 dark:border-gray-800" />
@@ -1224,14 +1228,21 @@ function InstagramPostsSection() {
   );
 }
 
-const EMAIL_NOTIF_TYPES = [
+const EMAIL_BOOL_NOTIF_TYPES = [
   { key: "emailWelcome", label: "Welcome & tips", description: "Onboarding emails and feature announcements" },
   { key: "emailGenerationComplete", label: "Generation complete", description: "Email me when a song finishes generating (opt-in)" },
-  { key: "emailWeeklyHighlights", label: "Weekly highlights", description: "A weekly digest of your top songs and activity" },
+];
+
+const DIGEST_FREQUENCY_OPTIONS = [
+  { value: "off", label: "Off" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
 ];
 
 function EmailNotificationsSection() {
-  const [prefs, setPrefs] = useState<Record<string, boolean>>({});
+  const [boolPrefs, setBoolPrefs] = useState<Record<string, boolean>>({});
+  const [digestFrequency, setDigestFrequency] = useState<string>("off");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -1245,15 +1256,19 @@ function EmailNotificationsSection() {
     fetch("/api/profile/email-preferences")
       .then((r) => r.json())
       .then((data) => {
-        if (!data.error) setPrefs(data);
+        if (!data.error) {
+          const { emailDigestFrequency, ...rest } = data;
+          setBoolPrefs(rest);
+          setDigestFrequency(emailDigestFrequency ?? "off");
+        }
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
   }, []);
 
   const toggle = async (key: string) => {
-    const updated = { ...prefs, [key]: !prefs[key] };
-    setPrefs(updated);
+    const updated = { ...boolPrefs, [key]: !boolPrefs[key] };
+    setBoolPrefs(updated);
     setSaving(true);
     try {
       const res = await fetch("/api/profile/email-preferences", {
@@ -1264,11 +1279,34 @@ function EmailNotificationsSection() {
       if (!res.ok) {
         const data = await res.json();
         showToast(data.error ?? "Failed to update preference", "error");
-        setPrefs(prefs); // revert
+        setBoolPrefs(boolPrefs);
       }
     } catch {
       showToast("Network error", "error");
-      setPrefs(prefs); // revert
+      setBoolPrefs(boolPrefs);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const changeDigestFrequency = async (value: string) => {
+    const prev = digestFrequency;
+    setDigestFrequency(value);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/profile/email-preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailDigestFrequency: value }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        showToast(data.error ?? "Failed to update digest frequency", "error");
+        setDigestFrequency(prev);
+      }
+    } catch {
+      showToast("Network error", "error");
+      setDigestFrequency(prev);
     } finally {
       setSaving(false);
     }
@@ -1285,14 +1323,14 @@ function EmailNotificationsSection() {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Choose which emails you want to receive. All emails include a one-click unsubscribe link.</p>
         </div>
         <div className="space-y-2">
-          {EMAIL_NOTIF_TYPES.map(({ key, label, description }) => (
+          {EMAIL_BOOL_NOTIF_TYPES.map(({ key, label, description }) => (
             <label
               key={key}
               className="flex items-center gap-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               <input
                 type="checkbox"
-                checked={prefs[key] === true}
+                checked={boolPrefs[key] === true}
                 onChange={() => !saving && toggle(key)}
                 disabled={saving}
                 className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-violet-600 focus:ring-violet-500 dark:bg-gray-800"
@@ -1304,7 +1342,169 @@ function EmailNotificationsSection() {
               <BellIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
             </label>
           ))}
+
+          {/* Digest frequency selector */}
+          <div className="flex items-center gap-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-3">
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-medium text-gray-900 dark:text-white">Email digest</span>
+              <span className="block text-xs text-gray-500 dark:text-gray-400">A digest of your top songs and activity</span>
+            </div>
+            <select
+              value={digestFrequency}
+              onChange={(e) => !saving && changeDigestFrequency(e.target.value)}
+              disabled={saving}
+              className="text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
+            >
+              {DIGEST_FREQUENCY_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
         </div>
+      </section>
+    </>
+  );
+}
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const label = i === 0 ? "12:00 AM" : i < 12 ? `${i}:00 AM` : i === 12 ? "12:00 PM" : `${i - 12}:00 PM`;
+  return { value: i, label };
+});
+
+function QuietHoursSection() {
+  const [enabled, setEnabled] = useState(false);
+  const [start, setStart] = useState(22);
+  const [end, setEnd] = useState(8);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  useEffect(() => {
+    fetch("/api/profile/email-preferences")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.error) {
+          setEnabled(data.quietHoursEnabled ?? false);
+          setStart(data.quietHoursStart ?? 22);
+          setEnd(data.quietHoursEnd ?? 8);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const patch = async (updates: Record<string, unknown>) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/profile/email-preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        showToast(data.error ?? "Failed to update quiet hours", "error");
+        return false;
+      }
+      return true;
+    } catch {
+      showToast("Network error", "error");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleEnabled = async () => {
+    const next = !enabled;
+    setEnabled(next);
+    const ok = await patch({ quietHoursEnabled: next });
+    if (!ok) setEnabled(!next);
+  };
+
+  const changeStart = async (value: number) => {
+    const prev = start;
+    setStart(value);
+    const ok = await patch({ quietHoursStart: value });
+    if (!ok) setStart(prev);
+  };
+
+  const changeEnd = async (value: number) => {
+    const prev = end;
+    setEnd(value);
+    const ok = await patch({ quietHoursEnd: value });
+    if (!ok) setEnd(prev);
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <>
+      {toast && <Toast message={toast.message} type={toast.type} />}
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Quiet Hours</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Suppress push notifications during a time window each day.</p>
+        </div>
+
+        {/* Master toggle */}
+        <div className="flex items-center justify-between bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-3">
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-medium text-gray-900 dark:text-white">Enable quiet hours</span>
+            <span className="block text-xs text-gray-500 dark:text-gray-400">No push notifications during this window</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            onClick={toggleEnabled}
+            disabled={saving}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+              enabled ? "bg-violet-600" : "bg-gray-300 dark:bg-gray-700"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                enabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Time range pickers (only shown when enabled) */}
+        {enabled && (
+          <div className="flex items-center gap-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg px-3 py-3">
+            <div className="flex-1 flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-700 dark:text-gray-300">From</span>
+              <select
+                value={start}
+                onChange={(e) => !saving && changeStart(Number(e.target.value))}
+                disabled={saving}
+                className="text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
+              >
+                {HOUR_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+              <span className="text-sm text-gray-700 dark:text-gray-300">to</span>
+              <select
+                value={end}
+                onChange={(e) => !saving && changeEnd(Number(e.target.value))}
+                disabled={saving}
+                className="text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
+              >
+                {HOUR_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
       </section>
     </>
   );

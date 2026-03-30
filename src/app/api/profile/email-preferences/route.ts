@@ -3,13 +3,23 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
+const VALID_DIGEST_FREQUENCIES = ["daily", "weekly", "monthly", "off"] as const;
+type DigestFrequency = (typeof VALID_DIGEST_FREQUENCIES)[number];
+
 export async function GET(request: Request) {
   const { userId, error: authError } = await resolveUser(request);
   if (authError) return authError;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { emailWelcome: true, emailGenerationComplete: true, emailWeeklyHighlights: true },
+    select: {
+      emailWelcome: true,
+      emailGenerationComplete: true,
+      emailDigestFrequency: true,
+      quietHoursEnabled: true,
+      quietHoursStart: true,
+      quietHoursEnd: true,
+    },
   });
 
   if (!user) {
@@ -19,7 +29,10 @@ export async function GET(request: Request) {
   return NextResponse.json({
     emailWelcome: user.emailWelcome,
     emailGenerationComplete: user.emailGenerationComplete,
-    emailWeeklyHighlights: user.emailWeeklyHighlights,
+    emailDigestFrequency: user.emailDigestFrequency,
+    quietHoursEnabled: user.quietHoursEnabled,
+    quietHoursStart: user.quietHoursStart,
+    quietHoursEnd: user.quietHoursEnd,
   });
 }
 
@@ -28,7 +41,7 @@ export async function PATCH(request: Request) {
   if (authError) return authError;
 
   const body = await request.json();
-  const { emailWelcome, emailGenerationComplete, emailWeeklyHighlights } = body;
+  const { emailWelcome, emailGenerationComplete, emailDigestFrequency, quietHoursEnabled, quietHoursStart, quietHoursEnd } = body;
 
   const data: Record<string, unknown> = {};
 
@@ -46,11 +59,35 @@ export async function PATCH(request: Request) {
     data.emailGenerationComplete = emailGenerationComplete;
   }
 
-  if (emailWeeklyHighlights !== undefined) {
-    if (typeof emailWeeklyHighlights !== "boolean") {
-      return NextResponse.json({ error: "emailWeeklyHighlights must be a boolean", code: "VALIDATION_ERROR" }, { status: 400 });
+  if (emailDigestFrequency !== undefined) {
+    if (!VALID_DIGEST_FREQUENCIES.includes(emailDigestFrequency as DigestFrequency)) {
+      return NextResponse.json(
+        { error: `emailDigestFrequency must be one of: ${VALID_DIGEST_FREQUENCIES.join(", ")}`, code: "VALIDATION_ERROR" },
+        { status: 400 }
+      );
     }
-    data.emailWeeklyHighlights = emailWeeklyHighlights;
+    data.emailDigestFrequency = emailDigestFrequency;
+  }
+
+  if (quietHoursEnabled !== undefined) {
+    if (typeof quietHoursEnabled !== "boolean") {
+      return NextResponse.json({ error: "quietHoursEnabled must be a boolean", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
+    data.quietHoursEnabled = quietHoursEnabled;
+  }
+
+  if (quietHoursStart !== undefined) {
+    if (typeof quietHoursStart !== "number" || quietHoursStart < 0 || quietHoursStart > 23) {
+      return NextResponse.json({ error: "quietHoursStart must be an integer 0–23", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
+    data.quietHoursStart = quietHoursStart;
+  }
+
+  if (quietHoursEnd !== undefined) {
+    if (typeof quietHoursEnd !== "number" || quietHoursEnd < 0 || quietHoursEnd > 23) {
+      return NextResponse.json({ error: "quietHoursEnd must be an integer 0–23", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
+    data.quietHoursEnd = quietHoursEnd;
   }
 
   if (Object.keys(data).length === 0) {
@@ -69,12 +106,22 @@ export async function PATCH(request: Request) {
   const user = await prisma.user.update({
     where: { id: userId },
     data,
-    select: { emailWelcome: true, emailGenerationComplete: true, emailWeeklyHighlights: true },
+    select: {
+      emailWelcome: true,
+      emailGenerationComplete: true,
+      emailDigestFrequency: true,
+      quietHoursEnabled: true,
+      quietHoursStart: true,
+      quietHoursEnd: true,
+    },
   });
 
   return NextResponse.json({
     emailWelcome: user.emailWelcome,
     emailGenerationComplete: user.emailGenerationComplete,
-    emailWeeklyHighlights: user.emailWeeklyHighlights,
+    emailDigestFrequency: user.emailDigestFrequency,
+    quietHoursEnabled: user.quietHoursEnabled,
+    quietHoursStart: user.quietHoursStart,
+    quietHoursEnd: user.quietHoursEnd,
   });
 }

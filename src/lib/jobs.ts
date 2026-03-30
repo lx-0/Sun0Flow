@@ -42,11 +42,11 @@ async function emailDigestSend() {
   const oneWeekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
 
-  // Fetch opted-in, enabled users who were active in the last 30 days.
+  // Fetch weekly digest users who were active in the last 30 days.
   // lastLoginAt is the best available activity proxy.
   const users = await prisma.user.findMany({
     where: {
-      emailWeeklyHighlights: true,
+      emailDigestFrequency: "weekly",
       email: { not: null },
       isDisabled: false,
       lastLoginAt: { gte: thirtyDaysAgo },

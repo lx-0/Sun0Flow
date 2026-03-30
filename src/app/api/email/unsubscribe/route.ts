@@ -23,11 +23,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired unsubscribe link", code: "NOT_FOUND" }, { status: 404 });
   }
 
-  const field = type === "generation_complete" ? "emailGenerationComplete" : "emailWeeklyHighlights";
+  const updateData =
+    type === "generation_complete"
+      ? { emailGenerationComplete: false }
+      : { emailDigestFrequency: "off" };
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { [field]: false },
+    data: updateData,
   });
 
   logger.info({ userId: user.id, type }, "email: user unsubscribed");

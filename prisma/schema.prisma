@@ -60,7 +60,10 @@ model User {
   onboardingCompleted      Boolean   @default(false)
   emailWelcome             Boolean   @default(true)
   emailGenerationComplete  Boolean   @default(false)
-  emailWeeklyHighlights    Boolean   @default(false)
+  emailDigestFrequency     String    @default("off")
+  quietHoursEnabled        Boolean   @default(false)
+  quietHoursStart          Int       @default(22)
+  quietHoursEnd            Int       @default(8)
   unsubscribeToken         String?   @unique
   pushGenerationComplete   Boolean   @default(true)
   pushNewFollower          Boolean   @default(true)

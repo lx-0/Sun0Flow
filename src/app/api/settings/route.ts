@@ -3,6 +3,9 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { stripHtml } from "@/lib/sanitize";
 
+const VALID_DIGEST_FREQUENCIES = ["daily", "weekly", "monthly", "off"] as const;
+type DigestFrequency = (typeof VALID_DIGEST_FREQUENCIES)[number];
+
 // GET /api/settings — returns profile + notification preferences
 export async function GET(request: Request) {
   const { userId, error: authError } = await resolveUser(request);
@@ -18,7 +21,10 @@ export async function GET(request: Request) {
       avatarUrl: true,
       emailWelcome: true,
       emailGenerationComplete: true,
-      emailWeeklyHighlights: true,
+      emailDigestFrequency: true,
+      quietHoursEnabled: true,
+      quietHoursStart: true,
+      quietHoursEnd: true,
       accounts: { select: { provider: true, type: true } },
     },
   });
@@ -46,7 +52,10 @@ export async function PATCH(request: Request) {
     avatarUrl,
     emailWelcome,
     emailGenerationComplete,
-    emailWeeklyHighlights,
+    emailDigestFrequency,
+    quietHoursEnabled,
+    quietHoursStart,
+    quietHoursEnd,
   } = body;
 
   const data: Record<string, unknown> = {};
@@ -102,11 +111,35 @@ export async function PATCH(request: Request) {
     data.emailGenerationComplete = emailGenerationComplete;
   }
 
-  if (emailWeeklyHighlights !== undefined) {
-    if (typeof emailWeeklyHighlights !== "boolean") {
-      return NextResponse.json({ error: "emailWeeklyHighlights must be a boolean", code: "VALIDATION_ERROR" }, { status: 400 });
+  if (emailDigestFrequency !== undefined) {
+    if (!VALID_DIGEST_FREQUENCIES.includes(emailDigestFrequency as DigestFrequency)) {
+      return NextResponse.json(
+        { error: `emailDigestFrequency must be one of: ${VALID_DIGEST_FREQUENCIES.join(", ")}`, code: "VALIDATION_ERROR" },
+        { status: 400 }
+      );
     }
-    data.emailWeeklyHighlights = emailWeeklyHighlights;
+    data.emailDigestFrequency = emailDigestFrequency;
+  }
+
+  if (quietHoursEnabled !== undefined) {
+    if (typeof quietHoursEnabled !== "boolean") {
+      return NextResponse.json({ error: "quietHoursEnabled must be a boolean", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
+    data.quietHoursEnabled = quietHoursEnabled;
+  }
+
+  if (quietHoursStart !== undefined) {
+    if (typeof quietHoursStart !== "number" || quietHoursStart < 0 || quietHoursStart > 23) {
+      return NextResponse.json({ error: "quietHoursStart must be an integer 0–23", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
+    data.quietHoursStart = quietHoursStart;
+  }
+
+  if (quietHoursEnd !== undefined) {
+    if (typeof quietHoursEnd !== "number" || quietHoursEnd < 0 || quietHoursEnd > 23) {
+      return NextResponse.json({ error: "quietHoursEnd must be an integer 0–23", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
+    data.quietHoursEnd = quietHoursEnd;
   }
 
   if (Object.keys(data).length === 0) {
@@ -124,7 +157,10 @@ export async function PATCH(request: Request) {
       avatarUrl: true,
       emailWelcome: true,
       emailGenerationComplete: true,
-      emailWeeklyHighlights: true,
+      emailDigestFrequency: true,
+      quietHoursEnabled: true,
+      quietHoursStart: true,
+      quietHoursEnd: true,
     },
   });
 
