@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { CheckIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import {
   SparklesIcon,
   MusicalNoteIcon,
@@ -8,96 +7,8 @@ import {
   ShareIcon,
   ChartBarIcon,
   AdjustmentsHorizontalIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
-
-// ─────────────────────────────────────────────────────────
-// Tier data (matches pricing page)
-// ─────────────────────────────────────────────────────────
-
-interface Tier {
-  id: "free" | "starter" | "pro" | "studio";
-  name: string;
-  price: string;
-  priceNote: string;
-  featured: boolean;
-  cta: string;
-  features: Array<{ label: string; included: boolean }>;
-}
-
-const TIERS: Tier[] = [
-  {
-    id: "free",
-    name: "Free",
-    price: "$0",
-    priceNote: "forever",
-    featured: false,
-    cta: "Get Started Free",
-    features: [
-      { label: "200 monthly credits", included: true },
-      { label: "5 generations/hour", included: true },
-      { label: "20 downloads/hour", included: true },
-      { label: "Library & playlists", included: true },
-      { label: "Mashup Studio", included: false },
-      { label: "Priority Queue", included: false },
-      { label: "Vocal Separation", included: false },
-      { label: "API Key Access", included: false },
-    ],
-  },
-  {
-    id: "starter",
-    name: "Starter",
-    price: "$9.99",
-    priceNote: "/ month",
-    featured: false,
-    cta: "Get Started",
-    features: [
-      { label: "1,500 monthly credits", included: true },
-      { label: "25 generations/hour", included: true },
-      { label: "100 downloads/hour", included: true },
-      { label: "Library & playlists", included: true },
-      { label: "Mashup Studio", included: true },
-      { label: "Priority Queue", included: false },
-      { label: "Vocal Separation", included: false },
-      { label: "API Key Access", included: false },
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "$24.99",
-    priceNote: "/ month",
-    featured: true,
-    cta: "Get Started",
-    features: [
-      { label: "5,000 monthly credits", included: true },
-      { label: "50 generations/hour", included: true },
-      { label: "500 downloads/hour", included: true },
-      { label: "Library & playlists", included: true },
-      { label: "Mashup Studio", included: true },
-      { label: "Priority Queue", included: true },
-      { label: "Vocal Separation", included: true },
-      { label: "API Key Access", included: false },
-    ],
-  },
-  {
-    id: "studio",
-    name: "Studio",
-    price: "$49.99",
-    priceNote: "/ month",
-    featured: false,
-    cta: "Get Started",
-    features: [
-      { label: "15,000 monthly credits", included: true },
-      { label: "100 generations/hour", included: true },
-      { label: "Unlimited downloads", included: true },
-      { label: "Library & playlists", included: true },
-      { label: "Mashup Studio", included: true },
-      { label: "Priority Queue", included: true },
-      { label: "Vocal Separation", included: true },
-      { label: "API Key Access", included: true },
-    ],
-  },
-];
 
 // ─────────────────────────────────────────────────────────
 // Features data
@@ -140,6 +51,15 @@ const FEATURES = [
     description:
       "Track play counts, listener trends, and top-performing tracks with built-in analytics dashboards.",
   },
+];
+
+const BETA_INCLUDES = [
+  "AI music generation with Suno",
+  "Full library & playlist management",
+  "Public sharing & collaboration",
+  "Inspiration feeds",
+  "Analytics dashboards",
+  "No credit card required",
 ];
 
 // ─────────────────────────────────────────────────────────
@@ -186,9 +106,9 @@ function HeroSection() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 mb-6">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 mb-6">
           <SparklesIcon className="w-3.5 h-3.5" />
-          Powered by Suno AI
+          Free early access — all features included
         </div>
 
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-6 leading-tight">
@@ -209,18 +129,18 @@ function HeroSection() {
             href="/register"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-base font-semibold bg-violet-600 hover:bg-violet-700 text-white transition-colors shadow-lg shadow-violet-600/25"
           >
-            Get Started Free
+            Get Started — it&apos;s free
           </Link>
           <Link
-            href="/pricing"
+            href="/login"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-base font-semibold border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
           >
-            See pricing
+            Log in
           </Link>
         </div>
 
         <p className="mt-4 text-sm text-gray-500 dark:text-gray-500">
-          Free forever · No credit card required
+          Free during beta · No credit card required
         </p>
       </div>
     </section>
@@ -263,85 +183,39 @@ function FeaturesSection() {
   );
 }
 
-function PricingSection() {
+function FreeBetaBanner() {
   return (
-    <section id="pricing" className="py-20">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white mb-3">
-            Simple, transparent pricing
+    <section id="beta" className="py-20">
+      <div className="max-w-3xl mx-auto px-4">
+        <div className="rounded-3xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 p-10 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 mb-6">
+            <SparklesIcon className="w-3.5 h-3.5" />
+            Early Access
+          </div>
+
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white mb-4">
+            Free during beta
           </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Start free. Upgrade when you need more credits, speed, or features.
+          <p className="text-lg text-gray-600 dark:text-gray-400 mb-8 max-w-xl mx-auto">
+            SunoFlow is free for all early users. Get full access to every feature — no tiers, no
+            limits, no credit card needed.
           </p>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {TIERS.map((tier) => (
-            <div
-              key={tier.id}
-              className={`relative flex flex-col rounded-2xl border p-6 transition-shadow ${
-                tier.featured
-                  ? "border-violet-500 shadow-lg shadow-violet-500/10 bg-violet-50 dark:bg-violet-950/20"
-                  : "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900"
-              }`}
-            >
-              {tier.featured && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-violet-600 text-white shadow">
-                    <SparklesIcon className="w-3.5 h-3.5" />
-                    Most Popular
-                  </span>
-                </div>
-              )}
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left max-w-md mx-auto mb-10">
+            {BETA_INCLUDES.map((item) => (
+              <li key={item} className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-gray-300">
+                <CheckCircleIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
+                {item}
+              </li>
+            ))}
+          </ul>
 
-              <div className="mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                  {tier.name}
-                </h3>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold text-gray-900 dark:text-white">
-                    {tier.price}
-                  </span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {tier.priceNote}
-                  </span>
-                </div>
-              </div>
-
-              <ul className="space-y-2.5 flex-1 mb-6">
-                {tier.features.map((f) => (
-                  <li key={f.label} className="flex items-center gap-2.5 text-sm">
-                    {f.included ? (
-                      <CheckIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
-                    ) : (
-                      <XMarkIcon className="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0" />
-                    )}
-                    <span
-                      className={
-                        f.included
-                          ? "text-gray-700 dark:text-gray-300"
-                          : "text-gray-400 dark:text-gray-600"
-                      }
-                    >
-                      {f.label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="/register"
-                className={`w-full text-center py-2 px-4 rounded-xl text-sm font-semibold transition-colors ${
-                  tier.featured
-                    ? "bg-violet-600 hover:bg-violet-700 text-white"
-                    : "border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                }`}
-              >
-                {tier.cta}
-              </Link>
-            </div>
-          ))}
+          <Link
+            href="/register"
+            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-base font-semibold bg-violet-600 hover:bg-violet-700 text-white transition-colors shadow-lg shadow-violet-600/20"
+          >
+            Join for free
+          </Link>
         </div>
       </div>
     </section>
@@ -371,7 +245,7 @@ function SocialProofSection({ stats }: SocialProofSectionProps) {
             <div className="text-5xl font-extrabold text-white mb-2">
               {stats.users.toLocaleString()}+
             </div>
-            <div className="text-violet-200 text-base font-medium">Active creators</div>
+            <div className="text-violet-200 text-base font-medium">Early creators</div>
           </div>
         </div>
 
@@ -379,7 +253,7 @@ function SocialProofSection({ stats }: SocialProofSectionProps) {
           href="/register"
           className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-base font-semibold bg-white text-violet-700 hover:bg-gray-50 transition-colors shadow-lg"
         >
-          Join the community — it&apos;s free
+          Join {stats.users.toLocaleString()}+ early users — it&apos;s free
         </Link>
       </div>
     </section>
@@ -397,9 +271,6 @@ function FooterSection() {
           </div>
 
           <nav className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-500 dark:text-gray-400">
-            <Link href="/pricing" className="hover:text-gray-900 dark:hover:text-white transition-colors">
-              Pricing
-            </Link>
             <Link href="/terms" className="hover:text-gray-900 dark:hover:text-white transition-colors">
               Terms
             </Link>
@@ -435,7 +306,7 @@ export function LandingPage({ stats = { songs: 10000, users: 2500 } }: LandingPa
       <main>
         <HeroSection />
         <FeaturesSection />
-        <PricingSection />
+        <FreeBetaBanner />
         <SocialProofSection stats={stats} />
       </main>
       <FooterSection />
