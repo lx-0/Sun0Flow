@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { QueueListIcon } from "@heroicons/react/24/outline";
 import { PlusIcon, ChevronDownIcon } from "@heroicons/react/24/solid";
 import { useToast } from "./Toast";
+import { track } from "@/lib/analytics";
 
 interface PlaylistOption {
   id: string;
@@ -72,6 +73,7 @@ export function AddToPlaylistButton({
         const data = await res.json();
         toast(data.error ?? "Failed to add to playlist", "error");
       } else {
+        track("playlist_song_added", { playlistId });
         toast("Added to playlist", "success");
         setOpen(false);
       }
