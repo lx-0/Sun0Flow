@@ -191,24 +191,33 @@ const TABS: { value: Tab; label: string; icon: React.ElementType }[] = [
   { value: "popular", label: "Popular", icon: TrophyIcon },
 ];
 
-export function DiscoverView({ basePath = "/discover" }: { basePath?: string } = {}) {
+export function DiscoverView({
+  basePath = "/discover",
+  initialSongs,
+  initialPagination,
+  defaultTab = "for_you",
+}: {
+  basePath?: string;
+  initialSongs?: DiscoverSong[];
+  initialPagination?: DiscoverPagination;
+  defaultTab?: Tab;
+} = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Tracks whether we should skip the initial browse fetch because SSR data is pre-loaded
+  const skipInitialBrowseFetch = useRef(!!initialSongs && defaultTab === "browse");
 
   // Tab state
   const [tab, setTab] = useState<Tab>(() => {
     const t = searchParams.get("tab");
-    return (t === "trending" || t === "popular" || t === "browse" || t === "for_you") ? t : "for_you";
+    return (t === "trending" || t === "popular" || t === "browse" || t === "for_you") ? t : defaultTab;
   });
 
   // Browse tab state
-  const [songs, setSongs] = useState<DiscoverSong[]>([]);
-  const [pagination, setPagination] = useState<DiscoverPagination>({
-    page: 1,
-    totalPages: 1,
-    total: 0,
-    hasMore: false,
-  });
+  const [songs, setSongs] = useState<DiscoverSong[]>(initialSongs ?? []);
+  const [pagination, setPagination] = useState<DiscoverPagination>(
+    initialPagination ?? { page: 1, totalPages: 1, total: 0, hasMore: false }
+  );
   const [sortBy, setSortBy] = useState(searchParams.get("sortBy") || "newest");
   const [tag, setTag] = useState(searchParams.get("tag") || "");
   const [mood, setMood] = useState(searchParams.get("mood") || "");
@@ -253,7 +262,7 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Shared state
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialSongs ? false : true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [playingSongId, setPlayingSongId] = useState<string | null>(null);
   const [genreTags, setGenreTags] = useState<string[]>([]);
@@ -409,6 +418,11 @@ export function DiscoverView({ basePath = "/discover" }: { basePath?: string } =
   // Fetch on browse tab changes
   useEffect(() => {
     if (tab !== "browse") return;
+    // Skip the first fetch when SSR pre-loaded data is provided for the default state
+    if (skipInitialBrowseFetch.current) {
+      skipInitialBrowseFetch.current = false;
+      return;
+    }
     setSongs([]);
     fetchSongs(
       1,
