@@ -14,6 +14,7 @@ import {
   GlobeAltIcon,
   XMarkIcon,
   SparklesIcon,
+  RectangleStackIcon,
 } from "@heroicons/react/24/solid";
 import { FollowButton } from "@/components/FollowButton";
 import { AddToPlaylistButton } from "@/components/AddToPlaylistButton";
@@ -83,7 +84,7 @@ interface TrendingPagination {
   hasMore: boolean;
 }
 
-type Tab = "for_you" | "browse" | "trending" | "popular";
+type Tab = "for_you" | "browse" | "trending" | "popular" | "collections";
 
 interface FeedSong {
   id: string;
@@ -108,6 +109,19 @@ interface FeedPagination {
   totalPages: number;
   total: number;
   hasMore: boolean;
+}
+
+interface CollectionPreview {
+  id: string;
+  title: string;
+  description: string | null;
+  coverImage: string | null;
+  songCount: number;
+  previewSongs: {
+    id: string;
+    imageUrl: string | null;
+  }[];
+  createdAt: string;
 }
 
 const SORT_OPTIONS = [
@@ -189,6 +203,7 @@ const TABS: { value: Tab; label: string; icon: React.ElementType }[] = [
   { value: "browse", label: "Browse", icon: GlobeAltIcon },
   { value: "trending", label: "Trending", icon: FireIcon },
   { value: "popular", label: "Popular", icon: TrophyIcon },
+  { value: "collections", label: "Collections", icon: RectangleStackIcon },
 ];
 
 export function DiscoverView({
@@ -210,7 +225,7 @@ export function DiscoverView({
   // Tab state
   const [tab, setTab] = useState<Tab>(() => {
     const t = searchParams.get("tab");
-    return (t === "trending" || t === "popular" || t === "browse" || t === "for_you") ? t : defaultTab;
+    return (t === "trending" || t === "popular" || t === "browse" || t === "for_you" || t === "collections") ? t : defaultTab;
   });
 
   // Browse tab state
@@ -248,6 +263,11 @@ export function DiscoverView({
   const [trendingOffset, setTrendingOffset] = useState(0);
   const [trendingGenre, setTrendingGenre] = useState("");
   const [trendingMood, setTrendingMood] = useState("");
+
+  // Collections tab state
+  const [collections, setCollections] = useState<CollectionPreview[]>([]);
+  const [collectionsLoading, setCollectionsLoading] = useState(false);
+  const collectionsFetchedRef = useRef(false);
 
   // Search state
   const [searchInputValue, setSearchInputValue] = useState(
@@ -383,6 +403,21 @@ export function DiscoverView({
     []
   );
 
+  // Fetch curated collections
+  const fetchCollections = useCallback(async () => {
+    setCollectionsLoading(true);
+    try {
+      const res = await fetch("/api/collections");
+      if (!res.ok) return;
+      const data = await res.json();
+      setCollections(data.collections ?? []);
+    } catch {
+      // keep existing state
+    } finally {
+      setCollectionsLoading(false);
+    }
+  }, []);
+
   // Fetch search results from /api/songs/public
   const fetchSearch = useCallback(
     async (q: string, offset: number, append = false) => {
@@ -441,6 +476,14 @@ export function DiscoverView({
     setTrendingOffset(0);
     fetchTrending(tab, trendingGenre, trendingMood, 0);
   }, [tab, trendingGenre, trendingMood, fetchTrending]);
+
+  // Fetch collections once when the tab is first visited
+  useEffect(() => {
+    if (tab !== "collections") return;
+    if (collectionsFetchedRef.current) return;
+    collectionsFetchedRef.current = true;
+    fetchCollections();
+  }, [tab, fetchCollections]);
 
   // Fetch on "for_you" tab + filter changes
   useEffect(() => {
@@ -677,6 +720,8 @@ export function DiscoverView({
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {tab === "for_you"
                   ? "Your personalized discover feed"
+                  : tab === "collections"
+                  ? "Themed song collections curated from the community"
                   : `Explore ${totalCount} publicly shared songs`}
               </p>
             </div>
@@ -1163,6 +1208,27 @@ export function DiscoverView({
             {/* Infinite scroll sentinel for trending */}
             {trendingPagination.hasMore && (
               <ScrollSentinel ref={sentinelRef} loading={loadingMore} />
+            )}
+          </>
+        )}
+
+        {!searchQuery && tab === "collections" && (
+          <>
+            {collectionsLoading ? (
+              <CollectionsGridSkeleton />
+            ) : collections.length === 0 ? (
+              <div className="text-center py-16">
+                <RectangleStackIcon className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                  No collections available yet. Check back soon.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {collections.map((collection) => (
+                  <CollectionCard key={collection.id} collection={collection} />
+                ))}
+              </div>
             )}
           </>
         )}
@@ -1817,6 +1883,87 @@ function TrendingRow({
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Collections sub-components ────────────────────────────────────────────────
+
+function CollectionCard({ collection }: { collection: CollectionPreview }) {
+  const FALLBACK_IMAGE = "https://placehold.co/400x400/1e1b4b/a78bfa?text=♪";
+  const cover = collection.coverImage ?? collection.previewSongs[0]?.imageUrl ?? FALLBACK_IMAGE;
+
+  return (
+    <Link
+      href={`/discover/collections/${collection.id}`}
+      className="group block bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden hover:border-violet-400 dark:hover:border-violet-600 transition-colors"
+    >
+      {/* Cover mosaic */}
+      <div className="relative aspect-video bg-gray-100 dark:bg-gray-800 overflow-hidden">
+        {collection.previewSongs.length >= 4 ? (
+          <div className="grid grid-cols-2 grid-rows-2 w-full h-full">
+            {collection.previewSongs.slice(0, 4).map((s, i) => (
+              <div key={i} className="relative overflow-hidden">
+                <Image
+                  src={s.imageUrl ?? FALLBACK_IMAGE}
+                  alt=""
+                  fill
+                  sizes="200px"
+                  className="object-cover"
+                  loading="lazy"
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Image
+            src={cover}
+            alt={collection.title}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="absolute bottom-2 left-3 right-3">
+          <p className="text-white font-bold text-base leading-tight line-clamp-2 drop-shadow">
+            {collection.title}
+          </p>
+        </div>
+      </div>
+
+      {/* Meta */}
+      <div className="p-3">
+        {collection.description && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-1.5">
+            {collection.description}
+          </p>
+        )}
+        <div className="flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 font-medium">
+          <MusicalNoteIcon className="w-3.5 h-3.5" />
+          {collection.songCount} song{collection.songCount !== 1 ? "s" : ""}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function CollectionsGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden animate-pulse"
+        >
+          <div className="aspect-video bg-gray-200 dark:bg-gray-800" />
+          <div className="p-3 space-y-2">
+            <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-3/4" />
+            <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-1/3" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

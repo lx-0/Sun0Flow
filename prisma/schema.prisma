@@ -188,6 +188,7 @@ model Song {
   viewEvents           SongView[]
   generationAttempt    GenerationAttempt?
   songEmbedding        SongEmbedding?
+  collectionSongs      CollectionSong[]
 
   @@index([userId, title])
   @@index([userId, prompt])
@@ -907,4 +908,39 @@ model AnonRateLimitEntry {
   createdAt DateTime @default(now())
 
   @@index([key, action, createdAt])
+}
+
+// ─── Curated Collections ──────────────────────────────────────────────────────
+
+// Themed groupings of public songs for the Discover page (e.g. "Chill Vibes").
+// Auto-generated from song metadata; manual curation deferred to a future release.
+model Collection {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  coverImage  String?  // URL to representative artwork
+  theme       String?  // internal tag used to build the collection (e.g. "chill")
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  songs CollectionSong[]
+
+  @@index([isPublic, createdAt(sort: Desc)])
+}
+
+// Join table: Collection ↔ Song (ordered by position)
+model CollectionSong {
+  id           String   @id @default(cuid())
+  collectionId String
+  songId       String
+  position     Int      @default(0)
+  addedAt      DateTime @default(now())
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  song       Song       @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, songId])
+  @@index([collectionId, position])
+  @@index([songId])
 }
