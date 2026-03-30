@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { KeyIcon, ArrowRightIcon, XMarkIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
 
