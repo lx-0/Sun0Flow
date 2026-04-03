@@ -215,7 +215,10 @@ test.describe("Navigation", () => {
     // Wait for full hydration so the Next.js client-side router is ready.
     // Without this, Link clicks may preventDefault (React handler attached)
     // but fail to trigger client-side navigation (router not yet initialized).
-    await page.waitForLoadState("networkidle");
+    // Note: networkidle is unsuitable here because persistent polling
+    // (notifications, pending songs) keeps the network active indefinitely.
+    await page.waitForLoadState("domcontentloaded");
+    await page.getByRole("link", { name: "Generate" }).first().waitFor();
 
     // Generate
     await page.getByRole("link", { name: "Generate" }).first().click();
@@ -228,7 +231,7 @@ test.describe("Navigation", () => {
     // Home — authenticated users are redirected to /library
     await page.getByRole("link", { name: "Home" }).first().click();
     await page.waitForURL(/\/library/, { timeout: 10000 });
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Inspire
     await page.getByRole("link", { name: "Inspire" }).first().click();
