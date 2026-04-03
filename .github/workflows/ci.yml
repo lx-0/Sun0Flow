@@ -238,7 +238,7 @@ jobs:
       - name: Deploy to staging
         run: railway up --detach --service SunoFlow
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Write deploy summary
         run: |
