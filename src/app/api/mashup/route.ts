@@ -12,6 +12,7 @@ import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
+import { canUseFeature, SubscriptionTier } from "@/lib/feature-gates";
 
 // Refresh the audio URL if it's expired or will expire within 1 hour
 const EXPIRY_BUFFER_MS = 60 * 60 * 1000;
@@ -49,6 +50,19 @@ export async function POST(request: Request) {
     const { userId, error: authError } = await resolveUser(request);
 
     if (authError) return authError;
+
+    // Server-side tier check: Mashup Studio requires Starter tier or higher
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+      select: { tier: true },
+    });
+    const tier: SubscriptionTier = (subscription?.tier as SubscriptionTier) ?? "free";
+    if (!canUseFeature("mashupStudio", tier)) {
+      return NextResponse.json(
+        { error: "Mashup Studio requires Starter tier or higher", code: "FORBIDDEN" },
+        { status: 403 }
+      );
+    }
 
     const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
     if (!acquired) {
