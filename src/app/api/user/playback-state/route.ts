@@ -44,7 +44,7 @@ export async function PUT(request: Request) {
     if (authError) return authError;
 
     const body = await request.json();
-    const { songId, position, queue, volume } = body;
+    const { songId, position, queue, volume, shuffleVersions } = body;
 
     if (!songId || typeof songId !== "string") {
       return NextResponse.json(
@@ -85,12 +85,14 @@ export async function PUT(request: Request) {
         position,
         queue,
         volume: typeof volume === "number" ? Math.max(0, Math.min(1, volume)) : 1,
+        shuffleVersions: shuffleVersions === true,
       },
       update: {
         songId,
         position,
         queue,
         volume: typeof volume === "number" ? Math.max(0, Math.min(1, volume)) : 1,
+        shuffleVersions: shuffleVersions === true,
       },
     });
 
