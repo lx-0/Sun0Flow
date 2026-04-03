@@ -250,6 +250,7 @@ jobs:
   e2e-staging:
     name: E2E Tests (Staging)
     needs: [deploy-staging]
+    if: vars.STAGING_URL != ''
     runs-on: ubuntu-latest
     environment: staging
 
