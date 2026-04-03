@@ -14,6 +14,7 @@ import {
   ArrowLeftIcon,
   MusicalNoteIcon,
   PresentationChartLineIcon,
+  ScaleIcon,
 } from "@heroicons/react/24/outline";
 
 const adminNav = [
@@ -24,6 +25,7 @@ const adminNav = [
   { label: "Content", href: "/admin/content", icon: MusicalNoteIcon },
   { label: "Moderation", href: "/admin/moderation", icon: ShieldExclamationIcon, badge: "reports" as const },
   { label: "Reports", href: "/admin/reports", icon: FlagIcon },
+  { label: "Appeals", href: "/admin/appeals", icon: ScaleIcon, badge: "appeals" as const },
   { label: "Errors", href: "/admin/errors", icon: ExclamationTriangleIcon },
   { label: "Audit Log", href: "/admin/logs", icon: ClipboardDocumentListIcon },
 ];
@@ -31,11 +33,16 @@ const adminNav = [
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [pendingReports, setPendingReports] = useState(0);
+  const [pendingAppeals, setPendingAppeals] = useState(0);
 
   useEffect(() => {
     fetch("/api/admin/reports/count")
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data?.pending) setPendingReports(data.pending); })
+      .catch(() => {});
+    fetch("/api/admin/appeals?status=pending&limit=1")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.total != null) setPendingAppeals(data.total); })
       .catch(() => {});
   }, []);
 
@@ -50,7 +57,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
           {adminNav.map(({ label, href, icon: Icon, badge }) => {
             const active = pathname === href;
-            const showBadge = badge === "reports" && pendingReports > 0;
+            const badgeCount = badge === "reports" ? pendingReports : badge === "appeals" ? pendingAppeals : 0;
+            const showBadge = badgeCount > 0;
             return (
               <Link
                 key={href}
@@ -65,7 +73,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 <span className="flex-1">{label}</span>
                 {showBadge && (
                   <span className="text-xs font-bold bg-red-600 text-white rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-none">
-                    {pendingReports > 99 ? "99+" : pendingReports}
+                    {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 )}
               </Link>
@@ -97,7 +105,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <nav className="flex items-center gap-1 px-4 py-2 bg-gray-900 border-b border-gray-800 md:hidden overflow-x-auto">
           {adminNav.map(({ label, href, icon: Icon, badge }) => {
             const active = pathname === href;
-            const showBadge = badge === "reports" && pendingReports > 0;
+            const badgeCount = badge === "reports" ? pendingReports : badge === "appeals" ? pendingAppeals : 0;
+            const showBadge = badgeCount > 0;
             return (
               <Link
                 key={href}
@@ -112,7 +121,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 {label}
                 {showBadge && (
                   <span className="text-xs font-bold bg-red-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
-                    {pendingReports > 99 ? "99+" : pendingReports}
+                    {badgeCount > 99 ? "99+" : badgeCount}
                   </span>
                 )}
               </Link>

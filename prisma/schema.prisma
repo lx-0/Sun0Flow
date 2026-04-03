@@ -82,6 +82,7 @@ model User {
   favorites        Favorite[]
   adminLogs        AdminLog[] @relation("adminLogs")
   reports          Report[]
+  appeals          Appeal[]
   notifications    Notification[]
   rssFeeds              RssFeedSubscription[]
   pendingFeedGenerations PendingFeedGeneration[]
@@ -177,6 +178,7 @@ model Song {
   songTags      SongTag[]
   favorites     Favorite[]
   reports       Report[]
+  appeals       Appeal[]
   ratings       Rating[]
   queueItems    GenerationQueueItem[]
   comments      Comment[]
@@ -379,6 +381,25 @@ model Report {
   @@index([songId])
   @@index([reporterId])
   @@index([status, createdAt])
+}
+
+model Appeal {
+  id         String    @id @default(cuid())
+  songId     String
+  userId     String
+  reason     String    @db.Text
+  status     String    @default("pending") // pending, approved, rejected
+  adminNote  String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([songId, userId])
+  @@index([status, createdAt])
+  @@index([userId])
+  @@index([songId])
 }
 
 model Notification {
