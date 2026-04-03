@@ -21,12 +21,13 @@ function savePlaybackState(
   songId: string,
   position: number,
   queue: QueueSong[],
-  volume: number
+  volume: number,
+  shuffleVersions: boolean
 ) {
   fetch("/api/user/playback-state", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ songId, position, queue, volume }),
+    body: JSON.stringify({ songId, position, queue, volume, shuffleVersions }),
   }).catch(() => {});
 }
 
@@ -71,6 +72,10 @@ interface QueueState {
   radioState: RadioParams | null;
   /** True while radio is fetching more songs */
   isRadioLoading: boolean;
+  /** When true, advancing songs picks a random version (remix/extension) */
+  shuffleVersions: boolean;
+  /** The version currently playing (null when shuffleVersions is off or song has no variations) */
+  activeVersion: QueueSong | null;
 }
 
 interface QueueActions {
@@ -102,6 +107,8 @@ interface QueueActions {
   stopRadio: () => void;
   /** Mark a song as disliked — excludes it from future radio fetches */
   radioThumbsDown: (songId: string) => void;
+  /** Toggle shuffle-across-versions mode */
+  toggleShuffleVersions: () => void;
 }
 
 type QueueContextValue = QueueState & QueueActions;
@@ -178,6 +185,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const [playlistSource, setPlaylistSource] = useState<string | null>(null);
   const [radioState, setRadioState] = useState<RadioParams | null>(null);
   const [isRadioLoading, setIsRadioLoading] = useState(false);
+  const [shuffleVersions, setShuffleVersions] = useState(false);
+  const [activeVersion, setActiveVersion] = useState<QueueSong | null>(null);
 
   // Ref versions for use in callbacks without stale closures
   const radioStateRef = useRef<RadioParams | null>(null);
@@ -196,6 +205,10 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   // Tracks songs that failed through the CDN proxy and fell back to direct URL
   const cdnFallbackRef = useRef<Set<string>>(new Set());
 
+  // Version cache — keyed by queue song ID, stores playable versions for the session
+  const versionCacheRef = useRef<Map<string, QueueSong[]>>(new Map());
+  const shuffleVersionsRef = useRef(false);
+
   const trackPlayRef = useRef(trackPlay);
   queueRef.current = queue;
   currentIndexRef.current = currentIndex;
@@ -203,13 +216,14 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   shuffleRef.current = shuffle;
   trackPlayRef.current = trackPlay;
   volumeRef.current = volume;
+  shuffleVersionsRef.current = shuffleVersions;
 
   // Debounced sync function — schedule a save of current playback state
   const scheduleSync = useCallback(
     (songId: string, position: number, syncQueue: QueueSong[]) => {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       syncTimerRef.current = setTimeout(() => {
-        savePlaybackState(songId, position, syncQueue, volumeRef.current);
+        savePlaybackState(songId, position, syncQueue, volumeRef.current, shuffleVersionsRef.current);
       }, SYNC_DEBOUNCE_MS);
     },
     []
@@ -224,6 +238,60 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     if (cdnFallbackRef.current.has(song.id)) return song.audioUrl;
     return proxiedAudioUrl(song.id);
   }
+
+  // Ref for resolveAndPlay — used inside the audio onEnded handler
+  const resolveAndPlayRef = useRef<((song: QueueSong, index: number) => Promise<void>) | null>(null);
+
+  /**
+   * Advance to a song, optionally picking a random version when shuffleVersions is on.
+   * Uses a per-session cache to avoid repeated version fetches.
+   */
+  const resolveAndPlay = useCallback(async (song: QueueSong, index: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    setCurrentIndex(index);
+    setCurrentTime(0);
+    setDuration(song.duration ?? 0);
+
+    if (!shuffleVersionsRef.current) {
+      setActiveVersion(null);
+      audio.src = getAudioSrc(song);
+      audio.play().catch(console.error);
+      trackPlayRef.current(song.id);
+      return;
+    }
+
+    // Check cache first, then fetch
+    let versions = versionCacheRef.current.get(song.id);
+    if (!versions) {
+      try {
+        const res = await fetch(`/api/songs/${song.id}/playable-versions`);
+        if (res.ok) {
+          const data = await res.json();
+          versions = (data.versions ?? []) as QueueSong[];
+          versionCacheRef.current.set(song.id, versions);
+        }
+      } catch {
+        // Fall through to play canonical
+      }
+    }
+
+    if (versions && versions.length > 1) {
+      const picked = versions[Math.floor(Math.random() * versions.length)];
+      setActiveVersion(picked);
+      audio.src = getAudioSrc(picked);
+      audio.play().catch(console.error);
+      trackPlayRef.current(picked.id);
+    } else {
+      setActiveVersion(null);
+      audio.src = getAudioSrc(song);
+      audio.play().catch(console.error);
+      trackPlayRef.current(song.id);
+    }
+  }, []);
+
+  resolveAndPlayRef.current = resolveAndPlay;
 
   // ─── Init audio element ───────────────────────────────────────────────────
   useEffect(() => {
@@ -279,12 +347,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       if (idx < q.length - 1) {
         // Advance to next
         const next = idx + 1;
-        setCurrentIndex(next);
-        audio.src = getAudioSrc(q[next]);
-        setCurrentTime(0);
-        setDuration(q[next].duration ?? 0);
-        audio.play().catch(console.error);
-        trackPlayRef.current(q[next].id);
+        resolveAndPlayRef.current?.(q[next], next);
 
         // Radio auto-refill: when fewer than 3 songs remain, fetch more
         if (radioStateRef.current && q.length - next <= 3) {
@@ -294,13 +357,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         // Radio mode — fetch a new batch when queue is exhausted
         radioRefillRef.current?.();
       } else if (rep === "repeat-all" && q.length > 0) {
-        // Wrap to start
-        setCurrentIndex(0);
-        audio.src = getAudioSrc(q[0]);
-        setCurrentTime(0);
-        setDuration(q[0].duration ?? 0);
-        audio.play().catch(console.error);
-        trackPlayRef.current(q[0].id);
+        // Wrap to start — allow a new random version pick
+        resolveAndPlayRef.current?.(q[0], 0);
       } else {
         // End of queue
         setIsPlaying(false);
@@ -425,14 +483,9 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    setCurrentIndex(next);
     audio.pause();
-    audio.src = getAudioSrc(queue[next]);
-    setCurrentTime(0);
-    setDuration(queue[next].duration ?? 0);
-    audio.play().catch(console.error);
-    trackPlay(queue[next].id);
-  }, [queue, currentIndex, repeat, trackPlay]);
+    resolveAndPlay(queue[next], next);
+  }, [queue, currentIndex, repeat, resolveAndPlay]);
 
   const skipPrev = useCallback(() => {
     const audio = audioRef.current;
@@ -454,14 +507,9 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    setCurrentIndex(prev);
     audio.pause();
-    audio.src = getAudioSrc(queue[prev]);
-    setCurrentTime(0);
-    setDuration(queue[prev].duration ?? 0);
-    audio.play().catch(console.error);
-    trackPlay(queue[prev].id);
-  }, [queue, currentIndex, repeat, trackPlay]);
+    resolveAndPlay(queue[prev], prev);
+  }, [queue, currentIndex, repeat, resolveAndPlay]);
 
   const seek = useCallback(
     (fraction: number) => {
@@ -506,6 +554,14 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      return next;
+    });
+  }, []);
+
+  const toggleShuffleVersions = useCallback(() => {
+    setShuffleVersions((prev) => {
+      const next = !prev;
+      if (!next) setActiveVersion(null);
       return next;
     });
   }, []);
@@ -593,6 +649,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     setRadioState(null);
     radioExcludedIds.current = new Set();
     originalQueueRef.current = [];
+    setActiveVersion(null);
+    versionCacheRef.current = new Map();
   }, []);
 
   // ─── Radio actions ─────────────────────────────────────────────────────────
@@ -700,7 +758,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       .then((r) => r.json())
       .then((data) => {
         if (!data.state?.song?.audioUrl) return;
-        const { song, position, queue: savedQueue, volume: savedVol } = data.state;
+        const { song, position, queue: savedQueue, volume: savedVol, shuffleVersions: savedShuffleVersions } = data.state;
         const audio = audioRef.current;
         if (!audio) return;
 
@@ -731,6 +789,11 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
         // Set the audio source but don't play
         audio.src = proxiedAudioUrl(restoreQueue[idx].id);
+
+        // Restore shuffleVersions
+        if (savedShuffleVersions === true) {
+          setShuffleVersions(true);
+        }
 
         // Restore volume
         const vol = typeof savedVol === "number" ? savedVol : 1;
@@ -785,6 +848,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     playlistSource,
     radioState,
     isRadioLoading,
+    shuffleVersions,
+    activeVersion,
     playQueue,
     togglePlay,
     playNext,
@@ -803,6 +868,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     startRadio,
     stopRadio,
     radioThumbsDown,
+    toggleShuffleVersions,
   };
 
   return (
