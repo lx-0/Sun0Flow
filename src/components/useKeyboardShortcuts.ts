@@ -103,6 +103,9 @@ export function useKeyboardShortcuts(
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if ((e.target as HTMLElement)?.isContentEditable) return;
 
+      // Allow browser shortcuts (Cmd+R, Ctrl+R, Cmd+L, etc.) to pass through
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
       const key = e.key;
       const hasQueue = queue.length > 0 && currentIndex >= 0;
 
