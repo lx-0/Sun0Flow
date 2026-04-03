@@ -1,24 +1,14 @@
 import { test, expect } from "@playwright/test";
 import {
-  uniqueEmail,
   DEFAULT_PASSWORD,
-  registerUser,
   loginViaUI,
+  getSharedUser,
   mockSong,
   mockSongsAPI,
 } from "./helpers";
 
 const TEST_PASSWORD = DEFAULT_PASSWORD;
-let testEmail: string;
-
-test.beforeAll(async ({ baseURL }) => {
-  testEmail = uniqueEmail("sharing");
-  await registerUser(baseURL ?? "http://localhost:3200", {
-    name: "Sharing Tester",
-    email: testEmail,
-    password: TEST_PASSWORD,
-  });
-});
+const testEmail = getSharedUser().email;
 
 // ─── Public Song Sharing ────────────────────────────────────────────────────
 

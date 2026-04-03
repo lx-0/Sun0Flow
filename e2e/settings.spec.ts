@@ -4,19 +4,12 @@ import {
   DEFAULT_PASSWORD,
   registerUser,
   loginViaUI,
+  getSharedUser,
+  isRemote,
 } from "./helpers";
 
 const TEST_PASSWORD = DEFAULT_PASSWORD;
-let testEmail: string;
-
-test.beforeAll(async ({ baseURL }) => {
-  testEmail = uniqueEmail("settings");
-  await registerUser(baseURL ?? "http://localhost:3200", {
-    name: "Settings Tester",
-    email: testEmail,
-    password: TEST_PASSWORD,
-  });
-});
+const testEmail = getSharedUser().email;
 
 // ─── Settings Page Rendering ────────────────────────────────────────────────
 
@@ -101,10 +94,11 @@ test.describe("Settings — Change Password", () => {
     ).toBeVisible();
   });
 
-  test("change password with valid credentials", async ({ page }) => {
-    // Use a unique user for this test since we're changing the password
+  // This test registers a dedicated user (password will be changed), so skip
+  // when running against a remote server to avoid hitting the rate limiter.
+  (isRemote ? test.skip : test)("change password with valid credentials", async ({ page, baseURL }) => {
     const email = uniqueEmail("chgpwd");
-    await registerUser("http://localhost:3200", {
+    await registerUser(baseURL ?? "http://localhost:3200", {
       name: "Password Changer",
       email,
       password: TEST_PASSWORD,

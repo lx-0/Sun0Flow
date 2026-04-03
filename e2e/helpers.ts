@@ -78,6 +78,24 @@ export async function loginViaUI(
   }
 }
 
+// ─── Shared Test User (registered once in globalSetup) ─────────────────────
+
+import fs from "fs";
+import path from "path";
+
+let _sharedUser: { email: string; password: string; name: string } | null = null;
+
+export function getSharedUser() {
+  if (!_sharedUser) {
+    const filePath = path.join(__dirname, ".shared-user.json");
+    _sharedUser = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  }
+  return _sharedUser!;
+}
+
+/** True when tests run against a remote staging/production server */
+export const isRemote = process.env.PLAYWRIGHT_REMOTE === "true";
+
 // ─── Mock Song Data ─────────────────────────────────────────────────────────
 
 export function mockSong(overrides: Record<string, unknown> = {}) {

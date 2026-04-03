@@ -1,24 +1,14 @@
 import { test, expect } from "@playwright/test";
 import {
-  uniqueEmail,
   DEFAULT_PASSWORD,
-  registerUser,
   loginViaUI,
+  getSharedUser,
 } from "./helpers";
 
-// ─── Test user shared across all tests ──────────────────────────────────────
+// ─── Test user shared across all tests (registered once in globalSetup) ─────
 
 const TEST_PASSWORD = DEFAULT_PASSWORD;
-let testEmail: string;
-
-test.beforeAll(async ({ baseURL }) => {
-  testEmail = uniqueEmail("core");
-  await registerUser(baseURL ?? "http://localhost:3200", {
-    name: "Core Flow Tester",
-    email: testEmail,
-    password: TEST_PASSWORD,
-  });
-});
+const testEmail = getSharedUser().email;
 
 // ─── Song Generation ────────────────────────────────────────────────────────
 

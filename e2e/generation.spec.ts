@@ -1,23 +1,13 @@
 import { test, expect } from "@playwright/test";
 import {
-  uniqueEmail,
   DEFAULT_PASSWORD,
-  registerUser,
   loginViaUI,
+  getSharedUser,
   mockSong,
 } from "./helpers";
 
 const TEST_PASSWORD = DEFAULT_PASSWORD;
-let testEmail: string;
-
-test.beforeAll(async ({ baseURL }) => {
-  testEmail = uniqueEmail("generation");
-  await registerUser(baseURL ?? "http://localhost:3200", {
-    name: "Generation Tester",
-    email: testEmail,
-    password: TEST_PASSWORD,
-  });
-});
+const testEmail = getSharedUser().email;
 
 // ─── Generation Status Polling ──────────────────────────────────────────────
 

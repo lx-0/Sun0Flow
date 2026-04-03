@@ -1,12 +1,16 @@
 import { test, expect } from "@playwright/test";
 import {
-  uniqueEmail,
   DEFAULT_PASSWORD,
   registerUser,
   loginViaUI,
+  getSharedUser,
+  isRemote,
 } from "./helpers";
 
+// Register tests hit /api/register multiple times — skip on staging to avoid rate limits
 test.describe("Register", () => {
+  test.skip(() => isRemote, "Skipped on staging — registration hits rate limiter");
+
   // Clear any session cookies before each test so a logged-in state from the
   // "happy path" test (which auto-signs-in after registration) does not leak
   // into subsequent tests that expect an unauthenticated browser.
@@ -94,26 +98,11 @@ test.describe("Register", () => {
 });
 
 test.describe("Login", () => {
-  let seededEmail: string;
-  const seededPassword = "SeededPass123!";
+  const seededEmail = getSharedUser().email;
+  const seededPassword = DEFAULT_PASSWORD;
 
   test.beforeEach(async ({ page }) => {
     await page.context().clearCookies();
-  });
-
-  test.beforeAll(async ({ baseURL }) => {
-    // Seed a user for login tests
-    seededEmail = `e2e-login-${Date.now()}@test.local`;
-    const res = await registerUser(baseURL ?? "http://localhost:3200", {
-      name: "Login Test User",
-      email: seededEmail,
-      password: seededPassword,
-    });
-    if (res.status !== 201) {
-      throw new Error(
-        `Failed to seed login user: ${res.status} ${await res.text()}`
-      );
-    }
   });
 
   test("happy path — login with valid credentials", async ({ page }) => {
@@ -151,17 +140,8 @@ test.describe("Login", () => {
 // ─── Logout ──────────────────────────────────────────────────────────────────
 
 test.describe("Logout", () => {
-  let logoutEmail: string;
+  const logoutEmail = getSharedUser().email;
   const logoutPassword = DEFAULT_PASSWORD;
-
-  test.beforeAll(async ({ baseURL }) => {
-    logoutEmail = uniqueEmail("logout");
-    await registerUser(baseURL ?? "http://localhost:3200", {
-      name: "Logout Tester",
-      email: logoutEmail,
-      password: logoutPassword,
-    });
-  });
 
   test("sign out redirects to login and prevents access to protected pages", async ({
     page,
@@ -211,15 +191,8 @@ test.describe("Password Reset", () => {
 
   test("submitting forgot password shows confirmation message", async ({
     page,
-    baseURL,
   }) => {
-    // Seed a user to request reset for
-    const email = uniqueEmail("reset");
-    await registerUser(baseURL ?? "http://localhost:3200", {
-      name: "Reset Tester",
-      email,
-      password: DEFAULT_PASSWORD,
-    });
+    const email = getSharedUser().email;
 
     await page.goto("/forgot-password");
 

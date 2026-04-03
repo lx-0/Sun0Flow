@@ -251,7 +251,6 @@ jobs:
     name: E2E Tests (Staging)
     needs: [deploy-staging]
     if: vars.STAGING_URL != ''
-    continue-on-error: true
     runs-on: ubuntu-latest
     environment: staging
 
