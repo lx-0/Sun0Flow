@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateApiKey } from "@/lib/api-keys";
 import { logServerError } from "@/lib/error-logger";
+import { canUseFeature, SubscriptionTier } from "@/lib/feature-gates";
 
 const MAX_ACTIVE_KEYS = 5;
 
@@ -39,6 +40,19 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
+    }
+
+    // Server-side tier check: API keys require Studio tier
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId: session.user.id },
+      select: { tier: true },
+    });
+    const tier: SubscriptionTier = subscription?.tier ?? "free";
+    if (!canUseFeature("apiKeys", tier)) {
+      return NextResponse.json(
+        { error: "Studio tier required", code: "FORBIDDEN" },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();
