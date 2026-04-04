@@ -78,14 +78,22 @@ test.describe("Error Scenarios", () => {
       });
     });
 
+    // Wait for the credits API response to confirm the page has hydrated —
+    // without this, the form's onSubmit handler may not be attached yet.
+    const creditsLoaded = page.waitForResponse(
+      (res) => res.url().includes("/api/credits") && res.request().method() === "GET",
+      { timeout: 15000 },
+    );
     await page.goto("/generate");
+    await creditsLoaded;
+
     await page.getByLabel("Style / genre").fill("jazz");
     await page.locator('button[type="submit"]').click();
 
     // Should show an error message rather than crashing
     await expect(
       page.getByText(/error|failed|something went wrong/i).first()
-    ).toBeVisible({ timeout: 5000 });
+    ).toBeVisible({ timeout: 10000 });
     // Should remain on the generate page
     await expect(page).toHaveURL(/\/generate/);
   });

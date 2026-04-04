@@ -131,7 +131,7 @@ test.describe("Settings — Change Password", () => {
     // Sign out first
     await page.goto("/");
     const signOutBtn = page.getByRole("button", { name: "Sign out" }).first();
-    await signOutBtn.waitFor({ state: "visible", timeout: 5000 });
+    await signOutBtn.waitFor({ state: "visible", timeout: 20000 });
     await signOutBtn.click();
     await expect(page).toHaveURL(/\/login/, { timeout: 15000 });
 

@@ -106,7 +106,7 @@ test.describe("Generation — Status Polling", () => {
     await gotoLibraryWithMock(page);
 
     // Should show the "Generating…" badge
-    await expect(page.getByText("Generating…")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Generating…").first()).toBeVisible({ timeout: 5000 });
   });
 
   test("library shows failed badge for errored songs", async ({ page }) => {
@@ -136,7 +136,7 @@ test.describe("Generation — Status Polling", () => {
 
     await gotoLibraryWithMock(page);
 
-    await expect(page.getByText("Failed").first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Failed").first()).toBeVisible({ timeout: 10000 });
   });
 });
 
@@ -220,13 +220,20 @@ test.describe("Generation — Rate Limiting", () => {
       });
     });
 
+    // Wait for credits fetch to confirm the page has hydrated
+    const creditsLoaded = page.waitForResponse(
+      (res) => res.url().includes("/api/credits") && res.request().method() === "GET",
+      { timeout: 15000 },
+    );
     await page.goto("/generate");
+    await creditsLoaded;
+
     await page.getByLabel("Style / genre").fill("jazz");
     await page.locator('button[type="submit"]').click();
 
     // Should show rate limit error (multiple elements match — use first)
     await expect(
       page.getByText(/Rate limit reached/i).first()
-    ).toBeVisible({ timeout: 5000 });
+    ).toBeVisible({ timeout: 10000 });
   });
 });

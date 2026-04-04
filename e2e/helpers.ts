@@ -56,13 +56,36 @@ export async function loginViaUI(
     await page.goto("/");
     await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
   } else {
-    // Fallback: use the browser form (works locally with existing CSRF cookies)
+    // Fallback: use the browser form (works on staging where PLAYWRIGHT_TEST is unset).
+    // The login page is a "use client" component — we must wait for React hydration
+    // before clicking Sign in, otherwise the form submits as plain HTML (no action attr)
+    // and the page simply reloads on /login.
+
+    // Listen for the providers-config fetch that fires in the login page's useEffect
+    // — this signals that the component has mounted and event handlers are attached.
+    const hydrationPromise = page.waitForResponse(
+      (res) => res.url().includes("/api/auth/providers-config"),
+      { timeout: 20000 },
+    );
     await page.goto("/login");
-    await expect(page.getByLabel("Email")).toBeVisible({ timeout: 15000 });
+    await hydrationPromise;
+
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
+
+    // Click and wait for the auth API call to confirm the JS handler fired
+    const signInBtn = page.getByRole("button", { name: "Sign in" });
+    await signInBtn.click();
+
+    // Wait for the signIn() call to hit the auth backend
+    await page.waitForResponse(
+      (res) =>
+        res.url().includes("/api/auth/") &&
+        res.request().method() === "POST",
+      { timeout: 15000 },
+    );
+
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 15000 });
   }
 
   // Safety net: dismiss welcome modal ("Skip for now") or tour tooltip ("Skip tour")
@@ -194,6 +217,14 @@ export async function gotoLibraryWithMock(page: Page, path = "/library") {
     { timeout: 15000 },
   );
   await page.goto(path);
+
+  // If we were redirected to /login, the mock will never fire — fail fast
+  if (page.url().includes("/login")) {
+    throw new Error(
+      `gotoLibraryWithMock: redirected to /login — login session is missing`,
+    );
+  }
+
   await responseDone;
   // Small settle time for React state update after response
   await page.waitForTimeout(300);

@@ -252,11 +252,11 @@ test.describe("Navigation", () => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
 
     await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
 
-    // Click sign out button (visible in header/sidebar on desktop)
+    // Wait for the session to load so the AppShell renders the sign-out button
+    // (useSession() needs time to fetch the session after navigation)
     const signOutBtn = page.getByRole("button", { name: "Sign out" }).first();
-    await signOutBtn.waitFor({ state: "visible", timeout: 10000 });
+    await signOutBtn.waitFor({ state: "visible", timeout: 20000 });
     await signOutBtn.click();
 
     // Should redirect to login
