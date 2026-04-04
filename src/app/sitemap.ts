@@ -14,31 +14,39 @@ const USERS_ID_OFFSET = 200;
 const STATIC_ID = 300;
 
 export async function generateSitemaps() {
-  const [songCount, playlistCount, userCount] = await Promise.all([
-    prisma.song.count({
-      where: { isPublic: true, isHidden: false, archivedAt: null },
-    }),
-    prisma.playlist.count({ where: { isPublic: true } }),
-    prisma.user.count({ where: { username: { not: null } } }),
-  ]);
+  try {
+    const [songCount, playlistCount, userCount] = await Promise.all([
+      prisma.song.count({
+        where: { isPublic: true, isHidden: false, archivedAt: null },
+      }),
+      prisma.playlist.count({ where: { isPublic: true } }),
+      prisma.user.count({ where: { username: { not: null } } }),
+    ]);
 
-  const songPages = Math.max(1, Math.ceil(songCount / ITEMS_PER_SITEMAP));
-  const playlistPages = Math.max(1, Math.ceil(playlistCount / ITEMS_PER_SITEMAP));
-  const userPages = Math.max(1, Math.ceil(userCount / ITEMS_PER_SITEMAP));
+    const songPages = Math.max(1, Math.ceil(songCount / ITEMS_PER_SITEMAP));
+    const playlistPages = Math.max(
+      1,
+      Math.ceil(playlistCount / ITEMS_PER_SITEMAP)
+    );
+    const userPages = Math.max(1, Math.ceil(userCount / ITEMS_PER_SITEMAP));
 
-  const ids: { id: number }[] = [{ id: STATIC_ID }];
+    const ids: { id: number }[] = [{ id: STATIC_ID }];
 
-  for (let i = 0; i < songPages; i++) {
-    ids.push({ id: SONGS_ID_OFFSET + i });
+    for (let i = 0; i < songPages; i++) {
+      ids.push({ id: SONGS_ID_OFFSET + i });
+    }
+    for (let i = 0; i < playlistPages; i++) {
+      ids.push({ id: PLAYLISTS_ID_OFFSET + i });
+    }
+    for (let i = 0; i < userPages; i++) {
+      ids.push({ id: USERS_ID_OFFSET + i });
+    }
+
+    return ids;
+  } catch {
+    // DB not available during build — return static-only fallback
+    return [{ id: STATIC_ID }];
   }
-  for (let i = 0; i < playlistPages; i++) {
-    ids.push({ id: PLAYLISTS_ID_OFFSET + i });
-  }
-  for (let i = 0; i < userPages; i++) {
-    ids.push({ id: USERS_ID_OFFSET + i });
-  }
-
-  return ids;
 }
 
 export default async function sitemap({
