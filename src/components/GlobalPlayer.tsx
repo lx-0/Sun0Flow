@@ -23,6 +23,7 @@ import {
   ChatBubbleLeftIcon,
   CubeIcon,
 } from "@heroicons/react/24/outline";
+import Link from "next/link";
 import { CoverArtImage } from "./CoverArtImage";
 import { useQueue } from "./QueueContext";
 import { UpNextPanel } from "./UpNextPanel";
@@ -400,7 +401,11 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
 
         <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2">
           {/* Cover art — hidden on very small screens to save space */}
-          <div className="relative flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden flex items-center justify-center">
+          <Link
+            href={`/library/${currentSong.id}`}
+            className="relative flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-violet-500/50 transition-all"
+            title="View song details"
+          >
             {currentSong.imageUrl ? (
               <CoverArtImage
                 src={currentSong.imageUrl}
@@ -412,14 +417,18 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
             ) : (
               <MusicalNoteIcon className="w-5 h-5 text-gray-500" aria-hidden="true" />
             )}
-          </div>
+          </Link>
 
           {/* Song info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <p className="text-sm font-medium text-white truncate" aria-live="polite">
+              <Link
+                href={`/library/${currentSong.id}`}
+                className="text-sm font-medium text-white truncate hover:text-violet-400 transition-colors"
+                aria-live="polite"
+              >
                 {currentSong.title ?? "Untitled"}
-              </p>
+              </Link>
               {activeVersion && activeVersion.id !== currentSong.id && (
                 <span className="flex-shrink-0 text-[10px] font-medium text-violet-400 bg-violet-400/10 px-1.5 py-0.5 rounded">
                   Alt version
