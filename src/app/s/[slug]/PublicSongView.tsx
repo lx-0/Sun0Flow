@@ -349,6 +349,7 @@ export function PublicSongView({
                 isPlaying={isPlaying}
                 isAuthenticated={true}
                 onReact={handleReact}
+                reactionEmojis={reactions.map((r) => r.emoji)}
               />
             ) : (
               isPlaying && (

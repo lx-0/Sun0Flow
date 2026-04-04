@@ -477,6 +477,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
                     isPlaying={isPlaying}
                     isAuthenticated={!!session?.user}
                     onReact={handleReact}
+                    reactionEmojis={reactions.map((r) => r.emoji)}
                   />
                 </div>
               )}
