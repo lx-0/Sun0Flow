@@ -48,6 +48,7 @@ const CoverArtModal = dynamic(() => import("./CoverArtModal").then((m) => m.Cove
 import { LyricsEditor } from "./LyricsEditor";
 import { CoverArtImage } from "./CoverArtImage";
 import { AddToPlaylistButton } from "./AddToPlaylistButton";
+import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 // Lazy-load below-fold recommendations to reduce initial bundle
 const RecommendationSection = dynamic(() => import("./SongRecommendations").then((m) => m.RecommendationSection), { ssr: false });
 
@@ -1098,6 +1099,7 @@ export function SongDetailView({
   // Cover art state
   const [coverArtModalOpen, setCoverArtModalOpen] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(song.imageUrl ?? null);
+  const generatedFallbackUrl = generateCoverArtVariants({ songId: song.id, title: song.title, tags: song.tags })[0].dataUrl;
 
   // Export/conversion state
   type ExportFormat = "wav" | "midi" | "mp4";
@@ -1527,15 +1529,16 @@ export function SongDetailView({
       {/* Hero cover art with blurred background */}
       <div className="relative w-full overflow-hidden rounded-b-3xl mb-6">
         {/* Blurred background layer */}
-        {coverImageUrl && (
+        {(coverImageUrl || generatedFallbackUrl) && (
           <div className="absolute inset-0">
             <CoverArtImage
-              src={coverImageUrl}
+              src={coverImageUrl || generatedFallbackUrl}
               alt=""
               fill
               className="object-cover scale-110 blur-2xl opacity-60"
               sizes="100vw"
               priority
+              fallbackSrc={generatedFallbackUrl}
             />
             <div className="absolute inset-0 bg-gradient-to-b from-gray-50/30 via-gray-50/50 to-gray-50 dark:from-gray-950/30 dark:via-gray-950/50 dark:to-gray-950" />
           </div>
@@ -1553,18 +1556,15 @@ export function SongDetailView({
 
           {/* Cover art */}
           <div className="relative w-full aspect-square max-h-80 sm:max-h-[400px] rounded-2xl bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center shadow-xl ring-1 ring-black/5 dark:ring-white/10 mx-auto group">
-            {coverImageUrl ? (
-              <CoverArtImage
-                src={coverImageUrl}
-                alt={song.title}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 400px"
-                priority
-              />
-            ) : (
-              <MusicalNoteIcon className="w-20 h-20 text-gray-400 dark:text-gray-600" aria-hidden="true" />
-            )}
+            <CoverArtImage
+              src={coverImageUrl || generatedFallbackUrl}
+              alt={song.title}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 400px"
+              priority
+              fallbackSrc={generatedFallbackUrl}
+            />
             {/* Generate Cover overlay button */}
             <button
               onClick={() => setCoverArtModalOpen(true)}
@@ -1981,18 +1981,16 @@ export function SongDetailView({
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 tracking-wide">Cover Art</h2>
         </div>
         <div className="flex items-center gap-3">
-          {coverImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={coverImageUrl}
+          <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 flex-shrink-0">
+            <CoverArtImage
+              src={coverImageUrl || generatedFallbackUrl}
               alt="Cover art"
-              className="w-14 h-14 rounded-xl object-cover border border-gray-200 dark:border-gray-700 flex-shrink-0"
+              fill
+              className="object-cover"
+              sizes="56px"
+              fallbackSrc={generatedFallbackUrl}
             />
-          ) : (
-            <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-              <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-600" aria-hidden="true" />
-            </div>
-          )}
+          </div>
           <button
             onClick={() => setCoverArtModalOpen(true)}
             className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
