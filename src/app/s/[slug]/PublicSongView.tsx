@@ -40,6 +40,7 @@ interface PublicSongViewProps {
   creatorUsername?: string | null;
   songOwnerId?: string | null;
   prompt: string | null;
+  lyrics: string | null;
   createdAt: string;
 }
 
@@ -56,6 +57,7 @@ export function PublicSongView({
   creatorUsername,
   songOwnerId,
   prompt,
+  lyrics,
   createdAt,
 }: PublicSongViewProps) {
   const signupReturnUrl = returnUrl ?? `/s/${slug}`;
@@ -260,6 +262,14 @@ export function PublicSongView({
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 transition-shadow duration-200 hover:shadow-md">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Prompt</h2>
           <p className="text-sm text-gray-700 dark:text-gray-300">{prompt}</p>
+        </div>
+      )}
+
+      {/* Lyrics */}
+      {lyrics && (
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 transition-shadow duration-200 hover:shadow-md">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Lyrics</h2>
+          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{lyrics}</p>
         </div>
       )}
 

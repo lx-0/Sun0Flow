@@ -147,6 +147,7 @@ export default async function PublicSongPage({
           creatorUsername={song.user.username}
           songOwnerId={song.userId}
           prompt={song.prompt}
+          lyrics={song.lyrics}
           createdAt={song.createdAt.toISOString()}
         />
       </div>
