@@ -44,16 +44,17 @@ export async function loginViaUI(
     headers: { "Content-Type": "application/json" },
   });
 
+  // Suppress onboarding tour and API key wizard BEFORE any page navigation
+  // so the welcome modal never renders and intercepts pointer events.
+  await page.addInitScript(() => {
+    try { localStorage.setItem("sunoflow-tour-completed", "true"); } catch {}
+    try { localStorage.setItem("sunoflow-apikey-wizard-dismissed", "true"); } catch {}
+  });
+
   if (loginRes.ok()) {
     // Session cookie is now set — navigate to the home page to complete auth
     await page.goto("/");
     await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
-    // Belt-and-suspenders: suppress onboarding tour and API key wizard via
-    // localStorage so they can't intercept pointer events in E2E tests.
-    await page.evaluate(() => {
-      try { localStorage.setItem("sunoflow-tour-completed", "true"); } catch {}
-      try { localStorage.setItem("sunoflow-apikey-wizard-dismissed", "true"); } catch {}
-    });
   } else {
     // Fallback: use the browser form (works locally with existing CSRF cookies)
     await page.goto("/login");
@@ -64,11 +65,14 @@ export async function loginViaUI(
     await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
   }
 
-  // Dismiss onboarding tour if present
-  const skipTour = page.getByRole("button", { name: "Skip tour" }).first();
-  if (await skipTour.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await skipTour.click();
-    await expect(skipTour).not.toBeVisible({ timeout: 2000 }).catch(() => {});
+  // Safety net: dismiss welcome modal ("Skip for now") or tour tooltip ("Skip tour")
+  for (const label of ["Skip for now", "Skip tour"]) {
+    const btn = page.getByRole("button", { name: label }).first();
+    if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await btn.click();
+      await expect(btn).not.toBeVisible({ timeout: 2000 }).catch(() => {});
+      break;
+    }
   }
 
   // Dismiss email verification banner if present
