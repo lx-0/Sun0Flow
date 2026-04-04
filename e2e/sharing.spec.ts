@@ -5,6 +5,7 @@ import {
   getSharedUser,
   mockSong,
   mockSongsAPI,
+  gotoLibraryWithMock,
 } from "./helpers";
 
 const TEST_PASSWORD = DEFAULT_PASSWORD;
@@ -64,7 +65,7 @@ test.describe("Public Song Sharing", () => {
       });
     });
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
     await expect(page.getByText("Shareable Song")).toBeVisible({
       timeout: 5000,
     });

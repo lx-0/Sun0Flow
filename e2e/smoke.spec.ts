@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { loginViaUI, DEFAULT_PASSWORD, getSharedUser } from "./helpers";
+import { loginViaUI, DEFAULT_PASSWORD, getSharedUser, mockCreditsAPI } from "./helpers";
 
 test("homepage loads successfully", async ({ page }) => {
   const response = await page.goto("/");
@@ -66,6 +66,9 @@ test.describe("Error Scenarios", () => {
 
   test("generate page handles API error gracefully", async ({ page }) => {
     await loginViaUI(page, sharedEmail, DEFAULT_PASSWORD);
+
+    // Mock credits so the UpgradeModal doesn't block form submission
+    await mockCreditsAPI(page);
 
     await page.route("**/api/generate", async (route) => {
       await route.fulfill({

@@ -5,6 +5,7 @@ import {
   getSharedUser,
   mockSong,
   mockSongsAPI,
+  gotoLibraryWithMock,
 } from "./helpers";
 
 const TEST_PASSWORD = DEFAULT_PASSWORD;
@@ -121,7 +122,7 @@ test.describe("Library — States", () => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
 
     await mockSongsAPI(page, []);
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
 
     await expect(
       page.getByText("No songs yet")
@@ -138,7 +139,7 @@ test.describe("Library — States", () => {
     ];
     await mockSongsAPI(page, songs);
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
 
     await expect(page.getByText(/3 songs?/)).toBeVisible({ timeout: 5000 });
   });
@@ -152,7 +153,7 @@ test.describe("Library — States", () => {
     ];
     await mockSongsAPI(page, songs);
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
 
     await expect(page.getByText("Alpha Song")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("Beta Song")).toBeVisible();
@@ -168,7 +169,7 @@ test.describe("Library — Song Actions", () => {
     const songs = [mockSong({ title: "Favable Song" })];
     await mockSongsAPI(page, songs);
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
     await expect(page.getByText("Favable Song")).toBeVisible({ timeout: 5000 });
 
     // Hover over the song row to reveal action buttons
@@ -196,7 +197,7 @@ test.describe("Library — Song Actions", () => {
       });
     });
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
     await expect(page.getByText("Toggle Fav Song")).toBeVisible({ timeout: 5000 });
 
     // Hover to reveal action buttons
@@ -219,7 +220,7 @@ test.describe("Library — Song Actions", () => {
     const songs = [mockSong({ title: "Playable Song" })];
     await mockSongsAPI(page, songs);
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
     await expect(page.getByText("Playable Song")).toBeVisible({
       timeout: 5000,
     });
@@ -239,7 +240,7 @@ test.describe("Library — Song Actions", () => {
     const songs = [mockSong({ id: songId, title: "Detail Link Song" })];
     await mockSongsAPI(page, songs);
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
     await expect(page.getByText("Detail Link Song")).toBeVisible({
       timeout: 5000,
     });
@@ -264,7 +265,7 @@ test.describe("Library — Batch Selection", () => {
     ];
     await mockSongsAPI(page, songs);
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
     await expect(page.getByText("Batch Song 1")).toBeVisible({ timeout: 5000 });
 
     // "Select all" link should be visible

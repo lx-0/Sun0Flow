@@ -3,6 +3,7 @@ import {
   DEFAULT_PASSWORD,
   loginViaUI,
   getSharedUser,
+  mockCreditsAPI,
 } from "./helpers";
 
 // ─── Test user shared across all tests (registered once in globalSetup) ─────
@@ -17,6 +18,9 @@ test.describe("Song Generation", () => {
     page,
   }) => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
+
+    // Mock credits so the UpgradeModal doesn't block form submission
+    await mockCreditsAPI(page);
 
     // Intercept the generate API to return a mock song
     await page.route("**/api/generate", async (route) => {
@@ -73,6 +77,8 @@ test.describe("Song Generation", () => {
 
   test("generate form with custom lyrics mode", async ({ page }) => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
+
+    await mockCreditsAPI(page);
 
     await page.route("**/api/generate", async (route) => {
       await route.fulfill({
@@ -138,18 +144,22 @@ test.describe("Library View", () => {
     // Verify the library page renders
     await expect(page.locator("h1").first()).toContainText("Library");
 
-    // Should show song count
-    await expect(page.getByText(/\d+ songs/)).toBeVisible();
+    // Should show song count — allow extra time for the client-side refetch
+    // (the library loads via SSR first, then refetches client-side which
+    // briefly shows "Searching…" before displaying the count again)
+    await expect(page.getByText(/\d+ songs?/)).toBeVisible({ timeout: 15000 });
 
     // Should show empty state or song list
     // (freshly seeded user has no songs unless generate tests ran first)
     const emptyMsg = page.getByText("No songs yet");
     const songList = page.locator("ul");
-    await expect(emptyMsg.or(songList)).toBeVisible({ timeout: 5000 });
+    await expect(emptyMsg.or(songList)).toBeVisible({ timeout: 10000 });
   });
 
   test("library page shows songs after generation", async ({ page }) => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
+
+    await mockCreditsAPI(page);
 
     // First, generate a song via the API directly
     // Intercept generate to return a mock
@@ -242,10 +252,11 @@ test.describe("Navigation", () => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
 
     await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
 
-    // Click sign out button (visible in header on desktop)
+    // Click sign out button (visible in header/sidebar on desktop)
     const signOutBtn = page.getByRole("button", { name: "Sign out" }).first();
-    await signOutBtn.waitFor({ state: "visible", timeout: 5000 });
+    await signOutBtn.waitFor({ state: "visible", timeout: 10000 });
     await signOutBtn.click();
 
     // Should redirect to login

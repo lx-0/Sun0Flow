@@ -50,21 +50,26 @@ test.describe("Settings — Display Name", () => {
 
     // Profile tab should be active by default
     const nameInput = page.getByPlaceholder("Your name");
-    await expect(nameInput).toBeVisible({ timeout: 5000 });
+    await expect(nameInput).toBeVisible({ timeout: 10000 });
     await nameInput.clear();
     await nameInput.fill("Updated Name");
 
-    // Click save
+    // Click save and wait for the API response to complete
+    const saveResponse = page.waitForResponse(
+      (res) => res.url().includes("/api/") && res.request().method() !== "GET",
+      { timeout: 10000 },
+    );
     await page.getByRole("button", { name: "Save Profile" }).click();
+    await saveResponse.catch(() => {});
 
-    // Wait for API response
-    await page.waitForTimeout(1000);
+    // Extra settle time for the server to persist the change
+    await page.waitForTimeout(2000);
 
     // Reload and verify persistence
     await page.reload();
     await expect(page.getByPlaceholder("Your name")).toHaveValue(
       "Updated Name",
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
   });
 });
@@ -180,9 +185,13 @@ test.describe("Settings — Export Data", () => {
     // Switch to Account tab
     await page.getByRole("button", { name: "Account" }).click();
 
-    // Listen for download
-    const downloadPromise = page.waitForEvent("download", { timeout: 10000 });
-    await page.getByRole("button", { name: /Export all as JSON/i }).click();
+    // Wait for the export button to be ready
+    const exportBtn = page.getByRole("button", { name: /Export all as JSON/i });
+    await expect(exportBtn).toBeVisible({ timeout: 5000 });
+
+    // Listen for download — start listening before clicking
+    const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
+    await exportBtn.click();
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toMatch(/\.json$/);

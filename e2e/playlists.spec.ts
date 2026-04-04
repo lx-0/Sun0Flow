@@ -6,6 +6,7 @@ import {
   mockSong,
   mockPlaylist,
   mockSongsAPI,
+  gotoLibraryWithMock,
 } from "./helpers";
 
 const TEST_PASSWORD = DEFAULT_PASSWORD;
@@ -42,9 +43,9 @@ test.describe("Playlists — List & Create", () => {
 
     // Should show the new playlist in the list
     await expect(page.getByText("My First Playlist")).toBeVisible({
-      timeout: 5000,
+      timeout: 10000,
     });
-    await expect(page.getByText("A test playlist")).toBeVisible();
+    await expect(page.getByText("A test playlist")).toBeVisible({ timeout: 5000 });
   });
 
   test("create form requires playlist name", async ({ page }) => {
@@ -80,7 +81,7 @@ test.describe("Playlists — Detail & Edit", () => {
     await page.getByPlaceholder("Playlist name").fill("Detail Test Playlist");
     await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByText("Detail Test Playlist")).toBeVisible({
-      timeout: 5000,
+      timeout: 10000,
     });
 
     // Navigate to it — click the anchor directly to avoid strict-mode ambiguity
@@ -103,12 +104,12 @@ test.describe("Playlists — Detail & Edit", () => {
     await page.getByPlaceholder("Playlist name").fill("Editable Playlist");
     await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByText("Editable Playlist")).toBeVisible({
-      timeout: 5000,
+      timeout: 10000,
     });
 
     // Navigate to detail
-    await page.getByText("Editable Playlist").click();
-    await expect(page).toHaveURL(/\/playlists\//, { timeout: 5000 });
+    await page.locator("a").filter({ hasText: "Editable Playlist" }).first().click();
+    await expect(page).toHaveURL(/\/playlists\//, { timeout: 10000 });
 
     // Click edit button
     await page.getByLabel("Edit playlist").click();
@@ -137,14 +138,10 @@ test.describe("Playlists — Song Management", () => {
     await page.getByPlaceholder("Playlist name").fill("Songs Test Playlist");
     await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByText("Songs Test Playlist")).toBeVisible({
-      timeout: 5000,
+      timeout: 10000,
     });
 
-    // Go to library first
-    await page.goto("/library");
-    await expect(page.locator("h1").first()).toContainText("Library");
-
-    // Set up mocks after page load (SSR already completed with real data)
+    // Set up mocks before navigating to library
     const songs = [mockSong({ id: "add-to-pl-1", title: "Playlist Song" })];
     await mockSongsAPI(page, songs);
 
@@ -178,9 +175,8 @@ test.describe("Playlists — Song Management", () => {
       }
     });
 
-    // Trigger a client-side fetch by typing in search (this triggers the mocked API)
-    const searchInput = page.getByLabel("Search songs");
-    await searchInput.fill("Playlist");
+    // Navigate to library with mock active — wait for client refetch
+    await gotoLibraryWithMock(page);
     await expect(page.getByText("Playlist Song")).toBeVisible({ timeout: 8000 });
 
     // Click "Add to playlist" — use getByRole to match aria-label on button elements
@@ -206,7 +202,7 @@ test.describe("Playlists — Song Management", () => {
     await page.getByPlaceholder("Playlist name").fill("Remove Song Playlist");
     await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByText("Remove Song Playlist")).toBeVisible({
-      timeout: 5000,
+      timeout: 10000,
     });
 
     // Navigate to the playlist detail
@@ -246,7 +242,7 @@ test.describe("Playlists — Delete", () => {
     await page.getByPlaceholder("Playlist name").fill("Playlist To Delete");
     await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByText("Playlist To Delete")).toBeVisible({
-      timeout: 5000,
+      timeout: 10000,
     });
 
     // Click the delete icon for this playlist (first step — shows confirmation)

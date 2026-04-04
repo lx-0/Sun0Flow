@@ -144,30 +144,59 @@ export function mockPlaylist(overrides: Record<string, unknown> = {}) {
 
 // ─── API Route Interceptors ─────────────────────────────────────────────────
 
+/** Intercept GET /api/credits to return available credits (prevents UpgradeModal) */
+export async function mockCreditsAPI(page: Page, creditsRemaining = 50) {
+  await page.route("**/api/credits", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          creditsRemaining,
+          budget: 100,
+          usagePercent: ((100 - creditsRemaining) / 100) * 100,
+          isLow: creditsRemaining < 10,
+        }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
 /** Intercept GET /api/songs to return mock songs */
 export async function mockSongsAPI(page: Page, songs: ReturnType<typeof mockSong>[]) {
-  await page.route("**/api/songs?*", async (route) => {
+  const body = JSON.stringify({ songs, total: songs.length });
+  const handler = async (route: import("@playwright/test").Route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ songs, total: songs.length }),
+        body,
       });
     } else {
       await route.continue();
     }
-  });
-  await page.route("**/api/songs", async (route) => {
-    if (route.request().method() === "GET") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ songs, total: songs.length }),
-      });
-    } else {
-      await route.continue();
-    }
-  });
+  };
+  await page.route("**/api/songs?*", handler);
+  await page.route("**/api/songs", handler);
+}
+
+/**
+ * Navigate to a page and wait for the client-side /api/songs refetch to complete.
+ * On staging, the SSR page renders with real data first; the client useEffect
+ * then refetches from /api/songs which the mock intercepts.  Waiting for the
+ * response ensures the mock data has been applied before assertions run.
+ */
+export async function gotoLibraryWithMock(page: Page, path = "/library") {
+  const responseDone = page.waitForResponse(
+    (res) => res.url().includes("/api/songs") && res.request().method() === "GET",
+    { timeout: 15000 },
+  );
+  await page.goto(path);
+  await responseDone;
+  // Small settle time for React state update after response
+  await page.waitForTimeout(300);
 }
 
 /** Intercept GET /api/playlists to return mock playlists */

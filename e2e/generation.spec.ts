@@ -4,6 +4,8 @@ import {
   loginViaUI,
   getSharedUser,
   mockSong,
+  mockCreditsAPI,
+  gotoLibraryWithMock,
 } from "./helpers";
 
 const TEST_PASSWORD = DEFAULT_PASSWORD;
@@ -16,6 +18,8 @@ test.describe("Generation — Status Polling", () => {
     page,
   }) => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
+
+    await mockCreditsAPI(page);
 
     let pollCount = 0;
 
@@ -99,7 +103,7 @@ test.describe("Generation — Status Polling", () => {
       });
     });
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
 
     // Should show the "Generating…" badge
     await expect(page.getByText("Generating…")).toBeVisible({ timeout: 5000 });
@@ -130,7 +134,7 @@ test.describe("Generation — Status Polling", () => {
       }
     });
 
-    await page.goto("/library");
+    await gotoLibraryWithMock(page);
 
     await expect(page.getByText("Failed").first()).toBeVisible({ timeout: 5000 });
   });
@@ -172,6 +176,8 @@ test.describe("Generation — Form Validation", () => {
   test("generate requires style/genre field", async ({ page }) => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
 
+    await mockCreditsAPI(page);
+
     await page.route("**/api/generate", async (route) => {
       await route.fulfill({
         status: 400,
@@ -195,6 +201,8 @@ test.describe("Generation — Form Validation", () => {
 test.describe("Generation — Rate Limiting", () => {
   test("shows error when rate limited", async ({ page }) => {
     await loginViaUI(page, testEmail, TEST_PASSWORD);
+
+    await mockCreditsAPI(page);
 
     const resetAt = new Date(Date.now() + 300000).toISOString();
     await page.route("**/api/generate", async (route) => {
