@@ -330,7 +330,10 @@ export async function middleware(request: NextRequest) {
   const userId = token?.id as string | undefined;
   const isAdmin = Boolean(token?.isAdmin);
 
-  if (userId && !isAdmin && pathname.startsWith("/api/") && process.env.PLAYWRIGHT_TEST !== "true") {
+  // E2E test users (@test.local) are exempt from per-user rate limits on staging,
+  // where PLAYWRIGHT_TEST is not set but rate limits would block the E2E suite.
+  const isE2eUser = typeof token?.email === "string" && token.email.endsWith("@test.local");
+  if (userId && !isAdmin && !isE2eUser && pathname.startsWith("/api/") && process.env.PLAYWRIGHT_TEST !== "true") {
     // Song generation: 10 req/min (expensive upstream operation)
     if (pathname === "/api/generate" && method === "POST") {
       const { allowed, retryAfterSec, remaining, limit } = checkUserRateLimit(userId, "generate", 10);
