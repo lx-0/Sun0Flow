@@ -22,12 +22,15 @@ function savePlaybackState(
   position: number,
   queue: QueueSong[],
   volume: number,
-  shuffleVersions: boolean
+  shuffleVersions: boolean,
+  shuffle: boolean,
+  repeat: string,
+  muted: boolean
 ) {
   fetch("/api/user/playback-state", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ songId, position, queue, volume, shuffleVersions }),
+    body: JSON.stringify({ songId, position, queue, volume, shuffleVersions, shuffle, repeat, muted }),
   }).catch(() => {});
 }
 
@@ -201,6 +204,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const currentIndexRef = useRef(currentIndex);
   const repeatRef = useRef(repeat);
   const shuffleRef = useRef(shuffle);
+  const mutedRef = useRef(muted);
 
   // Tracks songs that failed through the CDN proxy and fell back to direct URL
   const cdnFallbackRef = useRef<Set<string>>(new Set());
@@ -214,6 +218,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   currentIndexRef.current = currentIndex;
   repeatRef.current = repeat;
   shuffleRef.current = shuffle;
+  mutedRef.current = muted;
   trackPlayRef.current = trackPlay;
   volumeRef.current = volume;
   shuffleVersionsRef.current = shuffleVersions;
@@ -223,7 +228,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     (songId: string, position: number, syncQueue: QueueSong[]) => {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       syncTimerRef.current = setTimeout(() => {
-        savePlaybackState(songId, position, syncQueue, volumeRef.current, shuffleVersionsRef.current);
+        savePlaybackState(songId, position, syncQueue, volumeRef.current, shuffleVersionsRef.current, shuffleRef.current, repeatRef.current, mutedRef.current);
       }, SYNC_DEBOUNCE_MS);
     },
     []
@@ -758,7 +763,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       .then((r) => r.json())
       .then((data) => {
         if (!data.state?.song?.audioUrl) return;
-        const { song, position, queue: savedQueue, volume: savedVol, shuffleVersions: savedShuffleVersions } = data.state;
+        const { song, position, queue: savedQueue, volume: savedVol, shuffleVersions: savedShuffleVersions, shuffle: savedShuffle, repeat: savedRepeat, muted: savedMuted } = data.state;
         const audio = audioRef.current;
         if (!audio) return;
 
@@ -793,6 +798,17 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         // Restore shuffleVersions
         if (savedShuffleVersions === true) {
           setShuffleVersions(true);
+        }
+
+        // Restore shuffle, repeat, muted
+        if (savedShuffle === true) {
+          setShuffle(true);
+        }
+        if (savedRepeat && ["repeat-all", "repeat-one"].includes(savedRepeat)) {
+          setRepeat(savedRepeat as RepeatMode);
+        }
+        if (savedMuted === true) {
+          setMuted(true);
         }
 
         // Restore volume

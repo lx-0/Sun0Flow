@@ -44,7 +44,7 @@ export async function PUT(request: Request) {
     if (authError) return authError;
 
     const body = await request.json();
-    const { songId, position, queue, volume, shuffleVersions } = body;
+    const { songId, position, queue, volume, shuffleVersions, shuffle, repeat, muted } = body;
 
     if (!songId || typeof songId !== "string") {
       return NextResponse.json(
@@ -86,6 +86,9 @@ export async function PUT(request: Request) {
         queue,
         volume: typeof volume === "number" ? Math.max(0, Math.min(1, volume)) : 1,
         shuffleVersions: shuffleVersions === true,
+        shuffle: shuffle === true,
+        repeat: typeof repeat === "string" && ["off", "repeat-all", "repeat-one"].includes(repeat) ? repeat : "off",
+        muted: muted === true,
       },
       update: {
         songId,
@@ -93,6 +96,9 @@ export async function PUT(request: Request) {
         queue,
         volume: typeof volume === "number" ? Math.max(0, Math.min(1, volume)) : 1,
         shuffleVersions: shuffleVersions === true,
+        shuffle: shuffle === true,
+        repeat: typeof repeat === "string" && ["off", "repeat-all", "repeat-one"].includes(repeat) ? repeat : "off",
+        muted: muted === true,
       },
     });
 
