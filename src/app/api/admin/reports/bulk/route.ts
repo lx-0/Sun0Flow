@@ -36,18 +36,21 @@ export async function POST(request: NextRequest) {
       const updates: Record<string, unknown> = { status: newStatus, updatedAt: new Date() };
 
       if (action === "hide_song") {
+        if (!report.songId) { errors.push(report.id); continue; }
         await prisma.song.update({
           where: { id: report.songId },
           data: { isHidden: true, isPublic: false },
         });
         await logAdminAction(admin!.id, "hide_song", report.songId, `Bulk hide via report ${report.id}`);
       } else if (action === "delete_song") {
+        if (!report.songId) { errors.push(report.id); continue; }
         await prisma.song.delete({ where: { id: report.songId } });
         await logAdminAction(admin!.id, "delete_song", report.songId, `Bulk delete via report ${report.id}`);
         await prisma.report.update({ where: { id: report.id }, data: updates });
         processed.push(report.id);
         continue;
       } else if (action === "warn_user") {
+        if (!report.song) { errors.push(report.id); continue; }
         logger.info({ userId: report.song.userId, songId: report.songId, reportId: report.id }, "moderation: bulk warning issued");
         await logAdminAction(admin!.id, "warn_user", report.song.userId, `Bulk warn via report ${report.id}`);
       } else if (action === "dismiss") {

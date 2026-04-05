@@ -22,10 +22,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { songId, reason, description } = body;
+    const { songId, playlistId, reason, description } = body;
 
-    if (!songId || typeof songId !== "string") {
-      return NextResponse.json({ error: "songId is required", code: "VALIDATION_ERROR" }, { status: 400 });
+    if ((!songId && !playlistId) || (songId && playlistId)) {
+      return NextResponse.json({ error: "Exactly one of songId or playlistId is required", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
+
+    if ((songId && typeof songId !== "string") || (playlistId && typeof playlistId !== "string")) {
+      return NextResponse.json({ error: "songId and playlistId must be strings", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
     if (!reason || !VALID_REASONS.includes(reason)) {
@@ -35,37 +39,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify song exists
-    const song = await prisma.song.findUnique({
-      where: { id: songId },
-      select: { id: true, userId: true },
-    });
+    if (songId) {
+      // Verify song exists
+      const song = await prisma.song.findUnique({
+        where: { id: songId },
+        select: { id: true, userId: true },
+      });
 
-    if (!song) {
-      return NextResponse.json({ error: "Song not found", code: "NOT_FOUND" }, { status: 404 });
-    }
+      if (!song) {
+        return NextResponse.json({ error: "Song not found", code: "NOT_FOUND" }, { status: 404 });
+      }
 
-    // Don't allow reporting your own songs
-    if (song.userId === userId) {
-      return NextResponse.json({ error: "Cannot report your own song", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
+      // Don't allow reporting your own songs
+      if (song.userId === userId) {
+        return NextResponse.json({ error: "Cannot report your own song", code: "VALIDATION_ERROR" }, { status: 400 });
+      }
 
-    // Prevent duplicate reports from the same user for the same song
-    const existing = await prisma.report.findFirst({
-      where: { songId, reporterId: userId },
-      select: { id: true },
-    });
+      // Prevent duplicate reports
+      const existing = await prisma.report.findFirst({
+        where: { songId, reporterId: userId },
+        select: { id: true },
+      });
 
-    if (existing) {
-      return NextResponse.json(
-        { error: "You have already reported this song", code: "DUPLICATE_REPORT" },
-        { status: 409 }
-      );
+      if (existing) {
+        return NextResponse.json(
+          { error: "You have already reported this song", code: "DUPLICATE_REPORT" },
+          { status: 409 }
+        );
+      }
+    } else {
+      // Verify playlist exists
+      const playlist = await prisma.playlist.findUnique({
+        where: { id: playlistId },
+        select: { id: true, userId: true },
+      });
+
+      if (!playlist) {
+        return NextResponse.json({ error: "Playlist not found", code: "NOT_FOUND" }, { status: 404 });
+      }
+
+      // Don't allow reporting your own playlists
+      if (playlist.userId === userId) {
+        return NextResponse.json({ error: "Cannot report your own playlist", code: "VALIDATION_ERROR" }, { status: 400 });
+      }
+
+      // Prevent duplicate reports
+      const existing = await prisma.report.findFirst({
+        where: { playlistId, reporterId: userId },
+        select: { id: true },
+      });
+
+      if (existing) {
+        return NextResponse.json(
+          { error: "You have already reported this playlist", code: "DUPLICATE_REPORT" },
+          { status: 409 }
+        );
+      }
     }
 
     const report = await prisma.report.create({
       data: {
-        songId,
+        songId: songId || null,
+        playlistId: playlistId || null,
         reporterId: userId,
         reason,
         description: description?.trim()?.slice(0, 1000) || null,
@@ -73,7 +108,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Console log placeholder for admin notification
-    logger.info({ reportId: report.id, songId, userId, reason }, "moderation: new report filed");
+    logger.info({ reportId: report.id, songId, playlistId, userId, reason }, "moderation: new report filed");
 
     return NextResponse.json({ id: report.id, status: "pending" }, { status: 201 });
   } catch {

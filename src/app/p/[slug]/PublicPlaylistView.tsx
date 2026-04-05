@@ -8,6 +8,7 @@ import {
   PauseIcon,
   ForwardIcon,
   BackwardIcon,
+  FlagIcon,
 } from "@heroicons/react/24/solid";
 import {
   MusicalNoteIcon,
@@ -15,9 +16,12 @@ import {
   CheckBadgeIcon,
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
+import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/Toast";
 import { ShareMenu } from "@/components/ShareMenu";
+
+const ReportModal = dynamic(() => import("@/components/ReportModal").then((m) => m.ReportModal), { ssr: false });
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -76,6 +80,7 @@ export function PublicPlaylistView({
   const [audioDuration, setAudioDuration] = useState(0);
   const [isCopying, setIsCopying] = useState(false);
   const [expandedLyrics, setExpandedLyrics] = useState<Set<string>>(new Set());
+  const [reportOpen, setReportOpen] = useState(false);
   const playTrackedRef = useRef(false);
 
   const playableSongs = songs.filter((s) => s.audioUrl);
@@ -248,6 +253,15 @@ export function PublicPlaylistView({
               Add to library
             </Link>
           )}
+
+          <button
+            onClick={() => setReportOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200 active:scale-95 min-h-[44px]"
+            aria-label="Report playlist"
+          >
+            <FlagIcon className="w-3.5 h-3.5" aria-hidden="true" />
+            Report
+          </button>
         </div>
       </div>
 
@@ -428,6 +442,15 @@ export function PublicPlaylistView({
       <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-6">
         Shared via SunoFlow
       </p>
+
+      {/* Report modal */}
+      {reportOpen && (
+        <ReportModal
+          playlistId={playlistId}
+          songTitle={name}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
 
       {/* Hidden audio element */}
       <audio

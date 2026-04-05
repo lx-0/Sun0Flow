@@ -241,6 +241,7 @@ model Playlist {
   songs         PlaylistSong[]
   activities    Activity[]
   collaborators PlaylistCollaborator[]
+  reports       Report[]
 
   @@index([userId])
   @@index([userId, name])
@@ -370,7 +371,8 @@ model AdminLog {
 
 model Report {
   id          String   @id @default(cuid())
-  songId      String
+  songId      String?
+  playlistId  String?
   reporterId  String
   reason      String   // offensive, copyright, spam, other
   description String?
@@ -379,11 +381,14 @@ model Report {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  song     Song @relation(fields: [songId], references: [id], onDelete: Cascade)
-  reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  song     Song?     @relation(fields: [songId], references: [id], onDelete: Cascade)
+  playlist Playlist? @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  reporter User      @relation(fields: [reporterId], references: [id], onDelete: Cascade)
 
   @@unique([songId, reporterId])
+  @@unique([playlistId, reporterId])
   @@index([songId])
+  @@index([playlistId])
   @@index([reporterId])
   @@index([status, createdAt])
 }

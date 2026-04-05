@@ -12,12 +12,14 @@ const REASONS = [
 ];
 
 interface ReportModalProps {
-  songId: string;
+  songId?: string;
+  playlistId?: string;
   songTitle: string;
   onClose: () => void;
 }
 
-export function ReportModal({ songId, songTitle, onClose }: ReportModalProps) {
+export function ReportModal({ songId, playlistId, songTitle, onClose }: ReportModalProps) {
+  const entityType = playlistId ? "playlist" : "song";
   const { toast } = useToast();
   const [reason, setReason] = useState("");
   const [description, setDescription] = useState("");
@@ -50,7 +52,7 @@ export function ReportModal({ songId, songTitle, onClose }: ReportModalProps) {
       const res = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ songId, reason, description: description.trim() || undefined }),
+        body: JSON.stringify({ songId, playlistId, reason, description: description.trim() || undefined }),
       });
 
       if (res.status === 429) {
@@ -59,7 +61,7 @@ export function ReportModal({ songId, songTitle, onClose }: ReportModalProps) {
       }
 
       if (res.status === 409) {
-        toast("You have already reported this song.", "error");
+        toast(`You have already reported this ${entityType}.`, "error");
         onClose();
         return;
       }
@@ -90,7 +92,7 @@ export function ReportModal({ songId, songTitle, onClose }: ReportModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 id="report-modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">Report Song</h2>
+          <h2 id="report-modal-title" className="text-lg font-semibold text-gray-900 dark:text-white">Report {entityType === "playlist" ? "Playlist" : "Song"}</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 min-w-[44px] min-h-[44px] flex items-center justify-center"

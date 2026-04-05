@@ -37,8 +37,11 @@ export async function PATCH(
 
   if (action === "dismiss") {
     updates.status = "dismissed";
-    await logAdminAction(admin!.id, "dismiss_report", report.id, `Dismissed report for song ${report.songId}`);
+    await logAdminAction(admin!.id, "dismiss_report", report.id, `Dismissed report ${report.id}`);
   } else if (action === "hide_song") {
+    if (!report.songId) {
+      return NextResponse.json({ error: "This report is not for a song", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
     updates.status = "actioned";
     await prisma.song.update({
       where: { id: report.songId },
@@ -46,6 +49,9 @@ export async function PATCH(
     });
     await logAdminAction(admin!.id, "hide_song", report.songId, `Hidden song via report ${report.id}`);
   } else if (action === "delete_song") {
+    if (!report.songId) {
+      return NextResponse.json({ error: "This report is not for a song", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
     updates.status = "actioned";
     await prisma.song.delete({ where: { id: report.songId } });
     await logAdminAction(admin!.id, "delete_song", report.songId, `Deleted song via report ${report.id}`);
@@ -53,6 +59,9 @@ export async function PATCH(
     const updated = await prisma.report.update({ where: { id }, data: updates });
     return NextResponse.json(updated);
   } else if (action === "warn_user") {
+    if (!report.song) {
+      return NextResponse.json({ error: "This report is not for a song", code: "VALIDATION_ERROR" }, { status: 400 });
+    }
     updates.status = "actioned";
     logger.info({ userId: report.song.userId, songId: report.songId, reportId: report.id }, "moderation: warning issued to user");
     await logAdminAction(admin!.id, "warn_user", report.song.userId, `Warned user via report ${report.id} for song ${report.songId}`);
