@@ -17,11 +17,13 @@ const LOCALE_FLAGS: Record<Locale, string> = {
 };
 
 interface LocaleSwitcherProps {
-  /** If true, shows a compact dropdown instead of full labels */
+  /** When true, shows only the flag (for collapsed sidebar) */
+  iconOnly?: boolean;
+  /** Kept for backwards compat — now always renders as dropdown */
   compact?: boolean;
 }
 
-export function LocaleSwitcher({ compact = false }: LocaleSwitcherProps) {
+export function LocaleSwitcher({ iconOnly = false }: LocaleSwitcherProps) {
   const t = useTranslations("common");
   const locale = useLocale() as Locale;
   const router = useRouter();
@@ -30,34 +32,30 @@ export function LocaleSwitcher({ compact = false }: LocaleSwitcherProps) {
   function switchLocale(nextLocale: Locale) {
     if (nextLocale === locale) return;
 
-    // Swap the locale segment in the current URL.
-    // pathname from next/navigation already strips the locale prefix for default locale,
-    // so we need to handle both cases.
     const currentLocalePrefix = `/${locale}`;
     let newPath: string;
 
     if (pathname.startsWith(currentLocalePrefix + "/") || pathname === currentLocalePrefix) {
-      // Replace existing locale prefix
       newPath = pathname.replace(currentLocalePrefix, `/${nextLocale}`);
     } else {
-      // No locale prefix currently (default locale "en" with as-needed)
       newPath = `/${nextLocale}${pathname}`;
     }
 
     router.push(newPath);
   }
 
-  if (compact) {
+  if (iconOnly) {
     return (
       <select
         value={locale}
         onChange={(e) => switchLocale(e.target.value as Locale)}
         aria-label={t("language")}
-        className="bg-transparent text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500"
+        title={LOCALE_LABELS[locale]}
+        className="w-10 h-10 bg-transparent text-lg text-center cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-violet-500 rounded-lg"
       >
         {locales.map((l) => (
           <option key={l} value={l}>
-            {LOCALE_FLAGS[l]} {LOCALE_LABELS[l]}
+            {LOCALE_FLAGS[l]}
           </option>
         ))}
       </select>
@@ -65,25 +63,17 @@ export function LocaleSwitcher({ compact = false }: LocaleSwitcherProps) {
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-2">
-        {t("language")}
-      </p>
+    <select
+      value={locale}
+      onChange={(e) => switchLocale(e.target.value as Locale)}
+      aria-label={t("language")}
+      className="w-full bg-transparent text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500"
+    >
       {locales.map((l) => (
-        <button
-          key={l}
-          onClick={() => switchLocale(l)}
-          aria-pressed={l === locale}
-          className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors text-left ${
-            l === locale
-              ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-medium"
-              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-          }`}
-        >
-          <span aria-hidden="true">{LOCALE_FLAGS[l]}</span>
-          {LOCALE_LABELS[l]}
-        </button>
+        <option key={l} value={l}>
+          {LOCALE_FLAGS[l]} {LOCALE_LABELS[l]}
+        </option>
       ))}
-    </div>
+    </select>
   );
 }

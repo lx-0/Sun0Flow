@@ -353,11 +353,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Cog6ToothIcon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
               {!sidebarCollapsed && t("settings")}
             </Link>
-            {!sidebarCollapsed && (
-              <div className="px-2 py-1">
-                <LocaleSwitcher />
-              </div>
-            )}
+            <div className={sidebarCollapsed ? "flex justify-center py-1" : "px-2 py-1"}>
+              <LocaleSwitcher iconOnly={sidebarCollapsed} />
+            </div>
             <button
               onClick={() => setFeedbackOpen(true)}
               aria-label="Send feedback"
