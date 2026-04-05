@@ -23,6 +23,7 @@ import {
   UserGroupIcon,
   UserPlusIcon,
   LinkIcon,
+  MegaphoneIcon,
 } from "@heroicons/react/24/outline";
 import { PlayIcon as PlaySolidIcon, CheckIcon } from "@heroicons/react/24/solid";
 import { exportAsZip } from "@/lib/export";
@@ -88,6 +89,9 @@ interface PlaylistData {
   name: string;
   description: string | null;
   isPublic: boolean;
+  isPublished?: boolean;
+  publishedAt?: string | null;
+  genre?: string | null;
   isCollaborative: boolean;
   slug: string | null;
   songs: PlaylistSongItem[];
@@ -333,6 +337,23 @@ export function PlaylistDetailView({
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
   const [isInvitingByUsername, setIsInvitingByUsername] = useState(false);
+
+  // Publish to Discover state
+  const [isPublished, setIsPublished] = useState(initialPlaylist.isPublished ?? false);
+  const [publishedGenre, setPublishedGenre] = useState(initialPlaylist.genre ?? "");
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [genres, setGenres] = useState<{ name: string; count: number }[]>([]);
+  const [selectedGenre, setSelectedGenre] = useState(initialPlaylist.genre ?? "");
+
+  // Fetch genres on mount
+  useEffect(() => {
+    fetch("/api/songs/genres")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (data?.genres) setGenres(data.genres); })
+      .catch(() => {});
+  }, []);
 
   // Activity feed state
   const [activities, setActivities] = useState<PlaylistActivityItem[]>([]);
@@ -780,6 +801,61 @@ export function PlaylistDetailView({
     setShowActivityFeed((prev) => !prev);
   }
 
+  async function handlePublish() {
+    if (isPublishing) return;
+    if (songs.length === 0) {
+      toast("Playlist must have at least 1 song to publish", "error");
+      setShowPublishConfirm(false);
+      return;
+    }
+    setIsPublishing(true);
+    try {
+      const res = await fetch(`/api/playlists/${playlist.id}/publish`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ genre: selectedGenre || null }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast(data?.error ?? "Failed to publish", "error");
+        return;
+      }
+      const data = await res.json();
+      setIsPublished(data.isPublished);
+      setIsPublic(data.isPublic);
+      setSlug(data.slug);
+      if (data.genre) setPublishedGenre(data.genre);
+      toast("Playlist published to Discover!", "success");
+    } catch {
+      toast("Failed to publish", "error");
+    } finally {
+      setIsPublishing(false);
+      setShowPublishConfirm(false);
+    }
+  }
+
+  async function handleUnpublish() {
+    if (isPublishing) return;
+    setIsPublishing(true);
+    try {
+      const res = await fetch(`/api/playlists/${playlist.id}/publish`, {
+        method: "PATCH",
+      });
+      if (!res.ok) {
+        toast("Failed to unpublish", "error");
+        return;
+      }
+      const data = await res.json();
+      setIsPublished(data.isPublished);
+      toast("Playlist removed from Discover", "success");
+    } catch {
+      toast("Failed to unpublish", "error");
+    } finally {
+      setIsPublishing(false);
+      setShowUnpublishConfirm(false);
+    }
+  }
+
   const totalDuration = songs.reduce(
     (sum, ps) => sum + (ps.song.duration ?? 0),
     0
@@ -848,10 +924,18 @@ export function PlaylistDetailView({
                 {playlist.description}
               </p>
             )}
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">
-              {songs.length} song{songs.length !== 1 ? "s" : ""}
-              {totalDuration > 0 && ` · ${formatTime(totalDuration)}`}
-            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-sm text-gray-400 dark:text-gray-500">
+                {songs.length} song{songs.length !== 1 ? "s" : ""}
+                {totalDuration > 0 && ` · ${formatTime(totalDuration)}`}
+              </p>
+              {isPublished && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                  <GlobeAltIcon className="w-3 h-3" />
+                  Published
+                </span>
+              )}
+            </div>
             {songs.length > 0 && (
               <button
                 onClick={handleSelectAll}
@@ -862,6 +946,27 @@ export function PlaylistDetailView({
             )}
           </div>
           <div className="flex items-center gap-1">
+            {isOwner && (
+              <button
+                onClick={() => {
+                  if (isPublished) {
+                    setShowUnpublishConfirm(true);
+                  } else {
+                    setSelectedGenre(publishedGenre);
+                    setShowPublishConfirm(true);
+                  }
+                }}
+                aria-label={isPublished ? "Unpublish from Discover" : "Publish to Discover"}
+                title={isPublished ? "Unpublish from Discover" : "Publish to Discover"}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+                  isPublished
+                    ? "text-green-500 dark:text-green-400 hover:text-green-600"
+                    : "text-gray-400 dark:text-gray-500 hover:text-violet-400"
+                }`}
+              >
+                <MegaphoneIcon className="w-5 h-5" />
+              </button>
+            )}
             {isOwner && (
               <button
                 onClick={() => { setShowCollabPanel((v) => !v); setShowSharePanel(false); }}
@@ -1189,6 +1294,83 @@ export function PlaylistDetailView({
             <button
               onClick={() => setShowDeleteConfirm(false)}
               className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors min-h-[44px]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Publish confirmation */}
+      <BottomSheet
+        open={showPublishConfirm}
+        onClose={() => setShowPublishConfirm(false)}
+        title="Publish to Discover"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            This will make your playlist visible on the Discover page{!isPublic ? " and set it to public" : ""}.
+          </p>
+          {songs.length === 0 && (
+            <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+              Your playlist needs at least 1 song before it can be published.
+            </p>
+          )}
+          <div className="space-y-1.5">
+            <label htmlFor="publish-genre" className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              Genre (optional)
+            </label>
+            <select
+              id="publish-genre"
+              value={selectedGenre}
+              onChange={(e) => setSelectedGenre(e.target.value)}
+              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+            >
+              <option value="">No genre</option>
+              {genres.map((g) => (
+                <option key={g.name} value={g.name}>{g.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handlePublish}
+              disabled={isPublishing || songs.length === 0}
+              className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white transition-colors disabled:opacity-50 min-h-[44px]"
+            >
+              {isPublishing ? "Publishing…" : "Publish"}
+            </button>
+            <button
+              onClick={() => setShowPublishConfirm(false)}
+              className="px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors min-h-[44px]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Unpublish confirmation */}
+      <BottomSheet
+        open={showUnpublishConfirm}
+        onClose={() => setShowUnpublishConfirm(false)}
+        title="Unpublish playlist"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            This will remove your playlist from the Discover page. The public share link will still work.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleUnpublish}
+              disabled={isPublishing}
+              className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50 min-h-[44px]"
+            >
+              {isPublishing ? "Unpublishing…" : "Unpublish"}
+            </button>
+            <button
+              onClick={() => setShowUnpublishConfirm(false)}
+              className="px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors min-h-[44px]"
             >
               Cancel
             </button>
