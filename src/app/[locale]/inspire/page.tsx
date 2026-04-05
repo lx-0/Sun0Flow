@@ -37,6 +37,7 @@ interface FeedItem {
   mood?: string;
   topics?: string[];
   suggestedStyle?: string;
+  excerpt?: string;
 }
 
 interface FeedResult {
@@ -604,6 +605,17 @@ function InstagramMoodBoard({
 
 // ─── RSS Section ───
 
+function formatPubDate(raw?: string): string | null {
+  if (!raw) return null;
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return null;
+  }
+}
+
 function RssFeedCard({
   item,
   onUseAsPrompt,
@@ -611,62 +623,55 @@ function RssFeedCard({
   item: FeedItem;
   onUseAsPrompt: (item: FeedItem) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasContent = Boolean(item.content && item.content.length > (item.description?.length ?? 0));
+  const displayExcerpt = item.excerpt || item.description;
+  const formattedDate = formatPubDate(item.pubDate);
 
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-      <div className="flex items-center gap-2 mb-1">
-        <p className="text-xs text-violet-400 font-medium">{item.source}</p>
+      {/* Source attribution + date */}
+      <div className="flex items-center gap-2 mb-2 text-[11px] text-gray-400 dark:text-gray-500">
+        {item.source && <span className="font-medium truncate">{item.source}</span>}
+        {item.source && formattedDate && <span>·</span>}
+        {formattedDate && <span>{formattedDate}</span>}
+      </div>
+
+      {/* Article headline — linked to source when available */}
+      {item.link ? (
+        <a
+          href={item.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-semibold text-gray-900 dark:text-white leading-snug hover:text-violet-400 dark:hover:text-violet-400 transition-colors"
+        >
+          {item.title}
+        </a>
+      ) : (
+        <p className="text-sm font-semibold text-gray-900 dark:text-white leading-snug">
+          {item.title}
+        </p>
+      )}
+
+      {/* Content excerpt (2-4 sentences) */}
+      {displayExcerpt && (
+        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mt-2 line-clamp-4">
+          {displayExcerpt}
+        </p>
+      )}
+
+      {/* AI-generated style summary */}
+      {item.suggestedStyle && (
+        <p className="text-[11px] font-medium text-amber-400 mt-2">
+          ♪ {item.suggestedStyle}
+        </p>
+      )}
+
+      {/* Mood + topic badges */}
+      <div className="flex flex-wrap gap-1 mt-2">
         {item.mood && item.mood !== "neutral" && (
           <span
             className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${MOOD_COLORS[item.mood] ?? MOOD_COLORS.neutral}`}
           >
             {item.mood}
-          </span>
-        )}
-        {item.link && (
-          <a
-            href={item.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[10px] text-gray-400 hover:text-gray-300 transition-colors ml-auto"
-          >
-            Source ↗
-          </a>
-        )}
-      </div>
-
-      <p className="text-sm font-semibold text-gray-900 dark:text-white leading-snug">
-        {item.title}
-      </p>
-
-      {/* Content preview — expandable */}
-      {item.content ? (
-        <div className="mt-2">
-          <p className={`text-xs text-gray-500 dark:text-gray-400 leading-relaxed ${expanded ? "" : "line-clamp-3"}`}>
-            {expanded ? item.content : item.description}
-          </p>
-          {hasContent && (
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="text-[11px] text-violet-400 hover:text-violet-300 mt-1 transition-colors"
-            >
-              {expanded ? "Show less" : "Read more…"}
-            </button>
-          )}
-        </div>
-      ) : item.description ? (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 line-clamp-3">
-          {item.description}
-        </p>
-      ) : null}
-
-      {/* Style + topics */}
-      <div className="flex flex-wrap gap-1 mt-2">
-        {item.suggestedStyle && (
-          <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
-            ♪ {item.suggestedStyle}
           </span>
         )}
         {item.topics && item.topics.map((topic) => (
@@ -679,6 +684,7 @@ function RssFeedCard({
         ))}
       </div>
 
+      {/* CTA */}
       <button
         onClick={() => onUseAsPrompt(item)}
         className="mt-3 flex items-center gap-1.5 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors min-h-[44px]"
