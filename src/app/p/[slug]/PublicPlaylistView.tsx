@@ -12,6 +12,7 @@ import {
 import {
   MusicalNoteIcon,
   BookmarkIcon,
+  CheckBadgeIcon,
 } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/Toast";
@@ -22,6 +23,12 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function formatPlayCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, "")}M plays`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1).replace(/\.0$/, "")}k plays`;
+  return `${count} play${count !== 1 ? "s" : ""}`;
 }
 
 interface PlaylistSong {
@@ -42,6 +49,8 @@ interface PublicPlaylistViewProps {
   songs: PlaylistSong[];
   totalDuration: number;
   createdAt: string;
+  isPublished: boolean;
+  playCount: number;
 }
 
 export function PublicPlaylistView({
@@ -53,6 +62,8 @@ export function PublicPlaylistView({
   songs,
   totalDuration,
   createdAt,
+  isPublished,
+  playCount,
 }: PublicPlaylistViewProps) {
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -62,6 +73,7 @@ export function PublicPlaylistView({
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [isCopying, setIsCopying] = useState(false);
+  const playTrackedRef = useRef(false);
 
   const playableSongs = songs.filter((s) => s.audioUrl);
   const currentSong = currentIndex >= 0 ? playableSongs[currentIndex] : null;
@@ -73,8 +85,16 @@ export function PublicPlaylistView({
       setCurrentIndex(index);
       audioRef.current.src = song.audioUrl;
       audioRef.current.play().catch(console.error);
+
+      // Track play count once per session per playlist
+      if (!playTrackedRef.current) {
+        playTrackedRef.current = true;
+        fetch(`/api/playlists/${playlistId}/play`, { method: "POST" }).catch(
+          () => {}
+        );
+      }
     },
-    [playableSongs]
+    [playableSongs, playlistId]
   );
 
   function handleTogglePlay(songIndex?: number) {
@@ -180,6 +200,7 @@ export function PublicPlaylistView({
         <p className="text-xs text-gray-400 dark:text-gray-500">
           {songs.length} song{songs.length !== 1 ? "s" : ""}
           {totalDuration > 0 && ` · ${formatTime(totalDuration)}`}
+          {playCount > 0 && ` · ${formatPlayCount(playCount)}`}
           {" · "}
           {new Date(createdAt).toLocaleDateString("en-US", {
             year: "numeric",
@@ -187,6 +208,13 @@ export function PublicPlaylistView({
             day: "numeric",
           })}
         </p>
+
+        {isPublished && (
+          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-xs font-medium">
+            <CheckBadgeIcon className="w-3.5 h-3.5" />
+            Published on SunoFlow
+          </div>
+        )}
 
         {/* Action buttons */}
         <div className="flex items-center justify-center gap-2 pt-1">
