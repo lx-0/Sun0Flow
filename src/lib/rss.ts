@@ -8,6 +8,7 @@ export interface RssItem {
   mood?: string;
   topics?: string[];
   suggestedStyle?: string;
+  excerpt?: string;
 }
 
 export interface FeedResult {
@@ -150,15 +151,42 @@ function suggestStyle(mood: string, topics: string[]): string {
   return parts.join(", ");
 }
 
+function buildExcerpt(description: string, maxLen = 300): string {
+  const plain = stripTags(description).trim();
+  if (plain.length <= maxLen) return plain;
+
+  // Find the last sentence boundary (.!?) at or before maxLen
+  const region = plain.slice(0, maxLen);
+  const sentenceEnd = Math.max(
+    region.lastIndexOf(". "),
+    region.lastIndexOf("! "),
+    region.lastIndexOf("? "),
+  );
+
+  if (sentenceEnd > maxLen * 0.4) {
+    return plain.slice(0, sentenceEnd + 1).trim();
+  }
+
+  // Fall back to word boundary
+  const lastSpace = region.lastIndexOf(" ");
+  if (lastSpace > maxLen * 0.4) {
+    return plain.slice(0, lastSpace).trim() + "…";
+  }
+
+  return region.trim() + "…";
+}
+
 function enrichItem(item: RssItem): RssItem {
   const text = `${item.title} ${item.description} ${item.content ?? ""}`;
   const mood = detectMood(text);
   const topics = extractTopics(text);
+  const excerpt = item.description ? buildExcerpt(item.description) : undefined;
   return {
     ...item,
     mood,
     topics,
     suggestedStyle: suggestStyle(mood, topics),
+    excerpt,
   };
 }
 

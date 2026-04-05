@@ -110,7 +110,10 @@ export async function POST(req: NextRequest) {
       .slice(0, MAX_DAILY_PROMPTS);
 
     // Generate prompts from top items
-    const generated = ranked.map(({ item }) => buildPromptFromItem(item));
+    const generated = ranked.map(({ item }) => ({
+      ...buildPromptFromItem(item),
+      excerpt: item.excerpt ?? null,
+    }));
 
     // Optionally boost style via sunoapi
     if (boost) {
@@ -155,7 +158,13 @@ export async function POST(req: NextRequest) {
       )
     );
 
-    return NextResponse.json({ prompts });
+    // Attach excerpt from the source feed item to each prompt
+    const result = prompts.map((p, i) => ({
+      ...p,
+      excerpt: generated[i].excerpt,
+    }));
+
+    return NextResponse.json({ prompts: result });
   } catch {
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
   }
