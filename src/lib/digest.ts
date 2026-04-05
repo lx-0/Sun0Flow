@@ -15,8 +15,9 @@ const MAX_DIGESTS_PER_USER = 10;
 const MAX_FEEDS = 5;
 const MAX_ITEMS_PER_FEED = 3;
 const MAX_TOTAL_ITEMS = 15;
-const DIGEST_ITEMS_MIN = 5;
-const DIGEST_ITEMS_MAX = 8;
+const PICKS_MIN = 3;
+const PICKS_MAX = 5;
+const MAX_PER_SOURCE = 2;
 
 function buildPrompt(title: string, mood: string, topics: string[]): string {
   const parts: string[] = [];
@@ -26,6 +27,10 @@ function buildPrompt(title: string, mood: string, topics: string[]): string {
   return parts.length > 0 ? parts.join(" — ") : title.slice(0, 100);
 }
 
+/**
+ * Generate "Today's Picks" — a curated set of 3-5 items from the user's RSS feeds
+ * with source diversity (max 2 from same feed) and mood diversity.
+ */
 export async function generateDigest(userId: string) {
   // Fetch user RSS subscriptions (up to MAX_FEEDS active)
   const feeds = await prisma.rssFeedSubscription.findMany({
@@ -70,37 +75,51 @@ export async function generateDigest(userId: string) {
 
   if (allItems.length === 0) return null;
 
-  // Select DIGEST_ITEMS_MIN–DIGEST_ITEMS_MAX items preferring diverse moods
+  // Select PICKS_MIN–PICKS_MAX items with source and mood diversity
   const selected: DigestItem[] = [];
   const usedMoods = new Set<string>();
+  const sourceCount = new Map<string, number>();
 
-  // First pass: one item per mood
+  function canAdd(item: DigestItem): boolean {
+    const src = item.feedTitle ?? "unknown";
+    return (sourceCount.get(src) ?? 0) < MAX_PER_SOURCE;
+  }
+
+  function addItem(item: DigestItem) {
+    selected.push(item);
+    usedMoods.add(item.mood);
+    const src = item.feedTitle ?? "unknown";
+    sourceCount.set(src, (sourceCount.get(src) ?? 0) + 1);
+  }
+
+  // First pass: one item per unique mood, respecting source cap
   for (const item of allItems) {
-    if (selected.length >= DIGEST_ITEMS_MAX) break;
-    if (!usedMoods.has(item.mood)) {
-      selected.push(item);
-      usedMoods.add(item.mood);
+    if (selected.length >= PICKS_MAX) break;
+    if (!usedMoods.has(item.mood) && canAdd(item)) {
+      addItem(item);
     }
   }
 
-  // Second pass: fill up to min/max if needed
+  // Second pass: fill up to PICKS_MAX with remaining items respecting source cap
   for (const item of allItems) {
-    if (selected.length >= DIGEST_ITEMS_MAX) break;
-    if (!selected.includes(item)) {
-      selected.push(item);
+    if (selected.length >= PICKS_MAX) break;
+    if (!selected.includes(item) && canAdd(item)) {
+      addItem(item);
     }
   }
 
-  // Ensure at least DIGEST_ITEMS_MIN
-  if (selected.length < DIGEST_ITEMS_MIN && allItems.length >= DIGEST_ITEMS_MIN) {
+  // Third pass: if still below PICKS_MIN, relax source constraint
+  if (selected.length < PICKS_MIN) {
     for (const item of allItems) {
-      if (selected.length >= DIGEST_ITEMS_MIN) break;
-      if (!selected.includes(item)) selected.push(item);
+      if (selected.length >= PICKS_MIN) break;
+      if (!selected.includes(item)) {
+        addItem(item);
+      }
     }
   }
 
   const now = new Date();
-  const title = `Your Daily Digest — ${now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
+  const title = `Today's Picks — ${now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
 
   const digest = await prisma.inspirationDigest.create({
     data: {

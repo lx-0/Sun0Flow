@@ -8,26 +8,14 @@ import { PullToRefreshContainer } from "@/components/PullToRefreshContainer";
 import {
   ArrowPathIcon,
   SparklesIcon,
-  BoltIcon,
-  MusicalNoteIcon,
   FunnelIcon,
-  ClockIcon,
   CheckCircleIcon,
   XMarkIcon,
   RssIcon,
-  NewspaperIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
 
 // ─── Types ───
-
-interface DailyPrompt {
-  id: string;
-  name: string;
-  prompt: string;
-  style?: string | null;
-  category?: string | null;
-  createdAt: string;
-}
 
 interface FeedItem {
   title: string;
@@ -91,7 +79,7 @@ interface InspirationDigest {
 }
 
 // Unified feed item that normalizes all source types
-type SourceType = "rss" | "instagram" | "digest" | "daily" | "pending";
+type SourceType = "rss" | "instagram" | "picks" | "pending";
 
 interface UnifiedFeedItem {
   id: string;
@@ -165,8 +153,7 @@ const MOOD_COLORS: Record<string, string> = {
 const SOURCE_CONFIG: Record<SourceType, { label: string; color: string; icon: string }> = {
   rss: { label: "RSS", color: "text-violet-400", icon: "rss" },
   instagram: { label: "Instagram", color: "text-pink-400", icon: "camera" },
-  digest: { label: "Digest", color: "text-emerald-400", icon: "newspaper" },
-  daily: { label: "Daily Prompts", color: "text-amber-400", icon: "bolt" },
+  picks: { label: "Today's Picks", color: "text-amber-400", icon: "sparkles" },
   pending: { label: "Pending", color: "text-teal-400", icon: "clock" },
 };
 
@@ -183,10 +170,8 @@ function SourceIcon({ type, className }: { type: SourceType; className?: string 
           <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none" />
         </svg>
       );
-    case "digest":
-      return <NewspaperIcon className={cn} />;
-    case "daily":
-      return <BoltIcon className={cn} />;
+    case "picks":
+      return <SparklesIcon className={cn} />;
     case "pending":
       return <ClockIcon className={cn} />;
   }
@@ -321,7 +306,7 @@ function UnifiedCard({
               className="flex items-center gap-1.5 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors min-h-[44px]"
             >
               <SparklesIcon className="w-4 h-4" />
-              {item.sourceType === "daily" ? "Generate song" : "Generate from this"}
+              Generate from this
             </button>
           )}
         </div>
@@ -405,35 +390,9 @@ function MoodFilterChips({
   );
 }
 
-// ─── Empty prompts CTA (shown when no daily prompts exist) ───
+// ─── Today's Picks CTA (shown when no picks exist) ───
 
-function GeneratePromptsCTA({
-  generating,
-  onGenerate,
-}: {
-  generating: boolean;
-  onGenerate: () => void;
-}) {
-  return (
-    <div className="bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-5 text-center">
-      <MusicalNoteIcon className="w-8 h-8 text-gray-400 dark:text-gray-600 mx-auto mb-2" />
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-        Generate music prompts from your feed content
-      </p>
-      <button
-        onClick={onGenerate}
-        disabled={generating}
-        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-      >
-        {generating ? "Generating…" : "Auto-generate prompts"}
-      </button>
-    </div>
-  );
-}
-
-// ─── Digest CTA (shown when no digest exists) ───
-
-function GenerateDigestCTA({
+function GeneratePicksCTA({
   generating,
   onGenerate,
 }: {
@@ -444,14 +403,14 @@ function GenerateDigestCTA({
     <div className="bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-5 text-center">
       <SparklesIcon className="w-8 h-8 text-gray-400 dark:text-gray-600 mx-auto mb-2" />
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-        Auto-curate inspiration from your RSS feeds into a daily digest with suggested prompts.
+        Auto-curate today&apos;s top inspiration from your RSS feeds with diverse moods and sources.
       </p>
       <button
         onClick={onGenerate}
         disabled={generating}
-        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
       >
-        {generating ? "Generating…" : "Generate Today's Digest"}
+        {generating ? "Generating…" : "Generate Today's Picks"}
       </button>
     </div>
   );
@@ -472,6 +431,46 @@ function SortToggle({ mode, onChange }: { mode: SortMode; onChange: (m: SortMode
   );
 }
 
+// ─── Today's Picks Section ───
+
+function TodaysPicksSection({
+  picks,
+  onAction,
+  onRefresh,
+  refreshing,
+  title,
+}: {
+  picks: UnifiedFeedItem[];
+  onAction: (item: UnifiedFeedItem) => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+  title: string;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-amber-400 flex items-center gap-1.5">
+          <SparklesIcon className="w-4 h-4" />
+          {title}
+        </span>
+        <button
+          onClick={onRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-1 text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50"
+        >
+          <ArrowPathIcon className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
+      </div>
+      <div className="space-y-3">
+        {picks.map((item) => (
+          <UnifiedCard key={item.id} item={item} onAction={onAction} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Content ───
 
 function InspireContent() {
@@ -487,21 +486,16 @@ function InspireContent() {
   const [igLoading, setIgLoading] = useState(false);
   const [igRefreshed, setIgRefreshed] = useState<Date | null>(null);
 
-  const [dailyPrompts, setDailyPrompts] = useState<DailyPrompt[]>([]);
-  const [dailyLoading, setDailyLoading] = useState(true);
-  const [dailyGenerating, setDailyGenerating] = useState(false);
-  const [dailyStale, setDailyStale] = useState(false);
-
   const [pendingGenerations, setPendingGenerations] = useState<PendingFeedGenerationItem[]>([]);
   const [pendingLoading, setPendingLoading] = useState(true);
 
-  const [digest, setDigest] = useState<InspirationDigest | null>(null);
-  const [digestLoading, setDigestLoading] = useState(false);
-  const [digestGenerating, setDigestGenerating] = useState(false);
+  const [picks, setPicks] = useState<InspirationDigest | null>(null);
+  const [picksLoading, setPicksLoading] = useState(false);
+  const [picksGenerating, setPicksGenerating] = useState(false);
 
   // Unified filter state
   const [sourceFilters, setSourceFilters] = useState<Set<SourceType>>(
-    new Set(["rss", "instagram", "digest", "daily", "pending"])
+    new Set(["rss", "instagram", "picks", "pending"])
   );
   const [moodFilter, setMoodFilter] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("newest");
@@ -578,42 +572,6 @@ function InspireContent() {
     }
   }, []);
 
-  // ── Daily prompts ──
-
-  const fetchDailyPrompts = useCallback(async () => {
-    setDailyLoading(true);
-    try {
-      const res = await fetch("/api/prompts/daily");
-      if (!res.ok) throw new Error("Failed to load daily prompts");
-      const data = await res.json();
-      setDailyPrompts(data.prompts ?? []);
-      setDailyStale(data.stale ?? false);
-    } catch {
-      // ignore — empty state will show
-    } finally {
-      setDailyLoading(false);
-    }
-  }, []);
-
-  const generateDailyPrompts = useCallback(async () => {
-    setDailyGenerating(true);
-    try {
-      const res = await fetch("/api/prompts/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ boost: false }),
-      });
-      if (!res.ok) throw new Error("Failed to generate prompts");
-      const data = await res.json();
-      setDailyPrompts(data.prompts ?? []);
-      setDailyStale(false);
-    } catch {
-      // keep existing
-    } finally {
-      setDailyGenerating(false);
-    }
-  }, []);
-
   // ── Pending feed generations ──
 
   const fetchPendingGenerations = useCallback(async () => {
@@ -661,43 +619,65 @@ function InspireContent() {
     }
   }, []);
 
-  // ── Digest ──
+  // ── Today's Picks ──
 
-  const fetchLatestDigest = useCallback(async () => {
-    setDigestLoading(true);
+  const fetchTodaysPicks = useCallback(async () => {
+    setPicksLoading(true);
     try {
       const res = await fetch("/api/digests?limit=1");
       if (!res.ok) return;
       const data = await res.json();
-      setDigest(data.digests?.[0] ?? null);
+      const latest = data.digests?.[0] ?? null;
+      // Check if picks are from today — if stale, don't show (let user regenerate)
+      if (latest) {
+        const picksDate = new Date(latest.createdAt);
+        const today = new Date();
+        const isToday =
+          picksDate.getFullYear() === today.getFullYear() &&
+          picksDate.getMonth() === today.getMonth() &&
+          picksDate.getDate() === today.getDate();
+        setPicks(isToday ? latest : null);
+      } else {
+        setPicks(null);
+      }
     } catch {
       // ignore
     } finally {
-      setDigestLoading(false);
+      setPicksLoading(false);
     }
   }, []);
 
-  const generateDigest = useCallback(async () => {
-    setDigestGenerating(true);
+  const generatePicks = useCallback(async () => {
+    setPicksGenerating(true);
     try {
       const res = await fetch("/api/digests/generate", { method: "POST" });
       if (!res.ok) return;
       const data = await res.json();
-      setDigest(data.digest ?? null);
+      setPicks(data.digest ?? null);
     } catch {
       // ignore
     } finally {
-      setDigestGenerating(false);
+      setPicksGenerating(false);
     }
   }, []);
+
+  // Auto-generate picks on first visit each day if none exist
+  const [autoGenAttempted, setAutoGenAttempted] = useState(false);
+
+  useEffect(() => {
+    if (autoGenAttempted || picksLoading || picksGenerating) return;
+    if (picks === null && hasRss && !picksLoading) {
+      setAutoGenAttempted(true);
+      generatePicks();
+    }
+  }, [picks, hasRss, picksLoading, picksGenerating, autoGenAttempted, generatePicks]);
 
   // ── Load on mount ──
 
   useEffect(() => {
-    fetchDailyPrompts();
     fetchPendingGenerations();
-    fetchLatestDigest();
-  }, [fetchDailyPrompts, fetchPendingGenerations, fetchLatestDigest]);
+    fetchTodaysPicks();
+  }, [fetchPendingGenerations, fetchTodaysPicks]);
 
   useEffect(() => {
     if (!feedsLoaded || feedUrls.length === 0) return;
@@ -710,7 +690,25 @@ function InspireContent() {
     fetchIgPosts(igUrls);
   }, [igUrls, loadIgCache, fetchIgPosts]);
 
-  // ── Build unified feed ──
+  // ── Build Today's Picks items ──
+
+  const picksItems = useMemo((): UnifiedFeedItem[] => {
+    if (!picks) return [];
+    return picks.items.map((item, i) => ({
+      id: `picks-${picks.id}-${i}`,
+      sourceType: "picks" as SourceType,
+      title: item.title,
+      excerpt: item.suggestedPrompt,
+      mood: item.mood,
+      topics: item.topics,
+      link: item.link,
+      sourceName: item.feedTitle || "Today's Picks",
+      date: new Date(picks.createdAt),
+      original: item,
+    }));
+  }, [picks]);
+
+  // ── Build unified feed (excludes Today's Picks — those are rendered separately) ──
 
   const unifiedFeed = useMemo(() => {
     const items: UnifiedFeedItem[] = [];
@@ -754,43 +752,6 @@ function InspireContent() {
       });
     }
 
-    // Digest items
-    if (digest) {
-      for (let i = 0; i < digest.items.length; i++) {
-        const item = digest.items[i];
-        items.push({
-          id: `digest-${digest.id}-${i}`,
-          sourceType: "digest",
-          title: item.title,
-          excerpt: item.suggestedPrompt,
-          mood: item.mood,
-          topics: item.topics,
-          link: item.link,
-          sourceName: item.feedTitle || "Daily Digest",
-          date: new Date(digest.createdAt),
-          original: item,
-        });
-      }
-    }
-
-    // Daily prompts
-    for (const p of dailyPrompts) {
-      const styleParts = p.style?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
-      const moodKey = styleParts[0]?.toLowerCase();
-      items.push({
-        id: `daily-${p.id}`,
-        sourceType: "daily",
-        title: p.name,
-        excerpt: p.prompt,
-        mood: moodKey,
-        topics: styleParts.slice(1),
-        sourceName: "Daily Prompts",
-        date: new Date(p.createdAt),
-        suggestedStyle: p.style ?? undefined,
-        original: p,
-      });
-    }
-
     // Pending feed generations
     for (const item of pendingGenerations) {
       const styleParts = item.style?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
@@ -808,7 +769,7 @@ function InspireContent() {
     }
 
     return items;
-  }, [feeds, igPosts, digest, dailyPrompts, pendingGenerations]);
+  }, [feeds, igPosts, pendingGenerations]);
 
   // ── Available sources (only show chips for sources that have data) ──
 
@@ -816,25 +777,25 @@ function InspireContent() {
     const sources: SourceType[] = [];
     if (feeds.some((f) => !f.error && f.items.length > 0)) sources.push("rss");
     if (igPosts.some((p) => !p.error)) sources.push("instagram");
-    if (digest && digest.items.length > 0) sources.push("digest");
-    if (dailyPrompts.length > 0) sources.push("daily");
+    if (picks && picks.items.length > 0) sources.push("picks");
     if (pendingGenerations.length > 0) sources.push("pending");
     return sources;
-  }, [feeds, igPosts, digest, dailyPrompts, pendingGenerations]);
+  }, [feeds, igPosts, picks, pendingGenerations]);
 
   // ── Collect all moods ──
 
   const allMoods = useMemo(() => {
+    const allItems = [...unifiedFeed, ...picksItems];
     return Array.from(
       new Set(
-        unifiedFeed
+        allItems
           .map((i) => i.mood)
           .filter((m): m is string => !!m && m !== "neutral")
       )
     ).sort();
-  }, [unifiedFeed]);
+  }, [unifiedFeed, picksItems]);
 
-  // ── Filter and sort ──
+  // ── Filter and sort the main feed ──
 
   const filteredFeed = useMemo(() => {
     let items = unifiedFeed.filter((item) => sourceFilters.has(item.sourceType));
@@ -852,6 +813,13 @@ function InspireContent() {
     // "bestmatch" keeps the natural order (grouped by source, most relevant first)
     return items;
   }, [unifiedFeed, sourceFilters, moodFilter, sortMode]);
+
+  // Filter picks by mood if active
+  const filteredPicks = useMemo(() => {
+    if (!sourceFilters.has("picks")) return [];
+    if (moodFilter) return picksItems.filter((item) => item.mood === moodFilter);
+    return picksItems;
+  }, [picksItems, sourceFilters, moodFilter]);
 
   // ── Action handlers ──
 
@@ -879,14 +847,9 @@ function InspireContent() {
           router.push(`/generate?prompt=${encodeURIComponent(post.promptSuggestion)}`);
           break;
         }
-        case "digest": {
+        case "picks": {
           const digestItem = item.original as DigestItem;
           router.push(`/generate?prompt=${encodeURIComponent(digestItem.suggestedPrompt)}`);
-          break;
-        }
-        case "daily": {
-          const prompt = item.original as DailyPrompt;
-          router.push(`/generate?prompt=${encodeURIComponent(prompt.prompt)}`);
           break;
         }
         case "pending":
@@ -930,21 +893,24 @@ function InspireContent() {
 
   const handleRefresh = useCallback(async () => {
     const promises: Promise<void>[] = [];
-    promises.push(fetchDailyPrompts());
-    promises.push(fetchLatestDigest());
+    promises.push(fetchTodaysPicks());
     promises.push(fetchPendingGenerations());
     if (hasRss) promises.push(fetchRssFeeds(feedUrls));
     if (hasIg) promises.push(fetchIgPosts(igUrls));
     await Promise.all(promises);
-  }, [hasRss, hasIg, feedUrls, igUrls, fetchDailyPrompts, fetchLatestDigest, fetchPendingGenerations, fetchRssFeeds, fetchIgPosts]);
+  }, [hasRss, hasIg, feedUrls, igUrls, fetchTodaysPicks, fetchPendingGenerations, fetchRssFeeds, fetchIgPosts]);
 
-  const isLoading = rssLoading || igLoading || dailyLoading || pendingLoading || digestLoading || !feedsLoaded;
+  const isLoading = rssLoading || igLoading || pendingLoading || picksLoading || !feedsLoaded;
 
   const lastRefreshed = (() => {
     const times = [rssRefreshed, igRefreshed].filter(Boolean) as Date[];
     if (times.length === 0) return null;
     return new Date(Math.max(...times.map((d) => d.getTime())));
   })();
+
+  // Show picks CTA when no picks exist and user has RSS feeds
+  const showPicksCTA =
+    sourceFilters.has("picks") && !picks && !picksLoading && !picksGenerating && hasRss;
 
   // ── Empty state ──
 
@@ -968,38 +934,20 @@ function InspireContent() {
     );
   }
 
-  // Show generate CTAs when daily prompts or digest are empty and their sources are active
-  const showDailyPromptsCTA =
-    sourceFilters.has("daily") && dailyPrompts.length === 0 && !dailyLoading && !dailyGenerating;
-  const showDigestCTA =
-    sourceFilters.has("digest") && !digest && !digestLoading && !digestGenerating && hasRss;
-
   return (
     <PullToRefreshContainer onRefresh={handleRefresh}>
       <div className="px-4 py-6 space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Inspire</h2>
-          <div className="flex items-center gap-3">
-            {dailyStale && dailyPrompts.length > 0 && (
-              <button
-                onClick={generateDailyPrompts}
-                disabled={dailyGenerating}
-                className="flex items-center gap-1 text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50"
-              >
-                <BoltIcon className={`w-3.5 h-3.5 ${dailyGenerating ? "animate-spin" : ""}`} />
-                Refresh prompts
-              </button>
-            )}
-            <button
-              onClick={handleRefresh}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors disabled:opacity-50"
-            >
-              <ArrowPathIcon className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </button>
-          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors disabled:opacity-50"
+          >
+            <ArrowPathIcon className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
         </div>
 
         {lastRefreshed && (
@@ -1025,34 +973,33 @@ function InspireContent() {
           <SortToggle mode={sortMode} onChange={setSortMode} />
         </div>
 
-        {/* Generate CTAs */}
-        {showDailyPromptsCTA && (
-          <GeneratePromptsCTA generating={dailyGenerating} onGenerate={generateDailyPrompts} />
-        )}
-        {showDigestCTA && (
-          <GenerateDigestCTA generating={digestGenerating} onGenerate={generateDigest} />
+        {/* Today's Picks CTA — shown when no picks exist */}
+        {showPicksCTA && (
+          <GeneratePicksCTA generating={picksGenerating} onGenerate={generatePicks} />
         )}
 
-        {/* Digest refresh button */}
-        {digest && sourceFilters.has("digest") && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-              <SparklesIcon className="w-3.5 h-3.5" />
-              Digest: {digest.title}
-            </span>
-            <button
-              onClick={generateDigest}
-              disabled={digestGenerating}
-              className="flex items-center gap-1 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors disabled:opacity-50"
-            >
-              <ArrowPathIcon className={`w-3.5 h-3.5 ${digestGenerating ? "animate-spin" : ""}`} />
-              Refresh
-            </button>
+        {/* Today's Picks — promoted section */}
+        {filteredPicks.length > 0 && (
+          <TodaysPicksSection
+            picks={filteredPicks}
+            onAction={handleCardAction}
+            onRefresh={generatePicks}
+            refreshing={picksGenerating}
+            title={picks?.title ?? "Today's Picks"}
+          />
+        )}
+
+        {/* Divider between picks and main feed */}
+        {filteredPicks.length > 0 && filteredFeed.length > 0 && (
+          <div className="border-t border-gray-200 dark:border-gray-800 pt-2">
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              More inspiration
+            </p>
           </div>
         )}
 
         {/* Loading skeleton */}
-        {isLoading && filteredFeed.length === 0 && (
+        {isLoading && filteredFeed.length === 0 && filteredPicks.length === 0 && (
           <div className="space-y-3">
             {[...Array(5)].map((_, i) => (
               <div
@@ -1068,7 +1015,7 @@ function InspireContent() {
           </div>
         )}
 
-        {/* Unified feed */}
+        {/* Main feed */}
         <div className="space-y-3">
           {filteredFeed.map((item) => (
             <UnifiedCard
@@ -1082,7 +1029,7 @@ function InspireContent() {
         </div>
 
         {/* Empty filtered state */}
-        {!isLoading && filteredFeed.length === 0 && !showDailyPromptsCTA && !showDigestCTA && (
+        {!isLoading && filteredFeed.length === 0 && filteredPicks.length === 0 && !showPicksCTA && (
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 text-center">
             <p className="text-gray-500 dark:text-gray-400 text-sm">
               No items match your current filters. Try adjusting the source or mood filters.
