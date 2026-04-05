@@ -801,14 +801,22 @@ describe("uploadFileFromUrl", () => {
 // ─── 429 retry logic ──────────────────────────────────────────────────────────
 
 describe("retry on 429", () => {
-  it("does not retry on 429 — throws immediately", async () => {
+  it("retries on 429 once and then throws", async () => {
+    vi.useFakeTimers();
+
+    // Both calls return 429
+    mockFetchError(429, "Rate limited");
     mockFetchError(429, "Rate limited");
 
-    const err = await listSongs().catch((e: unknown) => e);
+    const errPromise = listSongs().catch((e: unknown) => e);
+    await vi.runAllTimersAsync();
 
+    const err = await errPromise;
     expect(err).toBeInstanceOf(SunoApiError);
     expect(err).toMatchObject({ status: 429 });
-    expect(fetch).toHaveBeenCalledTimes(1); // no retries for 429
+    expect(fetch).toHaveBeenCalledTimes(2); // initial + 1 retry
+
+    vi.useRealTimers();
   });
 
   it("retries once on 500 and succeeds on second attempt", async () => {
