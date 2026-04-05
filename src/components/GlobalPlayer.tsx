@@ -391,7 +391,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
 
       <div className="bg-gray-900 dark:bg-gray-800 rounded-2xl md:rounded-none md:rounded-t-2xl shadow-2xl border border-gray-700 dark:border-gray-600 overflow-hidden">
         {/* Waveform seek bar + reaction timeline overlay */}
-        <div className="relative h-10 px-2 pt-1 pb-0.5 bg-gray-900 dark:bg-gray-800">
+        <div className="relative h-12 px-2 pt-1 pb-0.5 bg-gray-900 dark:bg-gray-800">
           <PlayerWaveform
             songId={currentSong.id}
             currentTime={currentTime}
@@ -410,11 +410,11 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2">
+        <div className="flex items-center gap-2.5 sm:gap-2 px-2 sm:px-3 py-3">
           {/* Cover art — tap to expand on mobile, link on desktop */}
           <button
             onClick={() => setIsDrawerOpen(true)}
-            className="relative flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-violet-500/50 transition-all md:hidden"
+            className="relative flex-shrink-0 w-12 h-12 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-violet-500/50 transition-all md:hidden"
             aria-label="Expand player"
           >
             {currentSong.imageUrl ? (
@@ -553,7 +553,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
           </div>
 
           {/* Controls — touch-friendly targets */}
-          <div className="flex items-center gap-0">
+          <div className="flex items-center gap-1">
             {/* Shuffle */}
             <button
               onClick={toggleShuffle}
@@ -587,7 +587,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
               aria-label="Previous"
               className="w-11 h-11 rounded-full flex items-center justify-center text-white hover:text-violet-400 transition-colors"
             >
-              <BackwardIcon className="w-5 h-5" aria-hidden="true" />
+              <BackwardIcon className="w-6 h-6" aria-hidden="true" />
             </button>
 
             {/* Play/pause */}
@@ -615,7 +615,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
               aria-label="Next"
               className="w-11 h-11 rounded-full flex items-center justify-center text-white hover:text-violet-400 transition-colors"
             >
-              <ForwardIcon className="w-5 h-5" aria-hidden="true" />
+              <ForwardIcon className="w-6 h-6" aria-hidden="true" />
             </button>
 
             {/* Repeat */}
@@ -642,13 +642,13 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
                 onClick={() => setShowLyrics((v) => !v)}
                 aria-label={showLyrics ? "Hide lyrics" : "Show lyrics"}
                 aria-expanded={showLyrics}
-                className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors ${
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
                   showLyrics
                     ? "text-violet-400"
                     : "text-gray-500 hover:text-gray-300"
                 }`}
               >
-                <DocumentTextIcon className="w-5 h-5" />
+                <DocumentTextIcon className="w-6 h-6" />
               </button>
             )}
 
@@ -657,13 +657,13 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
               onClick={() => setShowEQ((v) => !v)}
               aria-label={showEQ ? "Hide equalizer" : "Show equalizer"}
               aria-expanded={showEQ}
-              className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors ${
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
                 showEQ
                   ? "text-violet-400"
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <AdjustmentsHorizontalIcon className="w-5 h-5" />
+              <AdjustmentsHorizontalIcon className="w-6 h-6" />
             </button>
 
             {/* Up Next toggle */}
@@ -671,13 +671,13 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
               onClick={() => setShowUpNext((v) => !v)}
               aria-label={showUpNext ? "Hide Up Next" : "Show Up Next"}
               aria-expanded={showUpNext}
-              className={`relative w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-colors ${
+              className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
                 showUpNext
                   ? "text-violet-400"
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              <QueueListIcon className="w-5 h-5" />
+              <QueueListIcon className="w-6 h-6" />
               {queue.length - (currentIndex + 1) > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
                   {queue.length - (currentIndex + 1)}
@@ -689,9 +689,9 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
             <button
               onClick={clearQueue}
               aria-label="Close player"
-              className="w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors"
             >
-              <XMarkIcon className="w-5 h-5" />
+              <XMarkIcon className="w-6 h-6" />
             </button>
           </div>
         </div>
