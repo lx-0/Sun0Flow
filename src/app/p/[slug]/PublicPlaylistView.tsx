@@ -13,6 +13,7 @@ import {
   MusicalNoteIcon,
   BookmarkIcon,
   CheckBadgeIcon,
+  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/Toast";
@@ -38,6 +39,7 @@ interface PlaylistSong {
   imageUrl: string | null;
   duration: number | null;
   tags: string | null;
+  lyrics: string | null;
 }
 
 interface PublicPlaylistViewProps {
@@ -73,6 +75,7 @@ export function PublicPlaylistView({
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [isCopying, setIsCopying] = useState(false);
+  const [expandedLyrics, setExpandedLyrics] = useState<Set<string>>(new Set());
   const playTrackedRef = useRef(false);
 
   const playableSongs = songs.filter((s) => s.audioUrl);
@@ -323,64 +326,99 @@ export function PublicPlaylistView({
           const isActive = playableIdx === currentIndex && currentIndex >= 0;
           const hasAudio = Boolean(song.audioUrl);
 
+          const isLyricsExpanded = expandedLyrics.has(song.id);
+
+          function toggleLyrics() {
+            setExpandedLyrics((prev) => {
+              const next = new Set(prev);
+              if (next.has(song.id)) {
+                next.delete(song.id);
+              } else {
+                next.add(song.id);
+              }
+              return next;
+            });
+          }
+
           return (
             <li
               key={song.id}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+              className={`rounded-xl transition-colors ${
                 isActive
                   ? "bg-violet-50 dark:bg-violet-900/20 border border-violet-300 dark:border-violet-700"
                   : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
               }`}
             >
-              {/* Position */}
-              <span className="flex-shrink-0 w-6 text-xs text-gray-400 dark:text-gray-500 text-center">
-                {index + 1}
-              </span>
+              <div className="flex items-center gap-3 px-3 py-2.5">
+                {/* Position */}
+                <span className="flex-shrink-0 w-6 text-xs text-gray-400 dark:text-gray-500 text-center">
+                  {index + 1}
+                </span>
 
-              {/* Cover art */}
-              <div className="relative flex-shrink-0 w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
-                {song.imageUrl ? (
-                  <Image
-                    src={song.imageUrl}
-                    alt={song.title ?? "Song"}
-                    fill
-                    className="object-cover"
-                    sizes="40px"
-                  />
-                ) : (
-                  <MusicalNoteIcon className="w-5 h-5 text-gray-400 dark:text-gray-600" />
-                )}
-              </div>
+                {/* Cover art */}
+                <div className="relative flex-shrink-0 w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
+                  {song.imageUrl ? (
+                    <Image
+                      src={song.imageUrl}
+                      alt={song.title ?? "Song"}
+                      fill
+                      className="object-cover"
+                      sizes="40px"
+                    />
+                  ) : (
+                    <MusicalNoteIcon className="w-5 h-5 text-gray-400 dark:text-gray-600" />
+                  )}
+                </div>
 
-              {/* Title + duration */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {song.title ?? "Untitled"}
-                </p>
-                {song.duration && (
+                {/* Title + duration */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {song.title ?? "Untitled"}
+                  </p>
                   <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {formatTime(song.duration)}
+                    {song.duration ? formatTime(song.duration) : ""}
+                    {song.lyrics && (
+                      <button
+                        onClick={toggleLyrics}
+                        className="ml-2 text-violet-500 hover:text-violet-400 transition-colors"
+                      >
+                        Lyrics
+                        <ChevronDownIcon
+                          className={`inline w-3 h-3 ml-0.5 transition-transform ${isLyricsExpanded ? "rotate-180" : ""}`}
+                        />
+                      </button>
+                    )}
                   </span>
-                )}
+                </div>
+
+                {/* Play button */}
+                <button
+                  onClick={() => handleTogglePlay(index)}
+                  disabled={!hasAudio}
+                  aria-label={isActive && isPlaying ? "Pause" : "Play"}
+                  className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+                    hasAudio
+                      ? "bg-violet-600 hover:bg-violet-500 text-white"
+                      : "bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {isActive && isPlaying ? (
+                    <PauseIcon className="w-5 h-5" />
+                  ) : (
+                    <PlayIcon className="w-5 h-5 ml-0.5" />
+                  )}
+                </button>
               </div>
 
-              {/* Play button */}
-              <button
-                onClick={() => handleTogglePlay(index)}
-                disabled={!hasAudio}
-                aria-label={isActive && isPlaying ? "Pause" : "Play"}
-                className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
-                  hasAudio
-                    ? "bg-violet-600 hover:bg-violet-500 text-white"
-                    : "bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
-                }`}
-              >
-                {isActive && isPlaying ? (
-                  <PauseIcon className="w-5 h-5" />
-                ) : (
-                  <PlayIcon className="w-5 h-5 ml-0.5" />
-                )}
-              </button>
+              {/* Expandable lyrics */}
+              {song.lyrics && isLyricsExpanded && (
+                <div className="px-3 pb-3">
+                  <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3 ml-9">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Lyrics</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{song.lyrics}</p>
+                  </div>
+                </div>
+              )}
             </li>
           );
         })}

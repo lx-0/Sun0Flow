@@ -44,6 +44,7 @@ const getPlaylist = cache((slug: string) =>
                   tags: true,
                   isHidden: true,
                   archivedAt: true,
+                  lyrics: true,
                 },
               },
             },
@@ -126,6 +127,7 @@ export default async function PublicPlaylistPage({
       imageUrl: ps.song.imageUrl,
       duration: ps.song.duration,
       tags: ps.song.tags,
+      lyrics: ps.song.lyrics,
     }));
 
   const totalDuration = visibleSongs.reduce(
