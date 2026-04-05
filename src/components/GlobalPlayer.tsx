@@ -36,7 +36,12 @@ import { useToast } from "./Toast";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ExpandedPlayer } from "./ExpandedPlayer";
-import { useVerticalSwipe } from "@/hooks/useVerticalSwipe";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHandle,
+  DrawerTitle,
+} from "./ui/drawer";
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -81,28 +86,8 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
   const [reactions, setReactions] = useState<ReactionItem[]>([]);
   const reactionSongIdRef = useRef<string | null>(null);
 
-  // Expanded player state
-  const [isExpanded, setIsExpanded] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("sunoflow-player-expanded") === "true";
-  });
-
-  const handleExpand = useCallback(() => {
-    setIsExpanded(true);
-    localStorage.setItem("sunoflow-player-expanded", "true");
-  }, []);
-
-  const handleCollapse = useCallback(() => {
-    setIsExpanded(false);
-    localStorage.setItem("sunoflow-player-expanded", "false");
-  }, []);
-
-  // Swipe-up on mini player to expand
-  const { handlers: swipeUpHandlers } = useVerticalSwipe({
-    direction: "up",
-    onSwipeComplete: handleExpand,
-    disabled: isExpanded,
-  });
+  // Expanded player drawer state
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Timestamped comments — for waveform markers and playback overlays
   interface TimestampedComment { id: string; timestamp: number; body: string; username: string | null; }
@@ -336,23 +321,8 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
 
   if (!currentSong) return null;
 
-  // Render expanded player when active
-  if (isExpanded) {
-    return (
-      <ExpandedPlayer
-        onClose={handleCollapse}
-        translateY={0}
-        isDragging={false}
-        isFavorite={isFavorite}
-        onToggleFavorite={handleToggleFavorite}
-        reactions={reactions}
-        onReact={handleReact}
-        isAuthenticated={!!session?.user}
-      />
-    );
-  }
-
   return (
+    <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
     <div role="region" aria-label="Audio player" className={`fixed bottom-16 left-0 right-0 z-20 px-2 md:bottom-0 transition-all duration-200 ${sidebarCollapsed ? "md:left-16" : "md:left-56"}`}>
       {/* Lyrics panel */}
       {showLyrics && currentSong?.lyrics && (
@@ -419,7 +389,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
           </div>
         )}
 
-      <div className="bg-gray-900 dark:bg-gray-800 rounded-2xl md:rounded-none md:rounded-t-2xl shadow-2xl border border-gray-700 dark:border-gray-600 overflow-hidden" {...swipeUpHandlers}>
+      <div className="bg-gray-900 dark:bg-gray-800 rounded-2xl md:rounded-none md:rounded-t-2xl shadow-2xl border border-gray-700 dark:border-gray-600 overflow-hidden">
         {/* Waveform seek bar + reaction timeline overlay */}
         <div className="relative h-10 px-2 pt-1 pb-0.5 bg-gray-900 dark:bg-gray-800">
           <PlayerWaveform
@@ -443,7 +413,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
         <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2">
           {/* Cover art — tap to expand on mobile, link on desktop */}
           <button
-            onClick={handleExpand}
+            onClick={() => setIsDrawerOpen(true)}
             className="relative flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-violet-500/50 transition-all md:hidden"
             aria-label="Expand player"
           >
@@ -478,7 +448,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
           </Link>
 
           {/* Song info — tap to expand on mobile */}
-          <div className="flex-1 min-w-0" onClick={handleExpand} role="button" tabIndex={0} aria-label="Expand player" onKeyDown={(e) => { if (e.key === "Enter") handleExpand(); }}>
+          <div className="flex-1 min-w-0" onClick={() => setIsDrawerOpen(true)} role="button" tabIndex={0} aria-label="Expand player" onKeyDown={(e) => { if (e.key === "Enter") setIsDrawerOpen(true); }}>
             <div className="flex items-center gap-1.5">
               <span
                 className="text-sm font-medium text-white truncate hover:text-violet-400 transition-colors cursor-pointer"
@@ -727,6 +697,20 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
         </div>
       </div>
       </div>
+
+      {/* Expanded player drawer */}
+      <DrawerContent className="h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-[480px] md:mx-auto md:rounded-2xl">
+        <DrawerHandle className="md:hidden" />
+        <DrawerTitle className="sr-only">Now Playing</DrawerTitle>
+        <ExpandedPlayer
+          isFavorite={isFavorite}
+          onToggleFavorite={handleToggleFavorite}
+          reactions={reactions}
+          onReact={handleReact}
+          isAuthenticated={!!session?.user}
+        />
+      </DrawerContent>
     </div>
+    </Drawer>
   );
 }

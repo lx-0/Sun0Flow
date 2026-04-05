@@ -47,6 +47,7 @@
     "recharts": "^3.8.0",
     "stripe": "^20.4.1",
     "swagger-ui-react": "^5.32.1",
+    "vaul": "^1.1.2",
     "wavesurfer.js": "^7.12.4",
     "web-push": "^3.6.7"
   },
