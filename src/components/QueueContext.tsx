@@ -324,14 +324,25 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       const idx = currentIndexRef.current;
       const currentSong = idx >= 0 ? q[idx] : null;
 
-      // If this was a CDN proxy request, fall back to the direct Suno URL
+      // If the CDN proxy failed, ask the server to refresh the URL and retry
       if (currentSong && !cdnFallbackRef.current.has(currentSong.id)) {
         cdnFallbackRef.current.add(currentSong.id);
-        audio.src = currentSong.audioUrl;
-        audio.play().catch(() => {
-          setIsBuffering(false);
-          setIsPlaying(false);
-        });
+        // Hit the play endpoint to trigger a server-side URL refresh, then
+        // retry via the proxy (which now also refreshes inline).
+        fetch(`/api/songs/${currentSong.id}/play`, { method: "POST" })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            // Use the freshly returned audioUrl if available, otherwise retry proxy
+            audio.src = data?.audioUrl ?? proxiedAudioUrl(currentSong.id);
+            audio.play().catch(() => {
+              setIsBuffering(false);
+              setIsPlaying(false);
+            });
+          })
+          .catch(() => {
+            setIsBuffering(false);
+            setIsPlaying(false);
+          });
         return;
       }
 

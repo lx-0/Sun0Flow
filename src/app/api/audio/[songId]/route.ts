@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
+import { getTaskStatus } from "@/lib/sunoapi/status";
+import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
+
+// Refresh audio URL when within 3 days of expiry (matches play endpoint threshold).
+const REFRESH_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000;
+// Conservative TTL after a successful refresh (12 days).
+const AUDIO_URL_TTL_MS = 12 * 24 * 60 * 60 * 1000;
 
 /**
  * Audio proxy — streams audio from the Suno origin through this endpoint.
@@ -9,6 +16,9 @@ import { prisma } from "@/lib/prisma";
  * This endpoint requires authentication and enforces per-user ownership; a
  * public CDN cache would allow any requester knowing the song ID to bypass
  * auth and retrieve another user's audio.
+ *
+ * When the stored Suno URL is expired or near-expiry, the proxy refreshes it
+ * from the Suno API before proxying — preventing 502s for older songs.
  */
 export async function GET(
   request: NextRequest,
@@ -22,7 +32,7 @@ export async function GET(
 
     const song = await prisma.song.findFirst({
       where: { id: songId, userId },
-      select: { audioUrl: true },
+      select: { audioUrl: true, audioUrlExpiresAt: true, sunoJobId: true },
     });
 
     if (!song?.audioUrl) {
@@ -30,6 +40,35 @@ export async function GET(
         { error: "Not found", code: "NOT_FOUND" },
         { status: 404 }
       );
+    }
+
+    let audioUrl = song.audioUrl;
+
+    // Refresh the Suno URL if it's expired or near-expiry
+    const now = Date.now();
+    const isExpired =
+      !song.audioUrlExpiresAt ||
+      song.audioUrlExpiresAt.getTime() - now < REFRESH_THRESHOLD_MS;
+
+    if (isExpired && song.sunoJobId) {
+      try {
+        const userApiKey = await resolveUserApiKey(userId);
+        const taskResult = await getTaskStatus(song.sunoJobId, userApiKey);
+        const fresh = taskResult.songs.find((s) => s.audioUrl) ?? taskResult.songs[0];
+        if (fresh?.audioUrl) {
+          await prisma.song.update({
+            where: { id: songId },
+            data: {
+              audioUrl: fresh.audioUrl,
+              audioUrlExpiresAt: new Date(now + AUDIO_URL_TTL_MS),
+              imageUrl: fresh.imageUrl || undefined,
+            },
+          });
+          audioUrl = fresh.audioUrl;
+        }
+      } catch {
+        // Refresh failed — continue with existing URL (may still work)
+      }
     }
 
     // Forward Range header so browsers can seek within the audio stream
@@ -41,7 +80,7 @@ export async function GET(
 
     let upstream: Response;
     try {
-      upstream = await fetch(song.audioUrl, { headers: upstreamHeaders });
+      upstream = await fetch(audioUrl, { headers: upstreamHeaders });
     } catch {
       return NextResponse.json(
         { error: "Failed to fetch audio from origin", code: "UPSTREAM_ERROR" },
