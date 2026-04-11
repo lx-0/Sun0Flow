@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getTaskStatus } from "@/lib/sunoapi/status";
 import { SunoApiError } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
+import { downloadAndCache } from "@/lib/audio-cache";
 
 // Conservative expiry after a successful refresh (12 days).
 const AUDIO_URL_TTL_MS = 12 * 24 * 60 * 60 * 1000;
@@ -73,6 +74,11 @@ export async function POST(
         imageUrl: fresh.imageUrl || song.imageUrl,
       },
     });
+
+    // Cache audio locally so playback never depends on Suno URL availability
+    if (updated.audioUrl) {
+      downloadAndCache(id, updated.audioUrl).catch(() => {});
+    }
 
     return NextResponse.json({ ok: true, song: updated });
   } catch {

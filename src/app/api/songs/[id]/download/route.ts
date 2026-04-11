@@ -5,6 +5,7 @@ import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { embedId3Tags, embedWavMetadata } from "@/lib/audio-metadata";
 import { wavToFlac } from "@/lib/flac-encoder";
 import type { SongMetadata } from "@/lib/audio-metadata";
+import { getCachedAudio } from "@/lib/audio-cache";
 
 const DOWNLOAD_RATE_LIMIT = 50; // per hour
 
@@ -98,13 +99,20 @@ export async function GET(
       targetFormat = sourceExt;
     }
 
-    // Proxy the audio from the external URL
-    const upstream = await fetch(song.audioUrl);
-    if (!upstream.ok) {
-      return NextResponse.json(
-        { error: "Failed to fetch audio from source", code: "INTERNAL_ERROR" },
-        { status: 502 }
-      );
+    // Serve from local cache when available, otherwise fetch from Suno
+    const cached = getCachedAudio(song.id);
+    let audioBuffer: ArrayBuffer;
+    if (cached) {
+      audioBuffer = cached.buffer.slice(cached.byteOffset, cached.byteOffset + cached.byteLength) as ArrayBuffer;
+    } else {
+      const upstream = await fetch(song.audioUrl);
+      if (!upstream.ok) {
+        return NextResponse.json(
+          { error: "Failed to fetch audio from source", code: "INTERNAL_ERROR" },
+          { status: 502 }
+        );
+      }
+      audioBuffer = await upstream.arrayBuffer();
     }
 
     // Increment download count (fire and forget)
@@ -119,8 +127,6 @@ export async function GET(
       .trim()
       .replace(/\s+/g, "-")
       .toLowerCase() || "song";
-
-    let audioBuffer = await upstream.arrayBuffer();
     let contentType: string;
     let fileExt: string;
 

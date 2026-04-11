@@ -3,6 +3,7 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { getTaskStatus } from "@/lib/sunoapi/status";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
+import { getCachedAudio, getCachedAudioSize, cacheAudio, isCached } from "@/lib/audio-cache";
 
 // Refresh audio URL when within 3 days of expiry (matches play endpoint threshold).
 const REFRESH_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000;
@@ -12,13 +13,10 @@ const AUDIO_URL_TTL_MS = 12 * 24 * 60 * 60 * 1000;
 /**
  * Audio proxy — streams audio from the Suno origin through this endpoint.
  *
- * Cache-Control: private — browser may cache, but CDN/shared caches must not.
- * This endpoint requires authentication and enforces per-user ownership; a
- * public CDN cache would allow any requester knowing the song ID to bypass
- * auth and retrieve another user's audio.
- *
- * When the stored Suno URL is expired or near-expiry, the proxy refreshes it
- * from the Suno API before proxying — preventing 502s for older songs.
+ * Serves from a local file cache when available so playback never depends on
+ * Suno URL availability. On a cache miss the audio is fetched from Suno (with
+ * automatic URL refresh when expired) and written through to the cache for
+ * future requests.
  */
 export async function GET(
   request: NextRequest,
@@ -30,6 +28,7 @@ export async function GET(
 
     const { songId } = await params;
 
+    // Ownership check
     const song = await prisma.song.findFirst({
       where: { id: songId, userId },
       select: { audioUrl: true, audioUrlExpiresAt: true, sunoJobId: true },
@@ -42,9 +41,15 @@ export async function GET(
       );
     }
 
+    // ── Serve from local cache ────────────────────────────────────────────
+    if (isCached(songId)) {
+      return serveCached(songId, request.headers.get("range"));
+    }
+
+    // ── Cache miss — fetch from Suno ──────────────────────────────────────
     let audioUrl = song.audioUrl;
 
-    // Refresh the Suno URL if it's expired or near-expiry
+    // Refresh the Suno URL if expired or near-expiry
     const now = Date.now();
     const isExpired =
       !song.audioUrlExpiresAt ||
@@ -71,16 +76,10 @@ export async function GET(
       }
     }
 
-    // Forward Range header so browsers can seek within the audio stream
-    const upstreamHeaders: Record<string, string> = {};
-    const rangeHeader = request.headers.get("range");
-    if (rangeHeader) {
-      upstreamHeaders["Range"] = rangeHeader;
-    }
-
+    // Fetch from Suno — full file (no Range) so we can cache the complete file
     let upstream: Response;
     try {
-      upstream = await fetch(audioUrl, { headers: upstreamHeaders });
+      upstream = await fetch(audioUrl);
     } catch {
       return NextResponse.json(
         { error: "Failed to fetch audio from origin", code: "UPSTREAM_ERROR" },
@@ -88,39 +87,59 @@ export async function GET(
       );
     }
 
-    // Accept both 200 and 206 (partial content for range requests)
-    if (!upstream.ok && upstream.status !== 206) {
+    if (!upstream.ok) {
       return NextResponse.json(
         { error: "Audio unavailable at origin", code: "UPSTREAM_ERROR" },
         { status: 502 }
       );
     }
 
-    const responseHeaders = new Headers();
+    // Read full body, cache to disk, then serve (including Range support)
+    const arrayBuf = await upstream.arrayBuffer();
+    const buf = Buffer.from(arrayBuf);
+    cacheAudio(songId, buf);
 
-    // Preserve content-type from upstream (audio/mpeg, audio/wav, etc.)
-    const contentType = upstream.headers.get("content-type") ?? "audio/mpeg";
-    responseHeaders.set("Content-Type", contentType);
-
-    // Forward streaming/range headers so browsers can seek properly
-    const contentLength = upstream.headers.get("content-length");
-    if (contentLength) responseHeaders.set("Content-Length", contentLength);
-    const contentRange = upstream.headers.get("content-range");
-    if (contentRange) responseHeaders.set("Content-Range", contentRange);
-    const acceptRanges = upstream.headers.get("accept-ranges");
-    responseHeaders.set("Accept-Ranges", acceptRanges ?? "bytes");
-
-    // Private cache only — CDN must not cache authenticated user content
-    responseHeaders.set("Cache-Control", "private, max-age=3600");
-
-    return new Response(upstream.body, {
-      status: upstream.status,
-      headers: responseHeaders,
-    });
+    return serveBuf(buf, request.headers.get("range"));
   } catch {
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
       { status: 500 }
     );
   }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function serveCached(songId: string, rangeHeader: string | null): Response {
+  const buf = getCachedAudio(songId);
+  if (!buf) {
+    // Race: cache file disappeared between check and read
+    return NextResponse.json(
+      { error: "Cache read failed", code: "CACHE_ERROR" },
+      { status: 500 }
+    );
+  }
+  return serveBuf(buf, rangeHeader);
+}
+
+function serveBuf(buf: Buffer, rangeHeader: string | null): Response {
+  const headers = new Headers();
+  headers.set("Content-Type", "audio/mpeg");
+  headers.set("Accept-Ranges", "bytes");
+  headers.set("Cache-Control", "private, max-age=3600");
+
+  if (rangeHeader) {
+    const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (match) {
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? parseInt(match[2], 10) : buf.length - 1;
+      const slice = buf.subarray(start, end + 1);
+      headers.set("Content-Length", String(slice.length));
+      headers.set("Content-Range", `bytes ${start}-${end}/${buf.length}`);
+      return new Response(new Uint8Array(slice), { status: 206, headers });
+    }
+  }
+
+  headers.set("Content-Length", String(buf.length));
+  return new Response(new Uint8Array(buf), { status: 200, headers });
 }

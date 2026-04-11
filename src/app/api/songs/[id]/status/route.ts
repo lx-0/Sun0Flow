@@ -12,6 +12,7 @@ import { recordActivity } from "@/lib/activity";
 import { recordDailyActivity, checkSongMilestones, checkStreakMilestones } from "@/lib/streaks";
 import { sendPushToUser } from "@/lib/push";
 import crypto from "crypto";
+import { downloadAndCache, isCached } from "@/lib/audio-cache";
 
 const MAX_POLL_ATTEMPTS = 60;
 
@@ -120,6 +121,12 @@ export async function GET(
         },
       });
 
+      // Proactively cache audio to local disk so playback never depends on
+      // Suno URL availability. Fire-and-forget to avoid slowing the response.
+      if (firstSong.audioUrl && !isCached(id)) {
+        downloadAndCache(id, firstSong.audioUrl).catch(() => {});
+      }
+
       // If the API returned additional songs, create them as linked alternates
       for (let i = 1; i < taskResult.songs.length; i++) {
         const extra = taskResult.songs[i];
@@ -152,6 +159,10 @@ export async function GET(
             imageUrl: alternateSong.imageUrl,
           },
         });
+        // Cache alternate audio locally too
+        if (extra.audioUrl) {
+          downloadAndCache(alternateSong.id, extra.audioUrl).catch(() => {});
+        }
       }
 
       const alternateCount = taskResult.songs.length - 1;

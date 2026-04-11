@@ -48,3 +48,6 @@ next-env.d.ts
 prisma.config.ts
 
 .claude/settings.local.json
+
+# local audio cache
+.audio-cache/
