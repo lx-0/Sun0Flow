@@ -225,11 +225,11 @@ model Playlist {
   isPublic         Boolean  @default(false)
   isCollaborative  Boolean  @default(false)
   slug             String?  @unique
+  shareCount       Int      @default(0)
   isPublished      Boolean  @default(false)
   publishedAt      DateTime?
   genre            String?
   playCount        Int      @default(0)
-  shareCount       Int      @default(0)
   isSmartPlaylist  Boolean  @default(false)
   smartPlaylistType String? // "top_hits" | "new_this_week" | "mood" | "similar_to"
   smartPlaylistMeta Json?   // e.g. {"mood": "chill"} or {"sourceSongId": "..."}
@@ -241,7 +241,7 @@ model Playlist {
   songs         PlaylistSong[]
   activities    Activity[]
   collaborators PlaylistCollaborator[]
-  reports       Report[]
+  reports       Report[]               @relation("PlaylistReports")
 
   @@index([userId])
   @@index([userId, name])
@@ -382,7 +382,7 @@ model Report {
   updatedAt   DateTime @updatedAt
 
   song     Song?     @relation(fields: [songId], references: [id], onDelete: Cascade)
-  playlist Playlist? @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  playlist Playlist? @relation("PlaylistReports", fields: [playlistId], references: [id], onDelete: Cascade)
   reporter User      @relation(fields: [reporterId], references: [id], onDelete: Cascade)
 
   @@unique([songId, reporterId])
