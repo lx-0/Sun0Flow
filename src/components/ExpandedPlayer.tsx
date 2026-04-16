@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import {
   PlayIcon,
   PauseIcon,
@@ -12,6 +13,7 @@ import {
 import {
   ArrowPathRoundedSquareIcon,
   ArrowsRightLeftIcon,
+  ArrowTopRightOnSquareIcon,
   MusicalNoteIcon,
   QueueListIcon,
   DocumentTextIcon,
@@ -45,6 +47,7 @@ interface ExpandedPlayerProps {
   reactions: ReactionItem[];
   onReact: (emoji: string) => void;
   isAuthenticated: boolean;
+  onClose?: () => void;
 }
 
 export function ExpandedPlayer({
@@ -53,6 +56,7 @@ export function ExpandedPlayer({
   reactions,
   onReact,
   isAuthenticated,
+  onClose,
 }: ExpandedPlayerProps) {
   const {
     queue,
@@ -117,6 +121,15 @@ export function ExpandedPlayer({
       {/* Song info */}
       <div className="px-6 py-2 text-center flex-shrink-0">
         <h2 className="text-lg font-semibold text-white">{currentSong.title ?? "Untitled"}</h2>
+        <Link
+          href={`/library/${currentSong.id}`}
+          onClick={() => onClose?.()}
+          aria-label="View song details"
+          className="mt-1 inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded transition-colors"
+        >
+          <span>View song details</span>
+          <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" aria-hidden="true" />
+        </Link>
       </div>
 
       {/* Waveform + reaction timeline */}

@@ -708,6 +708,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
           reactions={reactions}
           onReact={handleReact}
           isAuthenticated={!!session?.user}
+          onClose={() => setIsDrawerOpen(false)}
         />
       </DrawerContent>
     </div>
