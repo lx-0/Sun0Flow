@@ -75,10 +75,17 @@ export async function drainGenerationQueue(): Promise<void> {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       logger.error({ queueItemId: item.id, err }, "queue-processor: item failed");
-      await prisma.generationQueueItem.update({
-        where: { id: item.id },
-        data: { status: "failed", errorMessage: message },
-      });
+      try {
+        await prisma.generationQueueItem.update({
+          where: { id: item.id },
+          data: { status: "failed", errorMessage: message },
+        });
+      } catch (updateErr) {
+        logger.error(
+          { queueItemId: item.id, updateErr },
+          "queue-processor: failed to mark item as failed — item stuck in processing"
+        );
+      }
     }
   }
 }

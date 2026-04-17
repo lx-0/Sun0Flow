@@ -56,7 +56,9 @@ export async function GET(request: NextRequest) {
         generationStatus: "failed",
         errorMessage: "Generation timed out",
       },
-    }).catch(() => {});
+    }).catch((err) => {
+      logServerError("songs-stale-cleanup", err, { userId, route: "/api/songs" });
+    });
 
     // Pagination
     const limitParam = parseInt(params.get("limit") || "", 10);

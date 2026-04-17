@@ -21,7 +21,9 @@ import { drainGenerationQueue } from "@/lib/queue-processor";
 // Register queue drain callback so it fires whenever the circuit closes.
 // Module-level registration runs once when this route module is first loaded.
 onCircuitClose(() => {
-  drainGenerationQueue().catch(() => {});
+  drainGenerationQueue().catch((err) => {
+    logger.error({ err }, "generation: queue drain failed after circuit close");
+  });
 });
 
 /** Map API errors to user-friendly messages */

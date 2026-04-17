@@ -91,9 +91,10 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription): Prom
   const status = subscription.status as string;
 
   // In Stripe API 2025-03-31+, current_period_start/end moved to SubscriptionItem.
-  // Fall back to billing_cycle_anchor if item periods are not available.
-  const periodStart = item?.current_period_start ?? subscription.billing_cycle_anchor;
-  const periodEnd = item?.current_period_end ?? subscription.billing_cycle_anchor;
+  // Fall back to billing_cycle_anchor, then current epoch to avoid Invalid Date.
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  const periodStart = item?.current_period_start ?? subscription.billing_cycle_anchor ?? nowEpoch;
+  const periodEnd = item?.current_period_end ?? subscription.billing_cycle_anchor ?? nowEpoch;
 
   await prisma.subscription.upsert({
     where: { stripeSubscriptionId: subscription.id },
