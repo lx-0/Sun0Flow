@@ -13,11 +13,6 @@ import {
   ArrowDownTrayIcon,
   HeartIcon,
   ArrowPathIcon,
-  ShareIcon,
-  CalendarIcon,
-  ClockIcon,
-  TagIcon,
-  FlagIcon,
   ForwardIcon,
   MicrophoneIcon,
   SpeakerWaveIcon,
@@ -30,14 +25,12 @@ import {
   PauseIcon,
   HandThumbUpIcon,
   HandThumbDownIcon,
-  CodeBracketIcon,
   ArrowsRightLeftIcon,
 } from "@heroicons/react/24/solid";
-import { HeartIcon as HeartOutlineIcon, QueueListIcon, HandThumbUpIcon as HandThumbUpOutlineIcon, HandThumbDownIcon as HandThumbDownOutlineIcon, CloudArrowDownIcon, CheckCircleIcon, DocumentDuplicateIcon } from "@heroicons/react/24/outline";
+import { HeartIcon as HeartOutlineIcon, HandThumbUpIcon as HandThumbUpOutlineIcon, HandThumbDownIcon as HandThumbDownOutlineIcon, DocumentDuplicateIcon } from "@heroicons/react/24/outline";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
 import type { SunoSong } from "@/lib/sunoapi";
 import { getRating, type SongRating } from "@/lib/ratings";
-import { DownloadButton } from "./DownloadButton";
 import { useToast } from "./Toast";
 import { useQueue } from "./QueueContext";
 const ReportModal = dynamic(() => import("./ReportModal").then((m) => m.ReportModal), { ssr: false });
@@ -45,12 +38,13 @@ import { TagInput } from "./TagInput";
 // Lazy-load modal/tool components that are only shown on user interaction
 const SectionEditor = dynamic(() => import("./SectionEditor").then((m) => m.SectionEditor), { ssr: false });
 const CoverArtModal = dynamic(() => import("./CoverArtModal").then((m) => m.CoverArtModal), { ssr: false });
-import { LyricsEditor } from "./LyricsEditor";
 import { CoverArtImage } from "./CoverArtImage";
-import { AddToPlaylistButton } from "./AddToPlaylistButton";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 // Lazy-load below-fold recommendations to reduce initial bundle
 const RecommendationSection = dynamic(() => import("./SongRecommendations").then((m) => m.RecommendationSection), { ssr: false });
+import { SongMetadataCard } from "./SongMetadataCard";
+import { SongActionsBar } from "./SongActionsBar";
+import { SongLyricsSection } from "./SongLyricsSection";
 
 // ─── EmbedCodeModal ───────────────────────────────────────────────────────────
 
@@ -162,14 +156,6 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 // ─── Star rating widget ────────────────────────────────────────────────────────
@@ -1673,62 +1659,14 @@ export function SongDetailView({
       )}
 
       {/* Full metadata grid */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 transition-shadow duration-200 hover:shadow-md">
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          {song.tags && (
-            <div className="flex items-start gap-2">
-              <TagIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
-              <div>
-                <span className="text-gray-500 dark:text-gray-400 text-xs block uppercase tracking-wider">Style</span>
-                <span className="text-gray-900 dark:text-white">{song.tags}</span>
-              </div>
-            </div>
-          )}
-          {song.duration != null && (
-            <div className="flex items-start gap-2">
-              <ClockIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
-              <div>
-                <span className="text-gray-500 dark:text-gray-400 text-xs block uppercase tracking-wider">Duration</span>
-                <span className="text-gray-900 dark:text-white">{formatTime(song.duration)}</span>
-              </div>
-            </div>
-          )}
-          <div className="flex items-start gap-2">
-            <CalendarIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
-            <div>
-              <span className="text-gray-500 dark:text-gray-400 text-xs block uppercase tracking-wider">Created</span>
-              <span className="text-gray-900 dark:text-white">{formatDate(song.createdAt)}</span>
-            </div>
-          </div>
-          {song.model && (
-            <div className="flex items-start gap-2">
-              <MusicalNoteIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
-              <div>
-                <span className="text-gray-500 dark:text-gray-400 text-xs block uppercase tracking-wider">Model</span>
-                <span className="text-gray-900 dark:text-white">{song.model}</span>
-              </div>
-            </div>
-          )}
-          {rating.stars > 0 && (
-            <div className="flex items-start gap-2">
-              <span className="text-violet-400 mt-0.5 flex-shrink-0 text-sm">★</span>
-              <div>
-                <span className="text-gray-500 dark:text-gray-400 text-xs block uppercase tracking-wider">Rating</span>
-                <span className="text-yellow-400">{Array(rating.stars).fill("★").join("")}</span>
-              </div>
-            </div>
-          )}
-          {sunoJobId && (
-            <div className="flex items-start gap-2 col-span-2">
-              <span className="text-violet-400 mt-0.5 flex-shrink-0 text-xs font-mono">#</span>
-              <div>
-                <span className="text-gray-500 dark:text-gray-400 text-xs block uppercase tracking-wider">Suno ID</span>
-                <span className="text-gray-900 dark:text-white font-mono text-xs">{sunoJobId}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <SongMetadataCard
+        tags={song.tags}
+        duration={song.duration}
+        createdAt={song.createdAt}
+        model={song.model}
+        ratingStars={rating.stars}
+        sunoJobId={sunoJobId}
+      />
 
       {/* Tags */}
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-2">
@@ -1760,134 +1698,32 @@ export function SongDetailView({
         </div>
       )}
 
-      {/* Action buttons row — primary | secondary groups */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Primary actions */}
-        {hasAudio && (
-          <DownloadButton song={song} />
-        )}
-        {hasAudio && (
-          <button
-            onClick={() =>
-              isCached
-                ? removeOffline(song.id)
-                : saveOffline({ id: song.id, title: song.title, imageUrl: song.imageUrl ?? null })
-            }
-            disabled={isSavingOffline}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200 active:scale-95 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed ${
-              isCached
-                ? "bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400"
-                : "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
-            }`}
-          >
-            {isCached ? (
-              <CheckCircleIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-            ) : (
-              <CloudArrowDownIcon className={`w-4 h-4 flex-shrink-0 ${isSavingOffline ? "animate-pulse" : ""}`} aria-hidden="true" />
-            )}
-            {isSavingOffline ? "Saving…" : isCached ? "Saved Offline" : "Save Offline"}
-          </button>
-        )}
-
-        {/* Divider dot */}
-        <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700 hidden sm:block" aria-hidden="true" />
-
-        {/* Secondary actions */}
-        {/* Visibility toggle */}
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 min-h-[44px]">
-          <ShareIcon className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true" />
-          <span className="text-sm font-medium text-gray-900 dark:text-white">
-            {isPublic ? "Public" : "Private"}
-          </span>
-          <button
-            role="switch"
-            aria-checked={isPublic}
-            aria-label={isPublic ? "Make song private" : "Make song public"}
-            disabled={sharing}
-            onClick={handleVisibilityToggle}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-50 ${
-              isPublic ? "bg-violet-600" : "bg-gray-300 dark:bg-gray-600"
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                isPublic ? "translate-x-4" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
-        {isPublic && (
-          <button
-            onClick={handleCopyLink}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"
-          >
-            <ShareIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-            Share
-          </button>
-        )}
-        {isPublic && (
-          <button
-            onClick={handleShareOnX}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"
-            aria-label="Share on X (Twitter)"
-          >
-            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-            Share on X
-          </button>
-        )}
-
-        {/* Embed code button — only for public songs */}
-        {isPublic && (
-          <button
-            onClick={() => setEmbedOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"
-          >
-            <CodeBracketIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-            Get Embed Code
-          </button>
-        )}
-
-        {/* Queue actions */}
-        {song.audioUrl && (
-          <>
-            <button
-              onClick={() => {
-                playNext({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: coverImageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
-                toast("Playing next", "success");
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"
-            >
-              <ForwardIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-              Play Next
-            </button>
-            <button
-              onClick={() => {
-                addToQueue({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: coverImageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
-                toast("Added to queue", "success");
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200 active:scale-95 min-h-[44px]"
-            >
-              <QueueListIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-              Add to Queue
-            </button>
-          </>
-        )}
-
-        {/* Add to playlist */}
-        <AddToPlaylistButton songId={song.id} songTitle={song.title} variant="button" />
-
-        {/* Report button */}
-        <button
-          onClick={() => setReportOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200 active:scale-95 min-h-[44px]"
-          aria-label="Report song"
-        >
-          <FlagIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-          Report
-        </button>
-      </div>
+      {/* Action buttons row */}
+      <SongActionsBar
+        song={song}
+        hasAudio={hasAudio}
+        isPublic={isPublic}
+        publicSlug={publicSlug}
+        isCached={isCached}
+        isSavingOffline={isSavingOffline}
+        sharing={sharing}
+        coverImageUrl={coverImageUrl}
+        onVisibilityToggle={handleVisibilityToggle}
+        onCopyLink={handleCopyLink}
+        onShareOnX={handleShareOnX}
+        onEmbedOpen={() => setEmbedOpen(true)}
+        onReportOpen={() => setReportOpen(true)}
+        onSaveOffline={() => saveOffline({ id: song.id, title: song.title, imageUrl: song.imageUrl ?? null })}
+        onRemoveOffline={() => removeOffline(song.id)}
+        onPlayNext={() => {
+          playNext({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: coverImageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
+          toast("Playing next", "success");
+        }}
+        onAddToQueue={() => {
+          addToQueue({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: coverImageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics });
+          toast("Added to queue", "success");
+        }}
+      />
 
       {/* Make public confirmation dialog */}
       {confirmPublicOpen && (
@@ -2297,14 +2133,12 @@ export function SongDetailView({
       />
 
       {/* Lyrics */}
-      {(song.lyrics || lyricsEdited) && (
-        <LyricsEditor
-          songId={song.id}
-          originalLyrics={song.lyrics ?? null}
-          editedLyrics={lyricsEdited}
-          isCurrentSong={currentSong?.id === song.id}
-        />
-      )}
+      <SongLyricsSection
+        songId={song.id}
+        lyrics={song.lyrics}
+        lyricsEdited={lyricsEdited}
+        isCurrentSong={currentSong?.id === song.id}
+      />
 
       {/* Prompt */}
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 transition-shadow duration-200 hover:shadow-md">
