@@ -8,7 +8,6 @@ import {
   MusicalNoteIcon,
   ArrowDownTrayIcon,
   HeartIcon,
-  ArrowUpOnSquareStackIcon,
   CheckIcon,
   ArrowPathIcon,
   EllipsisVerticalIcon,
@@ -167,25 +166,6 @@ function usePollSong(song: Song, onUpdate: (updated: Song) => void) {
     activeRef.current = true;
 
     if (song.generationStatus !== "pending") return;
-
-    async function poll() {
-      if (!activeRef.current) return;
-      try {
-        const res = await fetch(`/api/songs/${song.id}/status`);
-        if (!res.ok) return;
-        const data = (await res.json()) as { song: Song };
-        if (!activeRef.current) return;
-        if (data.song.generationStatus !== "pending") {
-          onUpdate(data.song);
-          return;
-        }
-      } catch {
-        // ignore
-      }
-      if (activeRef.current) {
-        timerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
-      }
-    }
 
     let attempts = 0;
     async function pollWithLimit() {
