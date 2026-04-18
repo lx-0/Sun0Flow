@@ -214,6 +214,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const shuffleVersionsRef = useRef(false);
   /** True when audio.play() was rejected (e.g. backgrounded on mobile) */
   const pendingPlayRef = useRef(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextRef = useRef<() => void>(() => {});
   const skipPrevRef = useRef<() => void>(() => {});
 
@@ -226,6 +227,20 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   trackPlayRef.current = trackPlay;
   volumeRef.current = volume;
   shuffleVersionsRef.current = shuffleVersions;
+
+  // Retry audio.play() with exponential backoff for mobile PWA background playback
+  const retryPlay = useCallback((audio: HTMLAudioElement, retriesLeft = 3, delay = 200) => {
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    audio.play()
+      .then(() => { pendingPlayRef.current = false; })
+      .catch(() => {
+        if (retriesLeft > 0) {
+          retryTimerRef.current = setTimeout(() => retryPlay(audio, retriesLeft - 1, delay * 2), delay);
+        } else {
+          pendingPlayRef.current = true;
+        }
+      });
+  }, []);
 
   // Debounced sync function — schedule a save of current playback state
   const scheduleSync = useCallback(
@@ -266,7 +281,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     if (!shuffleVersionsRef.current) {
       setActiveVersion(null);
       audio.src = getAudioSrc(song);
-      audio.play().catch(() => { pendingPlayRef.current = true; });
+      retryPlay(audio);
       trackPlayRef.current(song.id);
       return;
     }
@@ -290,15 +305,15 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       const picked = versions[Math.floor(Math.random() * versions.length)];
       setActiveVersion(picked);
       audio.src = getAudioSrc(picked);
-      audio.play().catch(() => { pendingPlayRef.current = true; });
+      retryPlay(audio);
       trackPlayRef.current(picked.id);
     } else {
       setActiveVersion(null);
       audio.src = getAudioSrc(song);
-      audio.play().catch(() => { pendingPlayRef.current = true; });
+      retryPlay(audio);
       trackPlayRef.current(song.id);
     }
-  }, []);
+  }, [retryPlay]);
 
   resolveAndPlayRef.current = resolveAndPlay;
 
@@ -360,7 +375,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
       if (rep === "repeat-one") {
         audio.currentTime = 0;
-        audio.play().catch(() => { pendingPlayRef.current = true; });
+        retryPlay(audio);
         return;
       }
 
@@ -405,6 +420,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener("playing", onPlaying);
       audio.removeEventListener("canplay", onCanPlay);
       audio.removeEventListener("error", onError);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       audio.pause();
     };
   }, []);
@@ -761,13 +777,13 @@ export function QueueProvider({ children }: { children: ReactNode }) {
           audio.src = getAudioSrc(merged[firstNew]);
           setCurrentTime(0);
           setDuration(merged[firstNew].duration ?? 0);
-          audio.play().catch(() => { pendingPlayRef.current = true; });
+          retryPlay(audio);
           trackPlayRef.current(merged[firstNew].id);
         }
         return merged;
       });
     });
-  }, [fetchRadioSongs]);
+  }, [fetchRadioSongs, retryPlay]);
 
   radioRefillRef.current = radioRefill;
 
