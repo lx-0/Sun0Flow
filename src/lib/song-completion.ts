@@ -8,7 +8,7 @@ import { recordDailyActivity, checkSongMilestones, checkStreakMilestones } from 
 import { sendPushToUser } from "@/lib/push";
 import { downloadAndCache, isCached } from "@/lib/audio-cache";
 import crypto from "crypto";
-import type { SunoSong } from "@/lib/sunoapi/types";
+
 
 interface CompletionSong {
   audioUrl?: string;

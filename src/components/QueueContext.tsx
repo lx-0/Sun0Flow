@@ -453,7 +453,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       }
       audio.pause();
     };
-  }, []);
+  }, [retryPlay]);
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
