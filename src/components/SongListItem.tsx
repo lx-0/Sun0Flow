@@ -521,7 +521,7 @@ export const SongListItem = memo(function SongListItem({
 
         <div className="relative flex-shrink-0 w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-800 overflow-hidden flex items-center justify-center">
           {song.imageUrl ? (
-            <CoverArtImage src={song.imageUrl} alt={song.title ?? "Song"} fill className="object-cover" sizes="48px" loading="lazy" />
+            <CoverArtImage src={song.imageUrl} alt={song.title ?? "Song"} fill className="object-cover" sizes="48px" loading="lazy" songId={song.id} />
           ) : (
             <MusicalNoteIcon className="w-6 h-6 text-gray-400 dark:text-gray-600" aria-hidden="true" />
           )}

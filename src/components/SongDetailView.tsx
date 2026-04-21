@@ -1525,6 +1525,7 @@ export function SongDetailView({
               sizes="100vw"
               priority
               fallbackSrc={generatedFallbackUrl}
+              songId={song.id}
             />
             <div className="absolute inset-0 bg-gradient-to-b from-gray-50/30 via-gray-50/50 to-gray-50 dark:from-gray-950/30 dark:via-gray-950/50 dark:to-gray-950" />
           </div>
@@ -1550,6 +1551,7 @@ export function SongDetailView({
               sizes="(max-width: 768px) 100vw, 400px"
               priority
               fallbackSrc={generatedFallbackUrl}
+              songId={song.id}
             />
             {/* Generate Cover overlay button */}
             <button
@@ -1825,6 +1827,7 @@ export function SongDetailView({
               className="object-cover"
               sizes="56px"
               fallbackSrc={generatedFallbackUrl}
+              songId={song.id}
             />
           </div>
           <button

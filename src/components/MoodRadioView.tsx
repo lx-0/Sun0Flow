@@ -140,6 +140,7 @@ export function MoodRadioView() {
                   width={80}
                   height={80}
                   className={`rounded-xl shadow-lg ${isPlaying ? "ring-2 ring-purple-500" : ""}`}
+                  songId={currentSong.id}
                 />
                 {isBuffering && (
                   <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40">
@@ -222,6 +223,7 @@ export function MoodRadioView() {
                     width={40}
                     height={40}
                     className="rounded-lg shrink-0"
+                    songId={song.id}
                   />
                   <span className="flex-1 text-sm text-gray-300 truncate">
                     {song.title ?? "Untitled"}

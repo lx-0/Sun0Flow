@@ -29,6 +29,7 @@ interface SongRecord {
   audioUrl: string | null;
   audioUrlExpiresAt: Date | null;
   imageUrl: string | null;
+  imageUrlExpiresAt: Date | null;
   duration: number | null;
   lyrics: string | null;
   title: string | null;
@@ -44,15 +45,16 @@ export async function handleSongSuccess(
   if (completionSongs.length === 0) return;
 
   const firstSong = completionSongs[0];
-  const audioUrlExpiresAt = new Date(Date.now() + 12 * 24 * 60 * 60 * 1000);
+  const cdnUrlExpiresAt = new Date(Date.now() + 12 * 24 * 60 * 60 * 1000);
 
   const updated = await prisma.song.update({
     where: { id: song.id },
     data: {
       generationStatus: "ready",
       audioUrl: firstSong.audioUrl || song.audioUrl,
-      audioUrlExpiresAt: firstSong.audioUrl ? audioUrlExpiresAt : song.audioUrlExpiresAt,
+      audioUrlExpiresAt: firstSong.audioUrl ? cdnUrlExpiresAt : song.audioUrlExpiresAt,
       imageUrl: firstSong.imageUrl || song.imageUrl,
+      imageUrlExpiresAt: firstSong.imageUrl ? cdnUrlExpiresAt : song.imageUrlExpiresAt,
       duration: firstSong.duration ?? song.duration,
       lyrics: firstSong.lyrics || song.lyrics,
       title: firstSong.title || song.title,
@@ -76,8 +78,9 @@ export async function handleSongSuccess(
         prompt: song.prompt,
         tags: extra.tags || song.tags,
         audioUrl: extra.audioUrl || null,
-        audioUrlExpiresAt: extra.audioUrl ? audioUrlExpiresAt : null,
+        audioUrlExpiresAt: extra.audioUrl ? cdnUrlExpiresAt : null,
         imageUrl: extra.imageUrl || null,
+        imageUrlExpiresAt: extra.imageUrl ? cdnUrlExpiresAt : null,
         duration: extra.duration ?? null,
         lyrics: extra.lyrics || null,
         sunoModel: extra.model || null,

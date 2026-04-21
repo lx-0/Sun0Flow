@@ -1,7 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
+
+const inflightRefreshes = new Map<string, Promise<string | null>>();
+
+async function refreshCoverUrl(songId: string): Promise<string | null> {
+  const existing = inflightRefreshes.get(songId);
+  if (existing) return existing;
+
+  const p = fetch(`/api/songs/${songId}/refresh`, { method: "POST" })
+    .then((res) => {
+      if (!res.ok) return null;
+      return res.json();
+    })
+    .then((data) => (data?.song?.imageUrl as string) ?? null)
+    .catch(() => null)
+    .finally(() => {
+      inflightRefreshes.delete(songId);
+    });
+
+  inflightRefreshes.set(songId, p);
+  return p;
+}
 
 interface CoverArtImageProps {
   src: string;
@@ -14,19 +35,9 @@ interface CoverArtImageProps {
   priority?: boolean;
   loading?: "lazy" | "eager";
   fallbackSrc?: string;
+  songId?: string;
 }
 
-/**
- * Renders a song cover art image.
- *
- * Next.js `Image` does not support `data:` URIs; generated covers (SVG data
- * URIs) are rendered with a regular `<img>` element while CDN-hosted images
- * continue to use the optimized `Image` component.
- *
- * When a CDN image fails to load (expired URL, DNS error, etc.) the component
- * falls back to `fallbackSrc` (if provided) and then to a hidden state so the
- * parent can display its own placeholder.
- */
 export function CoverArtImage({
   src,
   alt,
@@ -38,25 +49,45 @@ export function CoverArtImage({
   priority = false,
   loading,
   fallbackSrc,
+  songId,
 }: CoverArtImageProps) {
   const [errored, setErrored] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
+  const [refreshedSrc, setRefreshedSrc] = useState<string | null>(null);
+  const didRefresh = useRef(false);
 
-  const activeSrc = useFallback && fallbackSrc ? fallbackSrc : src;
+  const activeSrc = refreshedSrc ?? (useFallback && fallbackSrc ? fallbackSrc : src);
 
-  function handleError() {
+  const handleError = useCallback(() => {
+    if (refreshedSrc) {
+      setErrored(true);
+      return;
+    }
+
+    if (songId && !didRefresh.current && !activeSrc.startsWith("data:")) {
+      didRefresh.current = true;
+      refreshCoverUrl(songId).then((newUrl) => {
+        if (newUrl && newUrl !== src) {
+          setRefreshedSrc(newUrl);
+        } else if (fallbackSrc && !useFallback) {
+          setUseFallback(true);
+        } else {
+          setErrored(true);
+        }
+      });
+      return;
+    }
+
     if (!useFallback && fallbackSrc) {
       setUseFallback(true);
     } else {
       setErrored(true);
     }
-  }
+  }, [songId, src, fallbackSrc, useFallback, activeSrc, refreshedSrc]);
 
   if (errored) return null;
 
   if (activeSrc.startsWith("data:")) {
-    // Inline SVG data URI — use a regular img tag; fill behaviour requires
-    // the parent to have position:relative and explicit dimensions.
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img

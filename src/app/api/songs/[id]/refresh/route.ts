@@ -7,7 +7,7 @@ import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { downloadAndCache } from "@/lib/audio-cache";
 
 // Conservative expiry after a successful refresh (12 days).
-const AUDIO_URL_TTL_MS = 12 * 24 * 60 * 60 * 1000;
+const CDN_URL_TTL_MS = 12 * 24 * 60 * 60 * 1000;
 
 export async function POST(
   request: NextRequest,
@@ -66,12 +66,14 @@ export async function POST(
       );
     }
 
+    const expiresAt = new Date(Date.now() + CDN_URL_TTL_MS);
     const updated = await prisma.song.update({
       where: { id },
       data: {
         audioUrl: fresh.audioUrl || song.audioUrl,
-        audioUrlExpiresAt: fresh.audioUrl ? new Date(Date.now() + AUDIO_URL_TTL_MS) : song.audioUrlExpiresAt,
+        audioUrlExpiresAt: fresh.audioUrl ? expiresAt : song.audioUrlExpiresAt,
         imageUrl: fresh.imageUrl || song.imageUrl,
+        imageUrlExpiresAt: fresh.imageUrl ? expiresAt : song.imageUrlExpiresAt,
       },
     });
 

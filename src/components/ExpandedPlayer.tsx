@@ -109,6 +109,7 @@ export function ExpandedPlayer({
               fill
               className="object-cover"
               sizes="288px"
+              songId={currentSong.id}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
