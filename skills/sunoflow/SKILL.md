@@ -10,15 +10,18 @@ metadata:
   version: "0.1.0"
   mcp-server: sunoflow-mcp
   transport: stdio
+  production-url: https://sunoflow.up.railway.app
 ---
 
 # SunoFlow
 
 Generate and manage AI music through the SunoFlow MCP server.
 
+**Production instance:** https://sunoflow.up.railway.app
+
 ## Setup
 
-1. Get an API key from your SunoFlow account: **Settings > API Keys**.
+1. Get an API key from your SunoFlow account at https://sunoflow.up.railway.app/settings/api-keys (or your self-hosted instance under **Settings > API Keys**).
 2. Start the MCP server:
 
 ```json
