@@ -8,7 +8,7 @@ import { logServerError } from "@/lib/error-logger";
  * PATCH /api/songs/[id]/cover-art
  *
  * Updates a song's cover art URL. Accepts either:
- * - An SVG data URI (from the AI generator)
+ * - An image data URI (SVG from AI generator, or uploaded raster JPEG/PNG/WEBP)
  * - An absolute HTTPS URL (user-provided external image)
  *
  * Body: { imageUrl: string }
@@ -42,8 +42,8 @@ export async function PATCH(
       );
     }
 
-    // Accept SVG data URIs (generated covers) or HTTPS URLs
-    const isDataUri = imageUrl.startsWith("data:image/svg+xml;base64,");
+    // Accept image data URIs (generated SVG or uploaded raster) or HTTPS URLs
+    const isDataUri = imageUrl.startsWith("data:image/");
     const isHttps = imageUrl.startsWith("https://");
     if (!isDataUri && !isHttps) {
       return NextResponse.json(
@@ -52,8 +52,8 @@ export async function PATCH(
       );
     }
 
-    // Sanity-limit data URI size (SVG should be well under 32 KB)
-    if (isDataUri && imageUrl.length > 65536) {
+    // Base64 of a 4 MB image ≈ 5.6 MB
+    if (isDataUri && imageUrl.length > 5_800_000) {
       return NextResponse.json(
         { error: "Cover art data URI is too large", code: "VALIDATION_ERROR" },
         { status: 400 }

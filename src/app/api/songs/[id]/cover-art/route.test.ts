@@ -86,6 +86,20 @@ describe("PATCH /api/songs/[id]/cover-art", () => {
     expect(res.status).toBe(200);
   });
 
+  it("accepts a PNG data URI (uploaded raster image)", async () => {
+    const imageUrl = "data:image/png;base64,iVBORw0KGgoAAAANS";
+    vi.mocked(prisma.song.update).mockResolvedValue({ id: SONG_ID, imageUrl } as never);
+    const res = await PATCH(makeRequest({ imageUrl }), { params: Promise.resolve({ id: SONG_ID }) });
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts a JPEG data URI (uploaded raster image)", async () => {
+    const imageUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ";
+    vi.mocked(prisma.song.update).mockResolvedValue({ id: SONG_ID, imageUrl } as never);
+    const res = await PATCH(makeRequest({ imageUrl }), { params: Promise.resolve({ id: SONG_ID }) });
+    expect(res.status).toBe(200);
+  });
+
   it("rejects a non-HTTPS, non-data-URI value", async () => {
     const res = await PATCH(makeRequest({ imageUrl: "http://insecure.example.com/img.jpg" }), { params: Promise.resolve({ id: SONG_ID }) });
     expect(res.status).toBe(400);
@@ -99,7 +113,7 @@ describe("PATCH /api/songs/[id]/cover-art", () => {
   });
 
   it("rejects a data URI that is too large", async () => {
-    const hugeUri = "data:image/svg+xml;base64," + "A".repeat(70000);
+    const hugeUri = "data:image/png;base64," + "A".repeat(5_800_000);
     const res = await PATCH(makeRequest({ imageUrl: hugeUri }), { params: Promise.resolve({ id: SONG_ID }) });
     expect(res.status).toBe(400);
     const body = await res.json();
