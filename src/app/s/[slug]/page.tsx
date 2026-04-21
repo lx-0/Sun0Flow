@@ -59,8 +59,11 @@ export async function generateMetadata({
   const canonicalUrl = `${siteUrl}/s/${slug}`;
   const ogImageUrl = `${siteUrl}/api/og/song/${song.id}`;
 
-  const ogImages = [{ url: ogImageUrl, width: 1200, height: 630, alt: title }];
-  const twitterImages = [ogImageUrl];
+  const ogImages = [
+    ...(song.imageUrl ? [{ url: song.imageUrl, width: 1200, height: 1200, alt: title }] : []),
+    { url: ogImageUrl, width: 1200, height: 630, alt: title },
+  ];
+  const twitterImages = [song.imageUrl ?? ogImageUrl];
 
   const twitterMeta: Metadata["twitter"] = song.audioUrl
     ? {
@@ -95,7 +98,17 @@ export async function generateMetadata({
       type: "music.song",
       siteName: "SunoFlow",
       images: ogImages,
-      ...(song.audioUrl ? { audio: [{ url: song.audioUrl, type: "audio/mpeg" }] } : {}),
+      ...(song.audioUrl
+        ? {
+            audio: [
+              {
+                url: song.audioUrl,
+                ...(song.audioUrl.startsWith("https://") ? { secureUrl: song.audioUrl } : {}),
+                type: "audio/mpeg",
+              },
+            ],
+          }
+        : {}),
     },
     twitter: twitterMeta,
   };

@@ -55,6 +55,33 @@ export async function generateMetadata({
     : `${siteUrl}/songs/${songId}`;
   const ogImageUrl = `${siteUrl}/api/og/song/${songId}`;
 
+  const ogImages = [
+    ...(song.imageUrl ? [{ url: song.imageUrl, width: 1200, height: 1200, alt: title }] : []),
+    { url: ogImageUrl, width: 1200, height: 630, alt: title },
+  ];
+
+  const twitterMeta: Metadata["twitter"] = song.audioUrl
+    ? {
+        card: "player",
+        title: `${title} by ${creatorName}`,
+        description,
+        images: [song.imageUrl ?? ogImageUrl],
+        players: [
+          {
+            playerUrl: `${siteUrl}/embed/${songId}`,
+            streamUrl: song.audioUrl,
+            width: 480,
+            height: 200,
+          },
+        ],
+      }
+    : {
+        card: "summary_large_image",
+        title: `${title} by ${creatorName}`,
+        description,
+        images: [song.imageUrl ?? ogImageUrl],
+      };
+
   return {
     title: `${title} by ${creatorName}`,
     description,
@@ -65,15 +92,20 @@ export async function generateMetadata({
       url: canonicalUrl,
       type: "music.song",
       siteName: "SunoFlow",
-      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: title }],
-      ...(song.audioUrl ? { audio: [{ url: song.audioUrl, type: "audio/mpeg" }] } : {}),
+      images: ogImages,
+      ...(song.audioUrl
+        ? {
+            audio: [
+              {
+                url: song.audioUrl,
+                ...(song.audioUrl.startsWith("https://") ? { secureUrl: song.audioUrl } : {}),
+                type: "audio/mpeg",
+              },
+            ],
+          }
+        : {}),
     },
-    twitter: {
-      card: song.audioUrl ? "player" : "summary_large_image",
-      title: `${title} by ${creatorName}`,
-      description,
-      images: [ogImageUrl],
-    },
+    twitter: twitterMeta,
   };
 }
 
