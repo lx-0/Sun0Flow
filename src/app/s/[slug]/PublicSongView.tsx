@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { PlayIcon, PauseIcon, MusicalNoteIcon, FlagIcon, SparklesIcon, SpeakerWaveIcon, SpeakerXMarkIcon, CodeBracketIcon } from "@heroicons/react/24/solid";
+import { ChatBubbleLeftIcon } from "@heroicons/react/24/outline";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import { useSession } from "next-auth/react";
@@ -77,6 +78,20 @@ export function PublicSongView({
   const { data: session } = useSession();
   const { toast } = useToast();
 
+  // Timestamped comments — for waveform markers and playback popups
+  interface TimestampedComment { id: string; timestamp: number; body: string; username: string | null; }
+  const [timedComments, setTimedComments] = useState<TimestampedComment[]>([]);
+  interface CommentPopup { id: string; body: string; username: string | null; key: number; leftPct: number; }
+  const [activeCommentPopups, setActiveCommentPopups] = useState<CommentPopup[]>([]);
+  const shownCommentIdsRef = useRef<Set<string>>(new Set());
+  const commentPopupKeyRef = useRef(0);
+
+  // Emoji popup state — floats up from waveform when currentTime passes a reaction
+  interface EmojiPopup { id: string; emoji: string; key: number; leftPct: number; }
+  const [activePopups, setActivePopups] = useState<EmojiPopup[]>([]);
+  const shownReactionIdsRef = useRef<Set<string>>(new Set());
+  const popupKeyRef = useRef(0);
+
 
   function getEmbedCode() {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://sunoflow.app";
@@ -116,6 +131,77 @@ export function PublicSongView({
       .catch(() => {});
     return () => { cancelled = true; };
   }, [songId]);
+
+  // Fetch timestamped comments on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/songs/${songId}/comments?page=1`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!cancelled && data?.comments) {
+          const timed: TimestampedComment[] = data.comments
+            .filter((c: { timestamp: number | null }) => c.timestamp !== null)
+            .map((c: { id: string; timestamp: number; body: string; user: { name: string | null } }) => ({
+              id: c.id,
+              timestamp: c.timestamp,
+              body: c.body,
+              username: c.user?.name ?? null,
+            }));
+          setTimedComments(timed);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songId]);
+
+  // Trigger comment popups as currentTime passes comment timestamps during playback
+  useEffect(() => {
+    if (!isPlaying || timedComments.length === 0 || audioDuration <= 0) return;
+    const newlyTriggered = timedComments.filter(
+      (c) => c.timestamp <= currentTime && !shownCommentIdsRef.current.has(c.id)
+    );
+    if (newlyTriggered.length === 0) return;
+    for (const c of newlyTriggered) {
+      shownCommentIdsRef.current.add(c.id);
+    }
+    const newPopups: CommentPopup[] = newlyTriggered.map((c) => {
+      const key = ++commentPopupKeyRef.current;
+      const leftPct = Math.min(95, Math.max(5, (c.timestamp / audioDuration) * 100));
+      return { id: c.id, body: c.body, username: c.username, key, leftPct };
+    });
+    setActiveCommentPopups((prev) => [...prev, ...newPopups]);
+    const keys = newPopups.map((p) => p.key);
+    const timer = setTimeout(() => {
+      setActiveCommentPopups((prev) => prev.filter((p) => !keys.includes(p.key)));
+    }, 3000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTime, isPlaying]);
+
+  // Trigger emoji popups as currentTime passes reaction timestamps
+  useEffect(() => {
+    if (!isPlaying || reactions.length === 0 || audioDuration <= 0) return;
+    const newlyTriggered = reactions.filter(
+      (r) => r.timestamp <= currentTime && !shownReactionIdsRef.current.has(r.id)
+    );
+    if (newlyTriggered.length === 0) return;
+    for (const r of newlyTriggered) {
+      shownReactionIdsRef.current.add(r.id);
+    }
+    const newPopups: EmojiPopup[] = newlyTriggered.map((r) => {
+      const key = ++popupKeyRef.current;
+      const leftPct = Math.min(98, Math.max(2, (r.timestamp / audioDuration) * 100));
+      return { id: r.id, emoji: r.emoji, key, leftPct };
+    });
+    setActivePopups((prev) => [...prev, ...newPopups]);
+    const ids = newPopups.map((p) => p.key);
+    const timer = setTimeout(() => {
+      setActivePopups((prev) => prev.filter((p) => !ids.includes(p.key)));
+    }, 2000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTime, isPlaying]);
 
   const handleReact = useCallback(
     async (emoji: string) => {
@@ -294,8 +380,46 @@ export function PublicSongView({
             </button>
           </div>
 
-          {/* Waveform + reaction timeline */}
-          <div className="space-y-1">
+          {/* Waveform + reaction timeline + floating popups */}
+          <div className="relative space-y-1">
+            {/* Floating emoji popups */}
+            {activePopups.length > 0 && (
+              <div className="pointer-events-none absolute inset-x-2 bottom-8 h-0 z-10">
+                {activePopups.map((popup) => (
+                  <span
+                    key={popup.key}
+                    className="absolute text-2xl leading-none animate-emoji-float"
+                    style={{ left: `${popup.leftPct}%` }}
+                    aria-hidden="true"
+                  >
+                    {popup.emoji}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Floating comment popups */}
+            {activeCommentPopups.length > 0 && (
+              <div className="pointer-events-none absolute inset-x-2 bottom-8 h-0 z-20">
+                {activeCommentPopups.map((popup) => (
+                  <div
+                    key={popup.key}
+                    className="absolute bottom-2 flex flex-col items-center gap-0.5 animate-emoji-float"
+                    style={{ left: `${popup.leftPct}%`, transform: "translateX(-50%)" }}
+                    aria-hidden="true"
+                  >
+                    <div className="bg-gray-800/90 border border-violet-500/50 text-white text-xs px-2 py-1 rounded-lg shadow-lg max-w-[160px] text-center leading-tight">
+                      {popup.username && (
+                        <span className="block text-[10px] text-violet-400 font-medium truncate">{popup.username}</span>
+                      )}
+                      <span className="line-clamp-2">{popup.body}</span>
+                    </div>
+                    <ChatBubbleLeftIcon className="w-3 h-3 text-violet-400" />
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="relative h-14 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden px-2 pt-1 pb-0.5">
               <PlayerWaveform
                 songId={songId}
@@ -304,6 +428,7 @@ export function PublicSongView({
                 isBuffering={false}
                 onSeek={handleSeek}
                 reactionTimestamps={reactions.map((r) => r.timestamp)}
+                commentTimestamps={timedComments.map((c) => c.timestamp)}
               />
               {reactions.length > 0 && audioDuration > 0 && (
                 <div className="absolute inset-x-2 top-0 bottom-0 pointer-events-none">
@@ -370,7 +495,7 @@ export function PublicSongView({
             src={audioUrl}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
-            onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
+            onEnded={() => { setIsPlaying(false); setCurrentTime(0); shownReactionIdsRef.current = new Set(); shownCommentIdsRef.current = new Set(); setActivePopups([]); setActiveCommentPopups([]); }}
             onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
             onDurationChange={() => setAudioDuration(audioRef.current?.duration ?? 0)}
           />
