@@ -63,7 +63,7 @@ registerTool({
         creditsConsumed: result.creditsConsumed,
       };
     } catch (err) {
-      if (err instanceof SunoApiError) throw new Error(`Style boost failed: ${err.message}`);
+      if (err instanceof SunoApiError) throw new Error(`Style boost failed (${err.code}): ${err.message}`);
       throw err;
     }
   },

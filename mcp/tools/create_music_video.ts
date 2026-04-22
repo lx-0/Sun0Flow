@@ -50,7 +50,7 @@ registerTool({
       );
       return { taskId: result.taskId, status: "pending" };
     } catch (err) {
-      if (err instanceof SunoApiError) throw new Error(`Music video creation failed: ${err.message}`);
+      if (err instanceof SunoApiError) throw new Error(`Music video creation failed (${err.code}): ${err.message}`);
       throw err;
     }
   },

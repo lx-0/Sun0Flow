@@ -46,7 +46,7 @@ registerTool({
 
       return { taskId: result.taskId, status: "pending" };
     } catch (err) {
-      if (err instanceof SunoApiError) throw new Error(`WAV conversion failed: ${err.message}`);
+      if (err instanceof SunoApiError) throw new Error(`WAV conversion failed (${err.code}): ${err.message}`);
       throw err;
     }
   },

@@ -43,7 +43,7 @@ registerTool({
       const result = await generateCoverImage({ taskId: song.sunoJobId }, userApiKey);
       return { taskId: result.taskId, status: "pending" };
     } catch (err) {
-      if (err instanceof SunoApiError) throw new Error(`Cover image generation failed: ${err.message}`);
+      if (err instanceof SunoApiError) throw new Error(`Cover image generation failed (${err.code}): ${err.message}`);
       throw err;
     }
   },

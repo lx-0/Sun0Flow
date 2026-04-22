@@ -20,8 +20,8 @@ registerTool({
       prompt: {
         type: "string",
         description:
-          "Description of the sound to generate (e.g. 'rain on a tin roof', 'lo-fi vinyl crackle', '808 drum loop').",
-        maxLength: 3000,
+          "Description of the sound to generate (e.g. 'rain on a tin roof', 'lo-fi vinyl crackle', '808 drum loop'). Max 500 chars.",
+        maxLength: 500,
       },
       soundLoop: {
         type: "boolean",
@@ -90,7 +90,7 @@ registerTool({
 
       return { taskId: result.taskId, status: "pending" };
     } catch (err) {
-      if (err instanceof SunoApiError) throw new Error(`Sound generation failed: ${err.message}`);
+      if (err instanceof SunoApiError) throw new Error(`Sound generation failed (${err.code}): ${err.message}`);
       throw err;
     }
   },

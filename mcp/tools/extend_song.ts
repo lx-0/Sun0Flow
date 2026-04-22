@@ -25,17 +25,17 @@ registerTool({
       prompt: {
         type: "string",
         description:
-          "Optional lyrics or description for the extension. If omitted, continues in the original style.",
-        maxLength: 3000,
+          "Optional lyrics or description for the extension. If omitted, continues in the original style. Max 3000 chars (V4) or 5000 chars (V4_5+).",
+        maxLength: 5000,
       },
       style: {
         type: "string",
-        description: "Optional style/genre tags for the extension (e.g. 'epic guitar solo, rock').",
+        description: "Optional style/genre tags for the extension (e.g. 'epic guitar solo, rock'). Max 200 chars (V4) or 1000 chars (V4_5+).",
       },
       title: {
         type: "string",
-        description: "Optional title for the extended version.",
-        maxLength: 200,
+        description: "Optional title for the extended version. Max 80 chars (V4/V4_5ALL) or 100 chars (V4_5/V5/V5_5).",
+        maxLength: 100,
       },
       continueAt: {
         type: "number",
@@ -169,7 +169,7 @@ registerTool({
 
       return { songId: song.id, generationStatus: "pending", parentSongId: rootId };
     } catch (err) {
-      if (err instanceof SunoApiError) throw new Error(`Extension failed: ${err.message}`);
+      if (err instanceof SunoApiError) throw new Error(`Extension failed (${err.code}): ${err.message}`);
       throw err;
     }
   },

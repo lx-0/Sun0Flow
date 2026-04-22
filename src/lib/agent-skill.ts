@@ -49,14 +49,14 @@ The SunoFlow MCP server exposes these tools for AI agent use:
 
 ### generate_song
 
-Generate a new AI song from a text prompt. Returns a songId — poll \`get_song\` until \`generationStatus === 'ready'\`. Each request produces 2 song variations.
+Generate a new AI song from a text prompt. Returns a songId — poll \`get_song\` until \`generationStatus === 'ready'\`. Each request produces 2 song variations. If webhooks are configured, results are also pushed automatically (see Webhook Mode below).
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| \`prompt\` | string | Yes | Song description or lyrics. In custom mode (when title/style set), this is lyrics text. Otherwise a style/genre description. Max 3000 chars. |
-| \`title\` | string | No | Song title (max 200 chars). Enables custom mode. |
+| \`prompt\` | string | Yes | Song description or lyrics. In custom mode (when title/style set), this is lyrics text. Otherwise a style/genre description. Limit depends on model (see Input Validation below). |
+| \`title\` | string | No | Song title. Limit depends on model (see Input Validation). Enables custom mode. |
 | \`style\` | string | No | Comma-separated style/genre tags (e.g. 'pop, upbeat, summer'). Enables custom mode. |
 | \`makeInstrumental\` | boolean | No | If true, generate without vocals. Default false. |
 | \`model\` | string | No | Suno model: \`V4\`, \`V4_5\`, \`V5\`, \`V5_5\`. V5_5 is latest/best quality. |
@@ -79,9 +79,9 @@ Extend/continue an existing song from a specific point. Creates a new variation 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | \`songId\` | string | Yes | The song ID to extend. |
-| \`prompt\` | string | No | Lyrics or description for the extension. If omitted, continues original style. |
-| \`style\` | string | No | Style/genre tags for the extension. |
-| \`title\` | string | No | Title for the extended version. |
+| \`prompt\` | string | No | Lyrics or description for the extension. If omitted, continues original style. Limit depends on model (see Input Validation). |
+| \`style\` | string | No | Style/genre tags for the extension. Limit depends on model. |
+| \`title\` | string | No | Title for the extended version. Limit depends on model. |
 | \`continueAt\` | number | No | Start point in seconds. If omitted, continues from the end. |
 | \`model\` | string | No | Model version. Should match the original song's model. |
 | \`negativeTags\` | string | No | Tags to exclude from the extension. |
@@ -283,8 +283,8 @@ Create a new AI-generated song from a text prompt.
 }
 \`\`\`
 
-- \`prompt\` (required): Style/genre description or lyrics (max 3000 chars)
-- \`title\` (optional): Song title (max 200 chars) — enables custom mode
+- \`prompt\` (required): Style/genre description or lyrics (limit depends on model — see Input Validation)
+- \`title\` (optional): Song title (limit depends on model) — enables custom mode
 - \`tags\` (optional): Comma-separated genre tags — enables custom mode
 - \`makeInstrumental\` (optional): If true, generate without vocals
 - \`personaId\` (optional): Voice persona ID to use
@@ -733,14 +733,105 @@ POST /api/notifications/read-all           — mark all as read
 1. \`generate_sounds\` with a description, optional \`soundLoop\`, \`soundTempo\`, \`soundKey\`
 2. Poll \`get_song\` until ready
 
-## Error Codes
+## Webhook Mode
 
-| Code | Meaning |
-|------|---------|
-| 400  | Bad request — missing or invalid parameters |
-| 401  | Unauthorized — invalid or missing API key |
-| 403  | Forbidden — admin-only endpoint |
-| 404  | Not found — resource doesn't exist or isn't yours |
-| 429  | Rate limited — check \`Retry-After\` header |
-| 500  | Server error — try again later |
+SunoFlow supports two result-delivery modes for async operations (song generation, extension, etc.):
+
+### Polling (default)
+
+Poll \`GET /api/songs/{id}/status\` until \`generationStatus\` is \`ready\` or \`failed\`. Works out of the box with no extra configuration.
+
+### Push via Webhooks
+
+When the server is configured with \`SUNO_WEBHOOK_SECRET\`, async operations automatically register a callback URL with the Suno API. Results are pushed to \`POST /api/webhooks/suno?token={SECRET}\` as soon as they complete — no polling needed.
+
+- Webhook mode is transparent to callers; the same MCP tools and REST endpoints work in both modes
+- Poll-based status checks remain available as a fallback even when webhooks are active
+- Webhook payloads are authenticated via the \`token\` query parameter
+
+---
+
+## Input Validation
+
+All inputs are validated before being sent to the Suno API. Character limits vary by model version.
+
+### Model-Specific Limits
+
+| Field | V4 | V4_5 / V4_5PLUS / V5 / V5_5 | V4_5ALL |
+|-------|----|-------------------------------|---------|
+| \`prompt\` (custom mode) | 3,000 chars | 5,000 chars | 5,000 chars |
+| \`style\` | 200 chars | 1,000 chars | 1,000 chars |
+| \`title\` | 80 chars | 100 chars | 80 chars |
+
+### Fixed Limits
+
+| Field | Max |
+|-------|-----|
+| \`prompt\` (non-custom mode, no title/style set) | 500 chars |
+| \`prompt\` for \`generate_lyrics\` | 200 chars |
+| \`prompt\` for \`generate_sounds\` | 500 chars |
+| \`author\` (music video) | 50 chars |
+
+### Numeric Ranges
+
+| Parameter | Range |
+|-----------|-------|
+| \`soundTempo\` | 1–300 BPM |
+| \`styleWeight\` | 0.00–1.00 |
+| \`weirdnessConstraint\` | 0.00–1.00 |
+| \`audioWeight\` | 0.00–1.00 |
+| Infill/replace-section duration | 6–60 seconds |
+| Persona vocal segment duration | 10–30 seconds |
+
+Validation errors throw before any API call is made, returning a \`400\` with a descriptive message.
+
+---
+
+## Error Handling
+
+API errors include a structured \`code\` field for programmatic handling. Check the \`code\` field rather than parsing status codes directly.
+
+### Error Response Format
+
+\`\`\`json
+{
+  "error": "Insufficient credits to generate song",
+  "code": "INSUFFICIENT_CREDITS",
+  "details": null
+}
+\`\`\`
+
+### Error Codes
+
+| HTTP Status | \`code\` | Meaning | Recommended Action |
+|-------------|--------|---------|-------------------|
+| 400 | — | Bad request — missing or invalid parameters | Fix the request body |
+| 401 / 403 | \`AUTH_ERROR\` | Invalid or missing API key | Check API key configuration |
+| 402 | \`INSUFFICIENT_CREDITS\` | Not enough Suno credits | Call \`get_credits\` to check balance |
+| 404 | — | Resource not found or not owned by user | Verify the resource ID |
+| 409 | \`CONFLICT\` | Resource conflict (e.g. duplicate operation) | Wait and retry, or check existing state |
+| 422 | \`VALIDATION_ERROR\` | Suno API rejected the input | Check \`details\` field for specifics |
+| 429 | \`RATE_LIMITED\` | Too many requests | Respect \`Retry-After\` header |
+| 451 | \`COMPLIANCE_BLOCK\` | Content blocked for policy/legal reasons | Modify the prompt content |
+| 5xx | \`SERVER_ERROR\` | Upstream server error | Retry after a short delay |
+| — | \`TIMEOUT\` | Request timed out | Retry; may indicate Suno API issues |
+
+### Handling 402 (Insufficient Credits)
+
+When a generation endpoint returns \`402\`, the response includes the user's remaining credit balance. Use \`get_credits\` to check the balance before retrying with a different operation.
+
+### Handling 422 (Validation Error)
+
+The \`details\` field contains the full validation error payload from the Suno API:
+
+\`\`\`json
+{
+  "error": "Validation failed",
+  "code": "VALIDATION_ERROR",
+  "details": {
+    "validation": { "field": "prompt", "message": "exceeds maximum length" }
+  }
+}
+\`\`\`
 `;
+

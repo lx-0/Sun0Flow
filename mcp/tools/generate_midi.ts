@@ -43,7 +43,7 @@ registerTool({
       const result = await generateMidi({ taskId: song.sunoJobId }, userApiKey);
       return { taskId: result.taskId, status: "pending" };
     } catch (err) {
-      if (err instanceof SunoApiError) throw new Error(`MIDI extraction failed: ${err.message}`);
+      if (err instanceof SunoApiError) throw new Error(`MIDI extraction failed (${err.code}): ${err.message}`);
       throw err;
     }
   },

@@ -71,7 +71,7 @@ registerTool({
           : "Vocal separation in progress. Results include: vocal track, instrumental track.",
       };
     } catch (err) {
-      if (err instanceof SunoApiError) throw new Error(`Vocal separation failed: ${err.message}`);
+      if (err instanceof SunoApiError) throw new Error(`Vocal separation failed (${err.code}): ${err.message}`);
       throw err;
     }
   },

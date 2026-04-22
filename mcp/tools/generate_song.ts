@@ -22,13 +22,13 @@ registerTool({
       prompt: {
         type: "string",
         description:
-          "Song description or lyrics. In custom mode (when title or style is set), this is the lyrics text. Otherwise it is a free-form style/genre description (e.g. 'upbeat pop with electric guitar'). Max 3000 chars.",
-        maxLength: 3000,
+          "Song description or lyrics. In custom mode (when title or style is set), this is the lyrics text. Otherwise it is a free-form style/genre description (e.g. 'upbeat pop with electric guitar'). Max 3000 chars (V4) or 5000 chars (V4_5+). Non-custom mode: max 500 chars.",
+        maxLength: 5000,
       },
       title: {
         type: "string",
-        description: "Song title (max 200 chars). Setting this enables custom mode.",
-        maxLength: 200,
+        description: "Song title. Setting this enables custom mode. Max 80 chars (V4/V4_5ALL) or 100 chars (V4_5/V5/V5_5).",
+        maxLength: 100,
       },
       style: {
         type: "string",
@@ -198,7 +198,7 @@ registerTool({
       return { songId: song.id, generationStatus: song.generationStatus, title: song.title };
     } catch (err) {
       if (err instanceof SunoApiError) {
-        throw new Error(`Generation failed: ${err.message}`);
+        throw new Error(`Generation failed (${err.code}): ${err.message}`);
       }
       throw err;
     }
