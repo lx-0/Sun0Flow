@@ -72,6 +72,13 @@ export async function GET(request: NextRequest) {
       if (error.status === 401) {
         return apiError("Invalid Suno API key", ErrorCode.SUNO_AUTH_ERROR, 401);
       }
+      if (error.status === 404) {
+        return apiError(
+          "Song listing is not supported by the current API provider (sunoapi.org). This endpoint does not exist in their API.",
+          ErrorCode.SUNO_API_ERROR,
+          501
+        );
+      }
       if (error.status === 429) {
         return apiError("Suno API rate limit exceeded. Please try again later.", ErrorCode.SUNO_RATE_LIMIT, 429);
       }

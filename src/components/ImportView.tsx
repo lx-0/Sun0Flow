@@ -231,7 +231,7 @@ export function ImportView() {
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [fetchError, setFetchError] = useState<{
-    type: "no_key" | "suno" | "network";
+    type: "no_key" | "not_supported" | "suno" | "network";
     message?: string;
   } | null>(null);
 
@@ -259,6 +259,10 @@ export function ImportView() {
           type: "suno",
           message: "Invalid Suno API key. Please check your settings.",
         });
+        return;
+      }
+      if (res.status === 501) {
+        setFetchError({ type: "not_supported" });
         return;
       }
       if (!res.ok) {
@@ -492,8 +496,37 @@ export function ImportView() {
         </div>
       )}
 
+      {/* Error: API doesn't support song listing */}
+      {!loadingInitial && fetchError?.type === "not_supported" && (
+        <div className="text-center py-20 space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto">
+            <CloudArrowDownIcon className="w-8 h-8 text-amber-500 dark:text-amber-400" />
+          </div>
+          <div className="space-y-2 max-w-lg mx-auto">
+            <p className="text-lg font-semibold text-gray-900 dark:text-white">
+              Song listing not available
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              The current API provider (sunoapi.org) does not support browsing your Suno song
+              library. Their API handles music generation and processing but does not include
+              a song listing endpoint.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Songs you generate through SunoFlow are automatically saved to your{" "}
+              <Link
+                href="/library"
+                className="text-violet-600 dark:text-violet-400 underline hover:text-violet-500"
+              >
+                Library
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Error: Suno API or network */}
-      {!loadingInitial && fetchError && fetchError.type !== "no_key" && (
+      {!loadingInitial && fetchError && fetchError.type !== "no_key" && fetchError.type !== "not_supported" && (
         <div className="text-center py-20 space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto">
             <ArrowPathIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
