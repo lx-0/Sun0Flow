@@ -127,34 +127,48 @@ export async function acquireAnonRateLimitSlot(
 ): Promise<{ acquired: boolean; status: RateLimitStatus }> {
   const key = hashRateLimitKey(rawKey);
   const windowStart = new Date(Date.now() - windowMs);
+  const MAX_RETRIES = 3;
 
-  return prisma.$transaction(
-    async (tx) => {
-      const entries = await tx.anonRateLimitEntry.findMany({
-        where: { key, action, createdAt: { gte: windowStart } },
-        orderBy: { createdAt: "asc" },
-        select: { createdAt: true },
-      });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const entries = await tx.anonRateLimitEntry.findMany({
+            where: { key, action, createdAt: { gte: windowStart } },
+            orderBy: { createdAt: "asc" },
+            select: { createdAt: true },
+          });
 
-      const count = entries.length;
-      const resetAt =
-        count > 0
-          ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
-          : new Date(Date.now() + windowMs).toISOString();
+          const count = entries.length;
+          const resetAt =
+            count > 0
+              ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
+              : new Date(Date.now() + windowMs).toISOString();
 
-      if (count >= limit) {
-        return { acquired: false, status: { remaining: 0, limit, resetAt } };
-      }
+          if (count >= limit) {
+            return { acquired: false, status: { remaining: 0, limit, resetAt } };
+          }
 
-      await tx.anonRateLimitEntry.create({ data: { key, action } });
+          await tx.anonRateLimitEntry.create({ data: { key, action } });
 
-      return {
-        acquired: true,
-        status: { remaining: Math.max(0, limit - count - 1), limit, resetAt },
-      };
-    },
-    { isolationLevel: "Serializable" }
-  );
+          return {
+            acquired: true,
+            status: { remaining: Math.max(0, limit - count - 1), limit, resetAt },
+          };
+        },
+        { isolationLevel: "Serializable" }
+      );
+    } catch (error: unknown) {
+      const isPrismaConflict =
+        error instanceof Error &&
+        "code" in error &&
+        (error as { code: string }).code === "P2034";
+      if (isPrismaConflict && attempt < MAX_RETRIES) continue;
+      throw error;
+    }
+  }
+
+  throw new Error("acquireAnonRateLimitSlot: unreachable");
 }
 
 /**
@@ -176,43 +190,55 @@ export async function acquireRateLimitSlot(
   const limit = limitOverride ?? (await resolveLimit(userId, action));
   const windowMs = windowMsOverride ?? WINDOW_MS;
   const windowStart = new Date(Date.now() - windowMs);
+  const MAX_RETRIES = 3;
 
-  return prisma.$transaction(
-    async (tx) => {
-      const entries = await tx.rateLimitEntry.findMany({
-        where: { userId, action, createdAt: { gte: windowStart } },
-        orderBy: { createdAt: "asc" },
-        select: { createdAt: true },
-      });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const entries = await tx.rateLimitEntry.findMany({
+            where: { userId, action, createdAt: { gte: windowStart } },
+            orderBy: { createdAt: "asc" },
+            select: { createdAt: true },
+          });
 
-      const count = entries.length;
+          const count = entries.length;
 
-      if (count >= limit) {
-        // Limit reached — do not insert
-        const resetAt =
-          count > 0
-            ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
-            : new Date(Date.now() + windowMs).toISOString();
-        return {
-          acquired: false,
-          status: { remaining: 0, limit, resetAt },
-        };
-      }
+          if (count >= limit) {
+            const resetAt =
+              count > 0
+                ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
+                : new Date(Date.now() + windowMs).toISOString();
+            return {
+              acquired: false,
+              status: { remaining: 0, limit, resetAt },
+            };
+          }
 
-      // Claim the slot
-      await tx.rateLimitEntry.create({ data: { userId, action } });
+          await tx.rateLimitEntry.create({ data: { userId, action } });
 
-      const remaining = Math.max(0, limit - count - 1);
-      const resetAt =
-        count > 0
-          ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
-          : new Date(Date.now() + windowMs).toISOString();
+          const remaining = Math.max(0, limit - count - 1);
+          const resetAt =
+            count > 0
+              ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
+              : new Date(Date.now() + windowMs).toISOString();
 
-      return {
-        acquired: true,
-        status: { remaining, limit, resetAt },
-      };
-    },
-    { isolationLevel: "Serializable" }
-  );
+          return {
+            acquired: true,
+            status: { remaining, limit, resetAt },
+          };
+        },
+        { isolationLevel: "Serializable" }
+      );
+    } catch (error: unknown) {
+      const isPrismaConflict =
+        error instanceof Error &&
+        "code" in error &&
+        (error as { code: string }).code === "P2034";
+      if (isPrismaConflict && attempt < MAX_RETRIES) continue;
+      throw error;
+    }
+  }
+
+  throw new Error("acquireRateLimitSlot: unreachable");
 }
