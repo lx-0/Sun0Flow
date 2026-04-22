@@ -78,7 +78,9 @@ export async function GET(request: NextRequest) {
       if (error.status >= 500) {
         return apiError("Suno API is temporarily unavailable. Please try again later.", ErrorCode.SUNO_API_ERROR, 502);
       }
-      return apiError(error.message, ErrorCode.SUNO_API_ERROR, 502);
+      const fallback = "Unable to fetch songs from Suno. Please check your API key and try again.";
+      const msg = error.message && error.message !== "No message available" ? error.message : fallback;
+      return apiError(msg, ErrorCode.SUNO_API_ERROR, 502);
     }
     logServerError("suno-songs-list", error, { route: "/api/suno/songs" });
     return internalError();
