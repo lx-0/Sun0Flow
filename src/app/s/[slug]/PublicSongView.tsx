@@ -96,7 +96,7 @@ export function PublicSongView({
   const [activeTitle, setActiveTitle] = useState(title);
   const [activeImageUrl, setActiveImageUrl] = useState(imageUrl);
   const [activeAudioUrl, setActiveAudioUrl] = useState(audioUrl);
-  const [activeDuration, setActiveDuration] = useState(duration);
+  const [, setActiveDuration] = useState(duration);
   const [activeTags, setActiveTags] = useState(tags);
 
   const showVariants = variants.length > 1;
