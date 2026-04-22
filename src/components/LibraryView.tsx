@@ -24,7 +24,6 @@ import {
   HeartIcon as HeartOutlineIcon,
   QueueListIcon,
   ChevronDownIcon,
-  CloudArrowDownIcon,
 } from "@heroicons/react/24/outline";
 import { PlayIcon as PlayOutlineIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
@@ -549,15 +548,6 @@ export function LibraryView({
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ completed: number; total: number } | null>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
-
-  // Suno import: check whether user has a personal API key
-  const [hasPersonalKey, setHasPersonalKey] = useState(false);
-  useEffect(() => {
-    fetch("/api/profile/api-key")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.usePersonalApiKey && d?.hasKey) setHasPersonalKey(true); })
-      .catch(() => {});
-  }, []);
 
   // Arrow-key navigation for song list
   const songListRef = useRef<HTMLDivElement>(null);
@@ -1458,18 +1448,6 @@ export function LibraryView({
 
         {/* Header actions */}
         <div className="flex items-center gap-2">
-          {/* Import from Suno link — only visible when user has a personal API key */}
-          {hasPersonalKey && (
-            <Link
-              href="/import"
-              aria-label="Import from Suno"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-colors min-h-[44px]"
-            >
-              <CloudArrowDownIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Import</span>
-            </Link>
-          )}
-
         {/* Export button */}
         <div className="relative" ref={exportMenuRef}>
           <button

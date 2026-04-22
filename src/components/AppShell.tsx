@@ -35,7 +35,6 @@ import {
   MusicalNoteIcon,
   RectangleStackIcon,
   Squares2X2Icon,
-  CloudArrowDownIcon,
 } from "@heroicons/react/24/outline";
 import { useTheme } from "./ThemeProvider";
 import dynamic from "next/dynamic";
@@ -56,7 +55,6 @@ const FeedbackModal = dynamic(() => import("./FeedbackModal").then((m) => m.Feed
 const NAV_ITEM_DEFS = [
   { key: "home" as const, href: "/", icon: HomeIcon, dataTour: undefined as string | undefined, prefetch: false },
   { key: "library" as const, href: "/library", icon: BookOpenIcon, dataTour: undefined as string | undefined, prefetch: true },
-  { key: "import" as const, href: "/import", icon: CloudArrowDownIcon, dataTour: undefined as string | undefined, prefetch: false },
   { key: "inspire" as const, href: "/inspire", icon: LightBulbIcon, dataTour: "nav-inspire" as string | undefined, prefetch: false },
   { key: "generate" as const, href: "/generate", icon: PlusCircleIcon, dataTour: "nav-generate" as string | undefined, prefetch: true },
   { key: "templates" as const, href: "/templates", icon: BookmarkIcon, dataTour: undefined as string | undefined, prefetch: false },
