@@ -146,6 +146,7 @@ model Song {
   audioUrlExpiresAt    DateTime?
   imageUrl             String?
   imageUrlExpiresAt    DateTime?
+  videoUrl             String?
   duration         Float?
   lyrics           String?
   lyricsEdited     String?  @db.Text
