@@ -231,8 +231,10 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   volumeRef.current = volume;
   shuffleVersionsRef.current = shuffleVersions;
 
-  // Retry audio.play() with exponential backoff for mobile PWA background playback
-  const retryPlay = useCallback((audio: HTMLAudioElement, retriesLeft = 5, delay = 200) => {
+  // Retry audio.play() with exponential backoff — only for transient play()
+  // rejections (AbortError when a new load interrupts play). Source/network
+  // errors are handled by the <audio> "error" event, not here.
+  const retryPlay = useCallback((audio: HTMLAudioElement, retriesLeft = 3, delay = 300) => {
     if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     if (!hasUserGestureRef.current) {
       pendingPlayRef.current = true;
@@ -245,11 +247,11 @@ export function QueueProvider({ children }: { children: ReactNode }) {
           pendingPlayRef.current = true;
           return;
         }
-        if (retriesLeft > 0) {
+        if (err.name === "AbortError" && retriesLeft > 0) {
           retryTimerRef.current = setTimeout(() => retryPlay(audio, retriesLeft - 1, delay * 2), delay);
-        } else {
-          pendingPlayRef.current = true;
+          return;
         }
+        pendingPlayRef.current = true;
       });
   }, []);
 
@@ -378,16 +380,19 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       const idx = currentIndexRef.current;
       const currentSong = idx >= 0 ? q[idx] : null;
 
-      // If the CDN proxy failed, ask the server to refresh the URL and retry
+      // One-shot fallback: ask the server to refresh the URL, then retry once.
+      // If this also fails, give up — no further retries to avoid 429 cascades.
       if (currentSong && !cdnFallbackRef.current.has(currentSong.id)) {
         cdnFallbackRef.current.add(currentSong.id);
-        // Hit the play endpoint to trigger a server-side URL refresh, then
-        // retry via the proxy (which now also refreshes inline).
         fetch(`/api/songs/${currentSong.id}/play`, { method: "POST" })
-          .then((res) => (res.ok ? res.json() : null))
+          .then((res) => (res.ok ? res.json() : Promise.reject()))
           .then((data) => {
-            // Use the freshly returned audioUrl if available, otherwise retry proxy
-            audio.src = data?.audioUrl ?? proxiedAudioUrl(currentSong.id);
+            if (!data?.audioUrl) {
+              setIsBuffering(false);
+              setIsPlaying(false);
+              return;
+            }
+            audio.src = data.audioUrl;
             audio.play().catch(() => {
               setIsBuffering(false);
               setIsPlaying(false);
