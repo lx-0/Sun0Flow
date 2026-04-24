@@ -2,7 +2,12 @@ import { BASE_URL, buildHeaders } from "./http";
 import { logger } from "@/lib/logger";
 
 function extractUrls(raw: Record<string, unknown>): { audioUrl?: string; imageUrl?: string } | null {
-  const audioUrl = (raw.audio_url as string) || (raw.audioUrl as string);
+  // Prefer sourceAudioUrl (cdn1.suno.ai, permanent) over audioUrl (tempfile CDN, expires)
+  const audioUrl =
+    (raw.sourceAudioUrl as string) ||
+    (raw.source_audio_url as string) ||
+    (raw.audio_url as string) ||
+    (raw.audioUrl as string);
   if (!audioUrl) return null;
   const imageUrl = (raw.image_url as string) || (raw.imageUrl as string) || undefined;
   return { audioUrl, imageUrl };
@@ -31,7 +36,7 @@ export async function fetchFreshUrls(
       };
       const clips = json.data?.response?.sunoData ?? [];
       const match = clips.find((c) => {
-        const url = (c.audio_url as string) || (c.audioUrl as string);
+        const url = (c.sourceAudioUrl as string) || (c.source_audio_url as string) || (c.audio_url as string) || (c.audioUrl as string);
         return typeof url === "string" && url;
       });
       if (match) {
