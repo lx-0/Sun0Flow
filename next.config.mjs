@@ -28,7 +28,17 @@ const nextConfig = {
   compress: true,
   serverExternalPackages: ["@prisma/client", "bcryptjs", "node-cron"],
   experimental: {},
-  webpack(config, { isServer, webpack: wp }) {
+  webpack(config, { isServer, nextRuntime, webpack: wp }) {
+    // Edge runtime (middleware) can't resolve Node.js builtins like fs/path.
+    // Server-only modules (audio-cache.ts) use them but only execute under
+    // the Node.js runtime; provide empty fallbacks so the edge bundle builds.
+    if (nextRuntime === "edge") {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+      };
+    }
     config.resolve.alias = {
       ...config.resolve.alias,
       ...corejs3Stubs,
