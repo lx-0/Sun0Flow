@@ -4,7 +4,9 @@ import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { buildHeaders } from "@/lib/sunoapi/http";
 import { logger } from "@/lib/logger";
 
-const BATCH_SIZE = parseInt(process.env.CACHE_WARMUP_BATCH_SIZE || "100", 10);
+const BATCH_SIZE = process.env.CACHE_WARMUP_BATCH_SIZE
+  ? parseInt(process.env.CACHE_WARMUP_BATCH_SIZE, 10)
+  : undefined;
 const DELAY_MS = 1000;
 const CDN_URL_TTL_MS = 12 * 24 * 60 * 60 * 1000;
 const SUNO_API_BASE = "https://api.sunoapi.org/api/v1";
@@ -40,7 +42,7 @@ export async function warmUpAudioCache(): Promise<void> {
       sunoJobId: { not: null },
     },
     orderBy: { playCount: "desc" },
-    take: BATCH_SIZE,
+    ...(BATCH_SIZE ? { take: BATCH_SIZE } : {}),
     select: { id: true, sunoJobId: true, userId: true },
   });
 
