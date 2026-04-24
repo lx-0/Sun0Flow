@@ -15,10 +15,12 @@ import {
   MusicalNoteIcon,
   PresentationChartLineIcon,
   ScaleIcon,
+  ServerStackIcon,
 } from "@heroicons/react/24/outline";
 
 const adminNav = [
   { label: "Dashboard", href: "/admin", icon: ChartBarIcon },
+  { label: "Mirror", href: "/admin/mirror", icon: ServerStackIcon },
   { label: "Analytics", href: "/admin/analytics", icon: ChartPieIcon },
   { label: "Metrics", href: "/admin/metrics", icon: PresentationChartLineIcon },
   { label: "Users", href: "/admin/users", icon: UsersIcon },

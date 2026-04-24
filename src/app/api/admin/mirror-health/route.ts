@@ -42,19 +42,21 @@ export async function GET() {
   if (error) return error;
 
   const songs = await prisma.song.findMany({
-    select: { id: true },
+    select: { id: true, title: true },
   });
-  const songIds = songs.map((s) => s.id);
-  const totalSongs = songIds.length;
+  const totalSongs = songs.length;
 
   const audio = scanCacheDir(AUDIO_CACHE_DIR, [".mp3"]);
   const images = scanCacheDir(IMAGE_CACHE_DIR, [".jpg", ".png", ".webp"]);
 
-  const audioMissing = songIds.filter((id) => !audio.files.has(id));
-  const imageMissing = songIds.filter((id) => !images.files.has(id));
+  const audioMissing = songs.filter((s) => !audio.files.has(s.id));
+  const imageMissing = songs.filter((s) => !images.files.has(s.id));
 
   const audioCached = totalSongs - audioMissing.length;
   const imagesCached = totalSongs - imageMissing.length;
+
+  const missingItems = (items: typeof audioMissing) =>
+    items.map((s) => ({ id: s.id, title: s.title ?? "Untitled" }));
 
   const audioPercent = totalSongs > 0 ? Math.round((audioCached / totalSongs) * 1000) / 10 : 100;
   const coversPercent = totalSongs > 0 ? Math.round((imagesCached / totalSongs) * 1000) / 10 : 100;
@@ -73,13 +75,13 @@ export async function GET() {
       cached: audioCached,
       missing: audioMissing.length,
       percentage: audioPercent,
-      missingSongIds: audioMissing,
+      missingSongs: missingItems(audioMissing),
     },
     covers: {
       cached: imagesCached,
       missing: imageMissing.length,
       percentage: coversPercent,
-      missingSongIds: imageMissing,
+      missingSongs: missingItems(imageMissing),
     },
     diskUsage: {
       audioBytes: audio.totalBytes,
