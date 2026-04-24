@@ -387,12 +387,17 @@ pnpm exec prisma migrate resolve --rolled-back <migration-name>
 
 ### Database backups
 
-#### Backup schedule
+Production backups run automatically every day at **01:00 UTC** via
+`.github/workflows/db-backup.yml`. Each run takes a `pg_dump`, restores it
+into a sidecar Postgres to prove it is loadable, and uploads the `.pgdump` as
+a GitHub artifact (30 / 90 / 365-day retention for daily / weekly / monthly).
+Full restore procedure and disaster-recovery notes live in
+[`docs/backup-runbook.md`](docs/backup-runbook.md).
 
-Run `scripts/backup-db.sh` daily at **1 am UTC** (e.g. via cron or the job scheduler once SUNAA-548 is complete).
+To run a backup manually from your laptop:
 
-```cron
-0 1 * * * cd /app && DATABASE_URL="$DATABASE_URL" ./scripts/backup-db.sh
+```bash
+DATABASE_URL="postgres://..." ./scripts/backup-db.sh
 ```
 
 The script creates a compressed `pg_dump --format=custom` archive and applies automatic rotation:

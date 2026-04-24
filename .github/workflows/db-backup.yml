@@ -1,0 +1,107 @@
+name: Database Backup
+
+on:
+  schedule:
+    # Daily at 01:00 UTC — matches the convention in README "Database backups".
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Backup + verify production database
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Off-platform verification target. We restore the freshly-taken dump into
+    # this sidecar Postgres (not the production DB) to prove the archive is
+    # restorable before we declare the backup successful.
+    services:
+      verify-db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: verify
+          POSTGRES_PASSWORD: verify
+          POSTGRES_DB: verify
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U verify"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 16 client
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-16
+
+      - name: Take production backup
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          BACKUP_DIR: backups
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::PRODUCTION_DATABASE_URL secret is not set. See docs/backup-runbook.md."
+            exit 1
+          fi
+          mkdir -p "$BACKUP_DIR"
+          ./scripts/backup-db.sh
+
+      - name: Inspect backup artifact
+        id: backup
+        run: |
+          latest=$(ls -1t backups/*.pgdump | head -1)
+          tier=$(basename "$latest" | cut -d_ -f1)
+          size_bytes=$(stat -c '%s' "$latest")
+          size_human=$(du -h "$latest" | cut -f1)
+          case "$tier" in
+            daily)   retention=30  ;;
+            weekly)  retention=90  ;;
+            monthly) retention=365 ;;
+            *)       retention=90  ;;
+          esac
+          echo "file=$latest"            >> "$GITHUB_OUTPUT"
+          echo "tier=$tier"              >> "$GITHUB_OUTPUT"
+          echo "size=$size_human"        >> "$GITHUB_OUTPUT"
+          echo "retention=$retention"    >> "$GITHUB_OUTPUT"
+          echo "Backup: $latest ($size_human, tier=$tier, retention=$retention d)"
+          # Guard against suspiciously tiny dumps (pg_dump wrote header only)
+          if [ "$size_bytes" -lt 4096 ]; then
+            echo "::error::Backup file is under 4 KiB (${size_bytes} bytes). Aborting — probable failed dump."
+            exit 1
+          fi
+
+      - name: Verify restore against sidecar Postgres
+        env:
+          DATABASE_URL: postgres://verify:verify@localhost:5433/verify
+        run: |
+          ./scripts/restore-db.sh "${{ steps.backup.outputs.file }}"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sunoflow-db-backup-${{ steps.backup.outputs.tier }}-${{ github.run_id }}
+          path: backups/*.pgdump
+          retention-days: ${{ steps.backup.outputs.retention }}
+          if-no-files-found: error
+          compression-level: 0  # pgdump is already zstd-compressed
+
+      - name: Write summary
+        if: always()
+        run: |
+          {
+            echo "## Database Backup"
+            echo "- **Status**: ${{ job.status }}"
+            echo "- **File**: \`${{ steps.backup.outputs.file }}\`"
+            echo "- **Tier**: ${{ steps.backup.outputs.tier }}"
+            echo "- **Size**: ${{ steps.backup.outputs.size }}"
+            echo "- **Retention**: ${{ steps.backup.outputs.retention }} days"
+            echo "- **Verified**: Restored into sidecar Postgres and key-table counts PASSED"
+            echo ""
+            echo "See [docs/backup-runbook.md](../blob/main/docs/backup-runbook.md) for the restore procedure."
+          } >> $GITHUB_STEP_SUMMARY

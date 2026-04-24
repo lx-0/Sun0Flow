@@ -29,9 +29,10 @@ push to main
 
 ### Repository-level
 
-| Name            | Type   | Description                      |
-|-----------------|--------|----------------------------------|
-| `GITHUB_TOKEN`  | Auto   | Used by Gitleaks secrets scan    |
+| Name                        | Type     | Description                                                       |
+|-----------------------------|----------|-------------------------------------------------------------------|
+| `GITHUB_TOKEN`              | Auto     | Used by Gitleaks secrets scan                                     |
+| `PRODUCTION_DATABASE_URL`   | Secret   | Railway Postgres **public** proxy URL, used by the daily backup workflow. See [backup-runbook.md](./backup-runbook.md). |
 
 ## Production E2E Notes
 
@@ -102,6 +103,12 @@ The health response includes:
 - `uptime` — seconds since process start
 - `generation.queueDepth` — pending generation tasks (should stay near 0)
 - `jobs` — scheduler status for each cron job
+
+## Database Backups
+
+Daily automated backups are handled by `.github/workflows/db-backup.yml` (runs
+01:00 UTC). Full procedure, restore steps, and disaster-recovery notes live in
+[`docs/backup-runbook.md`](./backup-runbook.md).
 
 ---
 
