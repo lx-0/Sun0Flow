@@ -90,12 +90,12 @@ async function main() {
   if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
 
   const songs = await prisma.song.findMany({
-    where: { generationStatus: "ready", sunoJobId: { not: null } },
+    where: { generationStatus: { in: ["ready", "completed", "complete"] }, sunoJobId: { not: null } },
     orderBy: { playCount: "desc" },
     select: { id: true, sunoJobId: true, userId: true },
   });
 
-  console.log(`Found ${songs.length} ready songs. Cache dir: ${CACHE_DIR}`);
+  console.log(`Found ${songs.length} songs with sunoJobId. Cache dir: ${CACHE_DIR}`);
 
   const userKeys = new Map<string, string | undefined>();
   const users = await prisma.user.findMany({
