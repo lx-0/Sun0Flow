@@ -2,10 +2,11 @@
 
 ## Environments
 
-| Environment | Railway Service   | URL                                                  | Trigger                              |
-|-------------|-------------------|------------------------------------------------------|--------------------------------------|
-| Staging     | SunoFlow-staging  | https://sunoflow-staging.up.railway.app              | Auto — push to `main`                |
-| Production  | SunoFlow          | https://sunoflow.up.railway.app                      | Manual — `workflow_dispatch` or `v*` tag |
+| Environment | Railway Service | URL                                     | Trigger                |
+|-------------|-----------------|------------------------------------------|------------------------|
+| Production  | SunoFlow        | https://sunoflow.up.railway.app          | Auto — push to `main`  |
+
+There is no separate staging environment. The CI pipeline deploys directly to production after QA passes.
 
 ## Normal Deploy Flow
 
@@ -13,32 +14,18 @@
 push to main
   → lint + typecheck + unit tests + build + local E2E  (qa job)
   → secrets scan                                        (secrets-scan job)
-  → deploy to staging                                   (deploy-staging job)
-  → E2E tests against staging URL                       (e2e-staging job)
-
-[human validates staging, then:]
-  → Actions → Deploy to Production → Run workflow       (workflow_dispatch)
-  OR
-  → git tag v1.2.3 && git push --tags                   (tag trigger)
+  → deploy to production                                (deploy-staging job)
+  → E2E tests against production URL                    (e2e-staging job)
 ```
-
-Production deploys require a reviewer to approve the GitHub Environment (`production`).
-Configure reviewers at **Settings → Environments → production → Required reviewers**.
 
 ## GitHub Secrets & Variables Required
 
-### Environment: `staging`
+### Environment: `staging` (used for CI production deploy)
 
-| Name                  | Type     | Description                              |
-|-----------------------|----------|------------------------------------------|
-| `RAILWAY_TOKEN_STAGING` | Secret | Railway token scoped to staging service  |
-| `STAGING_URL`           | Variable | Public URL of the staging service (e.g. `https://sunoflow-staging.up.railway.app`) |
-
-### Environment: `production`
-
-| Name                       | Type   | Description                                |
-|----------------------------|--------|--------------------------------------------|
-| `RAILWAY_TOKEN_PRODUCTION` | Secret | Railway token scoped to production service |
+| Name             | Type     | Description                                                    |
+|------------------|----------|----------------------------------------------------------------|
+| `RAILWAY_TOKEN`  | Secret   | Railway token scoped to the SunoFlow production service        |
+| `STAGING_URL`    | Variable | Production URL: `https://sunoflow.up.railway.app`              |
 
 ### Repository-level
 
@@ -46,12 +33,10 @@ Configure reviewers at **Settings → Environments → production → Required r
 |-----------------|--------|----------------------------------|
 | `GITHUB_TOKEN`  | Auto   | Used by Gitleaks secrets scan    |
 
-## Staging E2E Notes
+## Production E2E Notes
 
-- E2E tests run against the deployed staging URL via `BASE_URL` + `PLAYWRIGHT_REMOTE=true`.
-- The local dev server is **not** started for staging E2E.
-- Auth flows that rely on `PLAYWRIGHT_TEST=true` (CSRF skip) require that env var to be set
-  on the staging Railway service itself. Add it under **Railway → SunoFlow-staging → Variables**.
+- E2E tests run against the deployed production URL via `BASE_URL` + `PLAYWRIGHT_REMOTE=true`.
+- The local dev server is **not** started for production E2E.
 
 ## Rollback Procedure
 
