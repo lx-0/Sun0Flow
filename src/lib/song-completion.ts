@@ -51,6 +51,7 @@ export async function handleSongSuccess(
     where: { id: song.id },
     data: {
       generationStatus: "ready",
+      sunoAudioId: firstSong.id || undefined,
       audioUrl: firstSong.audioUrl || song.audioUrl,
       audioUrlExpiresAt: firstSong.audioUrl ? cdnUrlExpiresAt : song.audioUrlExpiresAt,
       imageUrl: firstSong.imageUrl || song.imageUrl,
@@ -74,6 +75,7 @@ export async function handleSongSuccess(
       data: {
         userId: song.userId,
         sunoJobId: extra.id || null,
+        sunoAudioId: extra.id || null,
         title: extra.title || song.title,
         prompt: song.prompt,
         tags: extra.tags || song.tags,

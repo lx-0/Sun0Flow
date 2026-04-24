@@ -44,10 +44,10 @@ registerTool({
 
     const song = await prisma.song.findFirst({
       where: { id: songId, userId },
-      select: { sunoJobId: true, generationStatus: true },
+      select: { sunoJobId: true, sunoAudioId: true, generationStatus: true },
     });
     if (!song) throw new Error(`Song not found: ${songId}`);
-    if (!song.sunoJobId) throw new Error("Cannot separate vocals — song has no Suno audio ID.");
+    if (!song.sunoJobId || !song.sunoAudioId) throw new Error("Cannot separate vocals — song is missing Suno identifiers.");
     if (song.generationStatus !== "ready") throw new Error("Song must be fully generated (status 'ready') before separating.");
 
     const { apiKey: userApiKey } = await resolveUserApiKeyWithMode(userId);
@@ -56,7 +56,7 @@ registerTool({
       const result = await separateVocals(
         {
           taskId: song.sunoJobId,
-          audioId: song.sunoJobId,
+          audioId: song.sunoAudioId,
           type: type as "separate_vocal" | "split_stem",
         },
         userApiKey

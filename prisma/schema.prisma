@@ -139,6 +139,7 @@ model Song {
   id               String   @id @default(cuid())
   userId           String
   sunoJobId        String?  @unique
+  sunoAudioId      String?
   title            String?
   prompt           String?
   tags             String?

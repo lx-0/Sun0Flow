@@ -77,15 +77,15 @@ export async function POST(
         },
       });
     } else {
-      if (!song.sunoJobId) {
-        return NextResponse.json({ error: "Song has no Suno task ID for vocal separation.", code: "VALIDATION_ERROR" }, { status: 400 });
+      if (!song.sunoJobId || !song.sunoAudioId) {
+        return NextResponse.json({ error: "Song is missing Suno identifiers for vocal separation.", code: "VALIDATION_ERROR" }, { status: 400 });
       }
 
       try {
         const result = await separateVocals(
           {
             taskId: song.sunoJobId,
-            audioId: song.sunoJobId,
+            audioId: song.sunoAudioId,
             type: separationType,
           },
           userApiKey

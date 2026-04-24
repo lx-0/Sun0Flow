@@ -105,7 +105,7 @@ registerTool({
       where: { id: songId, userId },
     });
     if (!parentSong) throw new Error(`Song not found: ${songId}`);
-    if (!parentSong.sunoJobId) throw new Error("Cannot extend a song without a Suno audio ID.");
+    if (!parentSong.sunoAudioId) throw new Error("Cannot extend a song without a Suno audio ID.");
 
     // Check credits
     const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
@@ -129,7 +129,7 @@ registerTool({
     try {
       const result = await extendMusic(
         {
-          audioId: parentSong.sunoJobId,
+          audioId: parentSong.sunoAudioId,
           defaultParamFlag: hasCustomParams,
           prompt: cleanPrompt,
           style: cleanStyle,

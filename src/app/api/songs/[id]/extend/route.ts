@@ -108,13 +108,13 @@ export async function POST(
         },
       });
     } else {
-      if (!parentSong.sunoJobId) {
+      if (!parentSong.sunoAudioId) {
         return NextResponse.json({ error: "Cannot extend a song without a Suno audio ID.", code: "VALIDATION_ERROR" }, { status: 400 });
       }
       try {
         const result = await extendMusic(
           {
-            audioId: parentSong.sunoJobId,
+            audioId: parentSong.sunoAudioId,
             defaultParamFlag: !!(prompt || style || title || continueAt),
             prompt: prompt || undefined,
             style,

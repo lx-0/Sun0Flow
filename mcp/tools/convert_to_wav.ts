@@ -30,17 +30,17 @@ registerTool({
 
     const song = await prisma.song.findFirst({
       where: { id: songId, userId },
-      select: { sunoJobId: true, generationStatus: true },
+      select: { sunoJobId: true, sunoAudioId: true, generationStatus: true },
     });
     if (!song) throw new Error(`Song not found: ${songId}`);
-    if (!song.sunoJobId) throw new Error("Cannot convert — song has no Suno audio ID.");
+    if (!song.sunoJobId || !song.sunoAudioId) throw new Error("Cannot convert — song is missing Suno identifiers.");
     if (song.generationStatus !== "ready") throw new Error("Song must be fully generated before converting.");
 
     const { apiKey: userApiKey } = await resolveUserApiKeyWithMode(userId);
 
     try {
       const result = await convertToWav(
-        { taskId: song.sunoJobId, audioId: song.sunoJobId },
+        { taskId: song.sunoJobId, audioId: song.sunoAudioId },
         userApiKey
       );
 

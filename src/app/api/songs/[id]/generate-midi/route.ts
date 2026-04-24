@@ -59,13 +59,13 @@ export async function POST(
       taskId = `mock-midi-${songId}`;
       status = "ready";
     } else {
-      if (!song.sunoJobId) {
-        return NextResponse.json({ error: "Song has no Suno task ID for MIDI extraction.", code: "VALIDATION_ERROR" }, { status: 400 });
+      if (!song.sunoJobId || !song.sunoAudioId) {
+        return NextResponse.json({ error: "Song is missing Suno identifiers for MIDI extraction.", code: "VALIDATION_ERROR" }, { status: 400 });
       }
 
       try {
         const result = await generateMidi(
-          { taskId: song.sunoJobId, audioId: song.sunoJobId },
+          { taskId: song.sunoJobId, audioId: song.sunoAudioId },
           userApiKey
         );
         taskId = result.taskId;

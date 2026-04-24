@@ -115,18 +115,15 @@ export async function POST(
         },
       });
     } else {
-      if (!parentSong.sunoJobId) {
-        return NextResponse.json({ error: "Cannot replace section on a song without a Suno audio ID.", code: "VALIDATION_ERROR" }, { status: 400 });
+      if (!parentSong.sunoJobId || !parentSong.sunoAudioId) {
+        return NextResponse.json({ error: "Cannot replace section on a song without Suno identifiers.", code: "VALIDATION_ERROR" }, { status: 400 });
       }
-
-      // replaceSection needs both taskId and audioId from the parent's sunoJobId
-      const sunoJobId = parentSong.sunoJobId;
 
       try {
         const result = await replaceSection(
           {
-            taskId: sunoJobId,
-            audioId: sunoJobId,
+            taskId: parentSong.sunoJobId,
+            audioId: parentSong.sunoAudioId,
             prompt,
             tags,
             title: title || parentSong.title || "Untitled",

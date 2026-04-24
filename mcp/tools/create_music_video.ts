@@ -35,17 +35,17 @@ registerTool({
 
     const song = await prisma.song.findFirst({
       where: { id: songId, userId },
-      select: { sunoJobId: true, generationStatus: true },
+      select: { sunoJobId: true, sunoAudioId: true, generationStatus: true },
     });
     if (!song) throw new Error(`Song not found: ${songId}`);
-    if (!song.sunoJobId) throw new Error("Cannot create video — song has no Suno audio ID.");
+    if (!song.sunoJobId || !song.sunoAudioId) throw new Error("Cannot create video — song is missing Suno identifiers.");
     if (song.generationStatus !== "ready") throw new Error("Song must be fully generated before creating a video.");
 
     const { apiKey: userApiKey } = await resolveUserApiKeyWithMode(userId);
 
     try {
       const result = await createMusicVideo(
-        { taskId: song.sunoJobId, audioId: song.sunoJobId, author },
+        { taskId: song.sunoJobId, audioId: song.sunoAudioId, author },
         userApiKey
       );
       return { taskId: result.taskId, status: "pending" };

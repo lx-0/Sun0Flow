@@ -60,13 +60,13 @@ export async function POST(
       taskId = `mock-wav-${songId}`;
       status = "ready";
     } else {
-      if (!song.sunoJobId) {
-        return NextResponse.json({ error: "Song has no Suno task ID for WAV conversion.", code: "VALIDATION_ERROR" }, { status: 400 });
+      if (!song.sunoJobId || !song.sunoAudioId) {
+        return NextResponse.json({ error: "Song is missing Suno identifiers for WAV conversion.", code: "VALIDATION_ERROR" }, { status: 400 });
       }
 
       try {
         const result = await convertToWav(
-          { taskId: song.sunoJobId, audioId: song.sunoJobId },
+          { taskId: song.sunoJobId, audioId: song.sunoAudioId },
           userApiKey
         );
         taskId = result.taskId;
