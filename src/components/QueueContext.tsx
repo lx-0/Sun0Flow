@@ -219,6 +219,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const pendingCanPlayRef = useRef<(() => void) | null>(null);
   const skipNextRef = useRef<() => void>(() => {});
   const skipPrevRef = useRef<() => void>(() => {});
+  const hasUserGestureRef = useRef(false);
 
   const trackPlayRef = useRef(trackPlay);
   queueRef.current = queue;
@@ -233,9 +234,17 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   // Retry audio.play() with exponential backoff for mobile PWA background playback
   const retryPlay = useCallback((audio: HTMLAudioElement, retriesLeft = 5, delay = 200) => {
     if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    if (!hasUserGestureRef.current) {
+      pendingPlayRef.current = true;
+      return;
+    }
     audio.play()
       .then(() => { pendingPlayRef.current = false; })
-      .catch(() => {
+      .catch((err: DOMException) => {
+        if (err.name === "NotAllowedError") {
+          pendingPlayRef.current = true;
+          return;
+        }
         if (retriesLeft > 0) {
           retryTimerRef.current = setTimeout(() => retryPlay(audio, retriesLeft - 1, delay * 2), delay);
         } else {
@@ -485,11 +494,11 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       setDuration(playOrder[playIdx].duration ?? 0);
       audio.pause();
       audio.src = getAudioSrc(playOrder[playIdx]);
-      audio.play().catch(console.error);
+      retryPlay(audio);
       trackPlay(playOrder[playIdx].id);
       scheduleSyncRef.current?.(playOrder[playIdx].id, 0, playOrder);
     },
-    [shuffle, trackPlay]
+    [shuffle, trackPlay, retryPlay]
   );
 
   const togglePlay = useCallback(
@@ -502,7 +511,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         if (isPlaying) {
           audio.pause();
         } else if (currentIndex >= 0 && queue.length > 0) {
-          audio.play().catch(console.error);
+          audio.play().catch(() => {});
         }
         return;
       }
@@ -513,7 +522,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         if (isPlaying) {
           audio.pause();
         } else {
-          audio.play().catch(console.error);
+          audio.play().catch(() => {});
         }
         return;
       }
@@ -526,7 +535,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         audio.src = getAudioSrc(queue[idx]);
         setCurrentTime(0);
         setDuration(queue[idx].duration ?? 0);
-        audio.play().catch(console.error);
+        audio.play().catch(() => {});
         return;
       }
 
@@ -820,7 +829,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   // ─── Visibility change recovery for background playback ────────────────
   useEffect(() => {
     const onVisibilityChange = () => {
-      if (!document.hidden && pendingPlayRef.current) {
+      if (!document.hidden && pendingPlayRef.current && hasUserGestureRef.current) {
         const audio = audioRef.current;
         if (audio && audio.src && audio.paused) {
           audio.play()
@@ -831,6 +840,32 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
+
+  // ─── Resume pending playback on first user gesture ─────────────────────
+  useEffect(() => {
+    const onGesture = () => {
+      hasUserGestureRef.current = true;
+      if (pendingPlayRef.current) {
+        const audio = audioRef.current;
+        if (audio && audio.src && audio.paused) {
+          audio.play()
+            .then(() => { pendingPlayRef.current = false; })
+            .catch(() => {});
+        }
+      }
+      document.removeEventListener("click", onGesture);
+      document.removeEventListener("touchstart", onGesture);
+      document.removeEventListener("keydown", onGesture);
+    };
+    document.addEventListener("click", onGesture);
+    document.addEventListener("touchstart", onGesture);
+    document.addEventListener("keydown", onGesture);
+    return () => {
+      document.removeEventListener("click", onGesture);
+      document.removeEventListener("touchstart", onGesture);
+      document.removeEventListener("keydown", onGesture);
+    };
   }, []);
 
   // ─── Media Session API — action handlers (registered once) ─────────────
