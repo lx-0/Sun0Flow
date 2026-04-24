@@ -55,14 +55,15 @@ async function fetchFreshUrls(
     data?: { response?: { sunoData?: Record<string, unknown>[] } };
   };
   const clips = json.data?.response?.sunoData ?? [];
-  const match = clips.find(
-    (c) => typeof c.audio_url === "string" && c.audio_url
-  );
+  const match = clips.find((c) => {
+    const url = (c.audio_url as string) || (c.audioUrl as string);
+    return typeof url === "string" && url;
+  });
   if (!match) return null;
 
   return {
-    audioUrl: match.audio_url as string,
-    imageUrl: (match.image_url as string) || undefined,
+    audioUrl: ((match.audio_url as string) || (match.audioUrl as string)),
+    imageUrl: ((match.image_url as string) || (match.imageUrl as string)) || undefined,
   };
 }
 
