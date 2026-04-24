@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
-import { getTaskStatus } from "@/lib/sunoapi/status";
+import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { getCachedAudio, cacheAudio, isCached } from "@/lib/audio-cache";
 import { logger } from "@/lib/logger";
@@ -59,8 +59,7 @@ export async function GET(
     if (isExpired && song.sunoJobId) {
       try {
         const userApiKey = await resolveUserApiKey(userId);
-        const taskResult = await getTaskStatus(song.sunoJobId, userApiKey);
-        const fresh = taskResult.songs.find((s) => s.audioUrl) ?? taskResult.songs[0];
+        const fresh = await fetchFreshUrls(song.sunoJobId, userApiKey);
         if (fresh?.audioUrl) {
           await prisma.song.update({
             where: { id: songId },

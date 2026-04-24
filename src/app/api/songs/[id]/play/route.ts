@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
-import { getTaskStatus } from "@/lib/sunoapi/status";
-import { SunoApiError } from "@/lib/sunoapi";
+import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 
 // Audio URLs expire in 15 days for generated songs; refresh when within 3 days of expiry or already expired.
@@ -31,11 +30,9 @@ export async function POST(
       song.audioUrlExpiresAt.getTime() - now < REFRESH_THRESHOLD_MS;
 
     if (isExpired && song.sunoJobId) {
-      // Attempt to refresh the audio URL from the Suno API.
       try {
         const userApiKey = await resolveUserApiKey(userId);
-        const taskResult = await getTaskStatus(song.sunoJobId, userApiKey);
-        const fresh = taskResult.songs.find((s) => s.audioUrl) ?? taskResult.songs[0];
+        const fresh = await fetchFreshUrls(song.sunoJobId, userApiKey);
         if (fresh?.audioUrl) {
           await prisma.song.update({
             where: { id },
@@ -48,21 +45,7 @@ export async function POST(
           });
           return NextResponse.json({ ok: true, audioUrl: fresh.audioUrl });
         }
-      } catch (err) {
-        if (err instanceof SunoApiError) {
-          if (err.status === 404) {
-            return NextResponse.json(
-              { error: "This song no longer exists on Suno.", code: "SONG_DELETED" },
-              { status: 404 }
-            );
-          }
-          if (err.status === 401) {
-            return NextResponse.json(
-              { error: "Invalid or missing Suno API key.", code: "UNAUTHORIZED" },
-              { status: 401 }
-            );
-          }
-        }
+      } catch {
         // Transient error — allow playback to continue with existing URL (may still work).
       }
     }

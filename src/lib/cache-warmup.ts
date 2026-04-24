@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { downloadAndCache, isCached } from "@/lib/audio-cache";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { buildHeaders } from "@/lib/sunoapi/http";
+import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { logger } from "@/lib/logger";
 
 const BATCH_SIZE = process.env.CACHE_WARMUP_BATCH_SIZE
@@ -9,32 +9,6 @@ const BATCH_SIZE = process.env.CACHE_WARMUP_BATCH_SIZE
   : undefined;
 const DELAY_MS = 1000;
 const CDN_URL_TTL_MS = 12 * 24 * 60 * 60 * 1000;
-const SUNO_API_BASE = "https://api.sunoapi.org/api/v1";
-
-async function fetchFreshAudioUrl(
-  taskId: string,
-  apiKey?: string
-): Promise<{ audioUrl?: string; imageUrl?: string } | null> {
-  const res = await fetch(
-    `${SUNO_API_BASE}/generate/record-info?taskId=${encodeURIComponent(taskId)}`,
-    { method: "GET", headers: buildHeaders(apiKey) }
-  );
-  if (!res.ok) return null;
-
-  const json = (await res.json()) as {
-    data?: { response?: { sunoData?: Record<string, unknown>[] } };
-  };
-  const clips = json.data?.response?.sunoData ?? [];
-  const match = clips.find((c) => {
-    const url = (c.audio_url as string) || (c.audioUrl as string);
-    return typeof url === "string" && url;
-  });
-  if (!match) return null;
-  const audioUrl = (match.audio_url as string) || (match.audioUrl as string);
-  const imageUrl =
-    (match.image_url as string) || (match.imageUrl as string) || undefined;
-  return { audioUrl, imageUrl };
-}
 
 export async function warmUpAudioCache(): Promise<void> {
   const songs = await prisma.song.findMany({
@@ -63,7 +37,7 @@ export async function warmUpAudioCache(): Promise<void> {
         userKeys.set(song.userId, await resolveUserApiKey(song.userId));
       }
 
-      const fresh = await fetchFreshAudioUrl(
+      const fresh = await fetchFreshUrls(
         song.sunoJobId!,
         userKeys.get(song.userId)
       );
