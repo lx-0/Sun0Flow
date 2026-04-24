@@ -18,7 +18,7 @@ export async function warmUpAudioCache(): Promise<void> {
     },
     orderBy: { playCount: "desc" },
     ...(BATCH_SIZE ? { take: BATCH_SIZE } : {}),
-    select: { id: true, sunoJobId: true, userId: true },
+    select: { id: true, sunoJobId: true, sunoAudioId: true, userId: true },
   });
 
   const userKeys = new Map<string, string | undefined>();
@@ -39,7 +39,8 @@ export async function warmUpAudioCache(): Promise<void> {
 
       const fresh = await fetchFreshUrls(
         song.sunoJobId!,
-        userKeys.get(song.userId)
+        userKeys.get(song.userId),
+        song.sunoAudioId ?? undefined
       );
       if (!fresh?.audioUrl) {
         failed++;

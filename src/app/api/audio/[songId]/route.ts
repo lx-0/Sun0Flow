@@ -32,7 +32,7 @@ export async function GET(
     // Ownership check
     const song = await prisma.song.findFirst({
       where: { id: songId, userId },
-      select: { audioUrl: true, audioUrlExpiresAt: true, sunoJobId: true },
+      select: { audioUrl: true, audioUrlExpiresAt: true, sunoJobId: true, sunoAudioId: true },
     });
 
     if (!song?.audioUrl) {
@@ -57,7 +57,7 @@ export async function GET(
       if (!song.sunoJobId) return false;
       try {
         const userApiKey = await resolveUserApiKey(userId);
-        const fresh = await fetchFreshUrls(song.sunoJobId, userApiKey);
+        const fresh = await fetchFreshUrls(song.sunoJobId, userApiKey, song.sunoAudioId ?? undefined);
         if (fresh?.audioUrl) {
           await prisma.song.update({
             where: { id: songId },

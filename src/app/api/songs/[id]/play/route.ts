@@ -26,7 +26,7 @@ export async function POST(
     if (song.sunoJobId) {
       try {
         const userApiKey = await resolveUserApiKey(userId);
-        const fresh = await fetchFreshUrls(song.sunoJobId, userApiKey);
+        const fresh = await fetchFreshUrls(song.sunoJobId, userApiKey, song.sunoAudioId ?? undefined);
         if (fresh?.audioUrl) {
           await prisma.song.update({
             where: { id },
