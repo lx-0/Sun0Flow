@@ -184,6 +184,14 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = request.url;
 
+  // 0. Let Next.js RSC payload requests pass through to the network untouched.
+  if (
+    request.headers.get("RSC") === "1" ||
+    request.headers.get("Next-Router-State-Tree")
+  ) {
+    return;
+  }
+
   // 1. Queue generation requests when offline
   if (isGenerateRequest(request)) {
     event.respondWith(
@@ -313,7 +321,9 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       }).catch(() =>
-        caches.match(OFFLINE_URL).then((response) => response)
+        caches.match(OFFLINE_URL).then((cached) =>
+          cached || new Response("Offline", { status: 503, headers: { "Content-Type": "text/html" } })
+        )
       )
     );
     return;
