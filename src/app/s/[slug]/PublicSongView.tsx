@@ -13,6 +13,7 @@ import type { ReactionItem } from "@/components/ReactionTimeline";
 import { track } from "@/lib/analytics";
 import { RelatedSongs } from "@/components/RelatedSongs";
 import { ShareMenu } from "@/components/ShareMenu";
+import * as Sentry from "@sentry/nextjs";
 
 // Lazy-load below-fold and conditional components to reduce initial bundle
 const ReportModal = dynamic(() => import("@/components/ReportModal").then((m) => m.ReportModal), { ssr: false });
@@ -91,6 +92,8 @@ export function PublicSongView({
   const { data: session } = useSession();
   const { toast } = useToast();
   const [isFavorite, setIsFavorite] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [isBuffering, setIsBuffering] = useState(false);
 
   const [activeSongId, setActiveSongId] = useState(songId);
   const [activeTitle, setActiveTitle] = useState(title);
@@ -98,6 +101,8 @@ export function PublicSongView({
   const [activeAudioUrl, setActiveAudioUrl] = useState(audioUrl);
   const [, setActiveDuration] = useState(duration);
   const [activeTags, setActiveTags] = useState(tags);
+
+  const resolvedAudioUrl = activeSongId ? `/api/audio/public/${activeSongId}` : activeAudioUrl;
 
   const showVariants = variants.length > 1;
 
@@ -119,6 +124,8 @@ export function PublicSongView({
       setCurrentTime(0);
       setAudioDuration(variant.duration ?? 0);
 
+      setAudioError(null);
+      setIsBuffering(false);
       shownReactionIdsRef.current = new Set();
       shownCommentIdsRef.current = new Set();
       setActivePopups([]);
@@ -367,7 +374,17 @@ export function PublicSongView({
     if (isPlaying) {
       audioRef.current.pause();
     } else {
-      audioRef.current.play().catch(console.error);
+      setAudioError(null);
+      setIsBuffering(true);
+      audioRef.current.play().catch((err) => {
+        setIsBuffering(false);
+        const msg = err instanceof Error ? err.message : "Playback failed";
+        setAudioError(msg);
+        Sentry.captureException(err, {
+          tags: { component: "PublicSongView", songId: activeSongId },
+          extra: { audioUrl: resolvedAudioUrl },
+        });
+      });
     }
   }
 
@@ -460,18 +477,27 @@ export function PublicSongView({
       {activeAudioUrl && (
         <div className="space-y-3">
           {/* Play button */}
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={handleTogglePlay}
-              className="w-14 h-14 rounded-full bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center transition-colors"
-              aria-label={isPlaying ? "Pause" : "Play"}
+              disabled={isBuffering}
+              className="w-14 h-14 rounded-full bg-violet-600 hover:bg-violet-500 disabled:opacity-70 text-white flex items-center justify-center transition-colors"
+              aria-label={isBuffering ? "Loading" : isPlaying ? "Pause" : "Play"}
             >
-              {isPlaying ? (
+              {isBuffering ? (
+                <svg className="w-7 h-7 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+                </svg>
+              ) : isPlaying ? (
                 <PauseIcon className="w-7 h-7" />
               ) : (
                 <PlayIcon className="w-7 h-7 ml-0.5" />
               )}
             </button>
+            {audioError && (
+              <p className="text-xs text-red-500 dark:text-red-400 text-center max-w-[200px]">{audioError}</p>
+            )}
           </div>
 
           {/* Waveform + reaction timeline + floating popups */}
@@ -519,7 +545,7 @@ export function PublicSongView({
                 songId={songId}
                 currentTime={currentTime}
                 duration={audioDuration}
-                isBuffering={false}
+                isBuffering={isBuffering}
                 onSeek={handleSeek}
                 reactionTimestamps={reactions.map((r) => r.timestamp)}
                 commentTimestamps={timedComments.map((c) => c.timestamp)}
@@ -586,12 +612,27 @@ export function PublicSongView({
 
           <audio
             ref={audioRef}
-            src={activeAudioUrl}
-            onPlay={() => setIsPlaying(true)}
+            src={resolvedAudioUrl ?? undefined}
+            preload="metadata"
+            onPlay={() => { setIsPlaying(true); setIsBuffering(false); setAudioError(null); }}
             onPause={() => setIsPlaying(false)}
             onEnded={() => { setIsPlaying(false); setCurrentTime(0); shownReactionIdsRef.current = new Set(); shownCommentIdsRef.current = new Set(); setActivePopups([]); setActiveCommentPopups([]); }}
             onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
             onDurationChange={() => setAudioDuration(audioRef.current?.duration ?? 0)}
+            onWaiting={() => setIsBuffering(true)}
+            onCanPlay={() => setIsBuffering(false)}
+            onError={() => {
+              setIsPlaying(false);
+              setIsBuffering(false);
+              const code = audioRef.current?.error?.code;
+              const msg = code === 4 ? "Audio format not supported" : "Could not load audio";
+              setAudioError(msg);
+              Sentry.captureMessage(`Audio load error on public song`, {
+                level: "error",
+                tags: { component: "PublicSongView", songId: activeSongId, errorCode: String(code ?? "unknown") },
+                extra: { audioUrl: resolvedAudioUrl },
+              });
+            }}
           />
         </div>
       )}

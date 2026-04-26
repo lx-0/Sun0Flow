@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { PlayIcon, PauseIcon, MusicalNoteIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/24/solid";
+import * as Sentry from "@sentry/nextjs";
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -26,6 +27,7 @@ interface EmbedSongPlayerProps {
 }
 
 export function EmbedSongPlayer({
+  songId,
   title,
   creatorName,
   imageUrl,
@@ -41,6 +43,10 @@ export function EmbedSongPlayer({
   const [audioDuration, setAudioDuration] = useState(duration ?? 0);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
+  const [audioError, setAudioError] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+
+  const resolvedAudioUrl = songId ? `/api/audio/public/${songId}` : audioUrl;
 
   const isDark = theme === "dark";
 
@@ -49,7 +55,16 @@ export function EmbedSongPlayer({
     if (isPlaying) {
       audioRef.current.pause();
     } else {
-      audioRef.current.play().catch(console.error);
+      setAudioError(false);
+      setIsBuffering(true);
+      audioRef.current.play().catch((err) => {
+        setIsBuffering(false);
+        setAudioError(true);
+        Sentry.captureException(err, {
+          tags: { component: "EmbedSongPlayer", songId },
+          extra: { audioUrl: resolvedAudioUrl },
+        });
+      });
     }
   }
 
@@ -135,11 +150,16 @@ export function EmbedSongPlayer({
         {/* Play/Pause */}
         <button
           onClick={handleTogglePlay}
-          disabled={!audioUrl}
-          className="w-9 h-9 rounded-full bg-violet-600 hover:bg-violet-500 disabled:bg-gray-500 text-white flex items-center justify-center transition-colors"
-          aria-label={isPlaying ? "Pause" : "Play"}
+          disabled={!audioUrl || isBuffering}
+          className={`w-9 h-9 rounded-full ${audioError ? "bg-red-500 hover:bg-red-400" : "bg-violet-600 hover:bg-violet-500"} disabled:opacity-70 text-white flex items-center justify-center transition-colors`}
+          aria-label={isBuffering ? "Loading" : isPlaying ? "Pause" : "Play"}
         >
-          {isPlaying ? (
+          {isBuffering ? (
+            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-25" />
+              <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+            </svg>
+          ) : isPlaying ? (
             <PauseIcon className="w-4 h-4" />
           ) : (
             <PlayIcon className="w-4 h-4 ml-0.5" />
@@ -188,13 +208,26 @@ export function EmbedSongPlayer({
       {audioUrl && (
         <audio
           ref={audioRef}
-          src={audioUrl}
+          src={resolvedAudioUrl ?? undefined}
+          preload="metadata"
           autoPlay={autoplay}
-          onPlay={() => setIsPlaying(true)}
+          onPlay={() => { setIsPlaying(true); setIsBuffering(false); setAudioError(false); }}
           onPause={() => setIsPlaying(false)}
           onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
           onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
           onDurationChange={() => setAudioDuration(audioRef.current?.duration ?? 0)}
+          onWaiting={() => setIsBuffering(true)}
+          onCanPlay={() => setIsBuffering(false)}
+          onError={() => {
+            setIsPlaying(false);
+            setIsBuffering(false);
+            setAudioError(true);
+            Sentry.captureMessage("Audio load error on embed player", {
+              level: "error",
+              tags: { component: "EmbedSongPlayer", songId },
+              extra: { audioUrl: resolvedAudioUrl },
+            });
+          }}
         />
       )}
     </div>

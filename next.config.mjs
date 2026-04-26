@@ -132,7 +132,7 @@ const nextConfig = {
           "img-src 'self' data: blob: https:",
           "media-src 'self' blob: https://*.sunoapi.org https://*.aiquickdraw.com",
           "font-src 'self' data:",
-          "connect-src 'self' https://*.sunoapi.org https://*.aiquickdraw.com https://*.posthog.com https://us.i.posthog.com https://eu.i.posthog.com",
+          "connect-src 'self' https://*.sunoapi.org https://*.aiquickdraw.com https://*.posthog.com https://us.i.posthog.com https://eu.i.posthog.com https://errors.yester.cloud",
           "frame-ancestors 'none'",
           "base-uri 'self'",
           "form-action 'self'",
@@ -200,6 +200,16 @@ const nextConfig = {
           {
             key: "Cache-Control",
             value: "private, max-age=3600",
+          },
+        ],
+      },
+      {
+        // Public audio proxy — cacheable by shared caches (public songs only).
+        source: "/api/audio/public/:songId",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=3600, s-maxage=3600",
           },
         ],
       },
