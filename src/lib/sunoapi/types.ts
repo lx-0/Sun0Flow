@@ -26,6 +26,7 @@ export interface SunoSong {
   audioUrl: string;
   streamAudioUrl?: string;
   imageUrl?: string;
+  videoUrl?: string;
   duration?: number;
   status: SongStatus;
   model?: string;

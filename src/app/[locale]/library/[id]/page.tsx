@@ -24,6 +24,7 @@ async function fetchSong(id: string) {
           tags: dbSong.tags ?? undefined,
           audioUrl: dbSong.audioUrl ?? "",
           imageUrl: dbSong.imageUrl ?? undefined,
+          videoUrl: dbSong.videoUrl ?? undefined,
           duration: dbSong.duration ?? undefined,
           status: (dbSong.generationStatus === "ready" ? "complete" : dbSong.generationStatus === "failed" ? "error" : "pending") as "complete" | "error" | "pending",
           model: dbSong.sunoModel ?? undefined,
