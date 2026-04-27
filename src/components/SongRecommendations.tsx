@@ -85,7 +85,7 @@ export function RecommendationSection({ songId, type, title }: RecommendationSec
   useEffect(() => {
     const url =
       type === "similar"
-        ? `/api/songs/${songId}/similar`
+        ? `/api/recommendations/similar?songId=${songId}&limit=5`
         : `/api/songs/${songId}/also-liked`;
 
     fetch(url)
