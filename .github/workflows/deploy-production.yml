@@ -42,12 +42,69 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
+      - name: Resolve smoke target URL
+        id: smoke_target
+        env:
+          PROD_URL: ${{ vars.PRODUCTION_URL }}
+        run: |
+          base="${PROD_URL:-https://sunoflow.up.railway.app}"
+          base="${base%/}"
+          echo "url=${base}/api/health" >> "$GITHUB_OUTPUT"
+          echo "base=${base}"           >> "$GITHUB_OUTPUT"
+
+      - name: Post-deploy smoke test
+        id: smoke
+        env:
+          HEALTH_URL: ${{ steps.smoke_target.outputs.url }}
+        run: |
+          set -u
+          echo "Probing ${HEALTH_URL}"
+          attempts=3
+          delay=10
+          last_status=""
+          last_body=""
+          for i in $(seq 1 $attempts); do
+            tmp=$(mktemp)
+            http=$(curl -sS -o "$tmp" -w '%{http_code}' --max-time 20 "$HEALTH_URL" || echo '000')
+            body=$(cat "$tmp"); rm -f "$tmp"
+            last_status="$http"
+            last_body="$body"
+            if [ "$http" = "200" ] && printf '%s' "$body" | jq -e '.status == "ok" and .db == true' >/dev/null 2>&1; then
+              echo "Attempt $i: OK"
+              printf '%s' "$body" | jq -r '"Status: \(.status) | db: \(.db) | uptime: \(.uptime)s | queueDepth: \(.generation.queueDepth // "n/a")"'
+              exit 0
+            fi
+            echo "Attempt $i failed (HTTP $http): $body"
+            if [ "$i" -lt "$attempts" ]; then sleep $delay; fi
+          done
+          echo "::error title=Post-deploy smoke test failed::${HEALTH_URL} did not return a healthy 200 after $attempts attempts (last HTTP $last_status)"
+          {
+            echo "last_status=$last_status"
+            echo "last_body<<__BODY_EOF__"
+            echo "$last_body"
+            echo "__BODY_EOF__"
+          } >> "$GITHUB_OUTPUT"
+          exit 1
+
       - name: Write deploy summary
         if: always()
+        env:
+          HEALTH_URL: ${{ steps.smoke_target.outputs.url }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          SMOKE_LAST_STATUS: ${{ steps.smoke.outputs.last_status }}
         run: |
-          echo "## Production Deploy" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Service**: SunoFlow (production)" >> $GITHUB_STEP_SUMMARY
-          echo "- **SHA**: \`${{ inputs.sha || github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Production Deploy"
+            echo "- **Status**: ${{ job.status }}"
+            echo "- **Service**: SunoFlow (production)"
+            echo "- **SHA**: \`${{ inputs.sha || github.sha }}\`"
+            echo "- **Deployed by**: ${{ github.actor }}"
+            echo "- **Trigger**: ${{ github.event_name }}"
+            echo ""
+            echo "### Smoke Test"
+            echo "- **URL**: \`${HEALTH_URL:-n/a}\`"
+            echo "- **Outcome**: ${SMOKE_OUTCOME:-skipped}"
+            if [ "${SMOKE_OUTCOME:-}" = "failure" ]; then
+              echo "- **Last HTTP**: \`${SMOKE_LAST_STATUS:-unknown}\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
