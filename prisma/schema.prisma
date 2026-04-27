@@ -167,6 +167,7 @@ model Song {
   playCount        Int      @default(0)
   viewCount        Int      @default(0)
   parentSongId         String?
+  batchId              String?
   source               String?  @default("manual") // "manual" | "auto"
   rssFeedSubscriptionId String?
   archivedAt       DateTime?
@@ -218,6 +219,7 @@ model Song {
   @@index([generationStatus, createdAt])
   @@index([userId, isFavorite])
   @@index([userId, downloadCount])
+  @@index([batchId])
 }
 
 model Playlist {
