@@ -1,6 +1,13 @@
 name: Deploy to Production
 
 on:
+  # Auto-deploy on push to main
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+
   # Manual trigger — deploy a specific SHA or HEAD of main
   workflow_dispatch:
     inputs:
@@ -8,11 +15,6 @@ on:
         description: "Git SHA to deploy (leave blank for HEAD of main)"
         required: false
         default: ""
-
-  # Tag-based trigger — push a semver tag to deploy (e.g. git tag v1.2.3 && git push --tags)
-  push:
-    tags:
-      - "v*.*.*"
 
 jobs:
   deploy-production:
