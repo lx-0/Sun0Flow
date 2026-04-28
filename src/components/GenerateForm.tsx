@@ -55,6 +55,14 @@ interface GenerationPreset {
   createdAt: string;
 }
 
+interface StyleTemplate {
+  id: string;
+  name: string;
+  tags: string;
+  sourceSongId: string | null;
+  createdAt: string;
+}
+
 interface PromptSuggestion {
   id: string;
   label: string;
@@ -122,6 +130,9 @@ export function GenerateForm() {
 
   // Style boost state
   const [isBoosting, setIsBoosting] = useState(false);
+
+  // Style template state
+  const [styleTemplates, setStyleTemplates] = useState<StyleTemplate[]>([]);
 
   // Credit usage state
   const [creditInfo, setCreditInfo] = useState<{
@@ -269,6 +280,18 @@ export function GenerateForm() {
     }
   }, []);
 
+  const fetchStyleTemplates = useCallback(async () => {
+    try {
+      const res = await fetch("/api/style-templates");
+      if (res.ok) {
+        const data = await res.json();
+        setStyleTemplates(data.templates);
+      }
+    } catch {
+      // Non-critical
+    }
+  }, []);
+
   const fetchSuggestions = useCallback(async () => {
     try {
       const res = await fetch("/api/suggestions/prompts");
@@ -299,9 +322,10 @@ export function GenerateForm() {
     fetchPersonas();
     fetchCredits();
     fetchPresets();
+    fetchStyleTemplates();
     fetchSuggestions();
     fetchTrendingCombos();
-  }, [fetchRateLimit, fetchTemplates, fetchPersonas, fetchCredits, fetchPresets, fetchSuggestions, fetchTrendingCombos]);
+  }, [fetchRateLimit, fetchTemplates, fetchPersonas, fetchCredits, fetchPresets, fetchStyleTemplates, fetchSuggestions, fetchTrendingCombos]);
 
   async function handleBoostStyle() {
     if (isBoosting || !stylePrompt.trim()) return;
@@ -1211,6 +1235,30 @@ export function GenerateForm() {
             <p id="prompt-error" role="alert" className="text-sm text-red-600 dark:text-red-400">
               {promptError}
             </p>
+          )}
+          {styleTemplates.length > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <AdjustmentsHorizontalIcon className="h-4 w-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+              <select
+                value=""
+                onChange={(e) => {
+                  const tmpl = styleTemplates.find((t) => t.id === e.target.value);
+                  if (tmpl) {
+                    setStylePrompt(tmpl.tags);
+                    if (promptError && !customMode) setPromptError(null);
+                  }
+                }}
+                disabled={isSubmitting}
+                className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent disabled:opacity-50"
+              >
+                <option value="">Apply a saved style template…</option>
+                {styleTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} — {t.tags.length > 40 ? t.tags.slice(0, 40) + "…" : t.tags}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
 
