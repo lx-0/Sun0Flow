@@ -111,6 +111,7 @@ model User {
   streak               UserStreak?
   milestones           UserMilestone[]
   pushSubscriptions    PushSubscription[]
+  styleTemplates       StyleTemplate[]
 
   @@index([lastLoginAt])
   @@index([createdAt])
@@ -198,6 +199,7 @@ model Song {
   generationAttempt    GenerationAttempt?
   songEmbedding        SongEmbedding?
   collectionSongs      CollectionSong[]
+  styleTemplates       StyleTemplate[]
 
   @@index([userId, title])
   @@index([userId, prompt])
@@ -986,4 +988,20 @@ model CollectionSong {
   @@unique([collectionId, songId])
   @@index([collectionId, position])
   @@index([songId])
+}
+
+model StyleTemplate {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  tags         String
+  sourceSongId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceSong Song? @relation(fields: [sourceSongId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([sourceSongId])
 }
