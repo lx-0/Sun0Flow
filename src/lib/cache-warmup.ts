@@ -18,7 +18,7 @@ export async function warmUpAudioCache(): Promise<void> {
     },
     orderBy: { playCount: "desc" },
     ...(BATCH_SIZE ? { take: BATCH_SIZE } : {}),
-    select: { id: true, sunoJobId: true, sunoAudioId: true, userId: true },
+    select: { id: true, sunoJobId: true, sunoAudioId: true, userId: true, imageUrlIsCustom: true },
   });
 
   const userKeys = new Map<string, string | undefined>();
@@ -53,7 +53,7 @@ export async function warmUpAudioCache(): Promise<void> {
         data: {
           audioUrl: fresh.audioUrl,
           audioUrlExpiresAt: expiresAt,
-          ...(fresh.imageUrl
+          ...(fresh.imageUrl && !song.imageUrlIsCustom
             ? { imageUrl: fresh.imageUrl, imageUrlExpiresAt: expiresAt }
             : {}),
         },

@@ -148,6 +148,7 @@ model Song {
   audioUrlExpiresAt    DateTime?
   imageUrl             String?
   imageUrlExpiresAt    DateTime?
+  imageUrlIsCustom     Boolean  @default(false)
   videoUrl             String?
   duration         Float?
   lyrics           String?

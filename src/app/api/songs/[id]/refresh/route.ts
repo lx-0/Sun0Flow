@@ -73,8 +73,10 @@ export async function POST(
       data: {
         audioUrl: fresh.audioUrl || song.audioUrl,
         audioUrlExpiresAt: fresh.audioUrl ? expiresAt : song.audioUrlExpiresAt,
-        imageUrl: fresh.imageUrl || song.imageUrl,
-        imageUrlExpiresAt: fresh.imageUrl ? expiresAt : song.imageUrlExpiresAt,
+        ...(!song.imageUrlIsCustom && {
+          imageUrl: fresh.imageUrl || song.imageUrl,
+          imageUrlExpiresAt: fresh.imageUrl ? expiresAt : song.imageUrlExpiresAt,
+        }),
       },
     });
 

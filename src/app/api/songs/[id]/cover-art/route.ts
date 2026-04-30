@@ -62,7 +62,7 @@ export async function PATCH(
 
     const updated = await prisma.song.update({
       where: { id: song.id },
-      data: { imageUrl },
+      data: { imageUrl, imageUrlIsCustom: true },
       select: { id: true, imageUrl: true },
     });
 

@@ -33,7 +33,9 @@ export async function POST(
             data: {
               audioUrl: fresh.audioUrl,
               audioUrlExpiresAt: new Date(Date.now() + AUDIO_URL_TTL_MS),
-              imageUrl: fresh.imageUrl || song.imageUrl,
+              ...(!song.imageUrlIsCustom && {
+                imageUrl: fresh.imageUrl || song.imageUrl,
+              }),
               playCount: { increment: 1 },
             },
           });
