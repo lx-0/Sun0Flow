@@ -42,7 +42,7 @@ function buildPromptFromItem(item: {
   // Include content excerpt for richer prompt context
   const body = item.content || item.description || "";
   if (body.length > 20) {
-    parts.push(body.slice(0, 400));
+    parts.push(body.slice(0, 1500));
   }
 
   const prompt = parts.length > 0 ? parts.join(". ") : titleClean;

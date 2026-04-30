@@ -66,16 +66,25 @@ const FALLBACK_TEMPLATES = [
  * a meaningful clause, keeping it concise for prompt injection.
  */
 function extractCoreTheme(excerpt: string): string {
-  // Grab the first sentence (up to . ! ?)
-  const sentenceMatch = excerpt.match(/^(.+?[.!?])\s/);
-  const sentence = sentenceMatch ? sentenceMatch[1] : excerpt;
+  const sentences: string[] = [];
+  let remaining = excerpt;
+  while (sentences.length < 3 && remaining.length > 0) {
+    const m = remaining.match(/^(.+?[.!?])\s/);
+    if (!m) {
+      sentences.push(remaining);
+      break;
+    }
+    sentences.push(m[1]);
+    remaining = remaining.slice(m[0].length);
+  }
 
-  // Cap at ~120 chars on a word boundary
-  if (sentence.length <= 120) return sentence.replace(/[.!?]+$/, "").trim();
+  const result = sentences.join(" ");
 
-  const truncated = sentence.slice(0, 120);
+  if (result.length <= 500) return result.replace(/[.!?]+$/, "").trim();
+
+  const truncated = result.slice(0, 500);
   const lastSpace = truncated.lastIndexOf(" ");
-  return (lastSpace > 40 ? truncated.slice(0, lastSpace) : truncated).trim();
+  return (lastSpace > 100 ? truncated.slice(0, lastSpace) : truncated).trim();
 }
 
 /**

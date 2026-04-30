@@ -151,7 +151,7 @@ function suggestStyle(mood: string, topics: string[]): string {
   return parts.join(", ");
 }
 
-function buildExcerpt(description: string, maxLen = 300): string {
+function buildExcerpt(description: string, maxLen = 800): string {
   const plain = stripTags(description).trim();
   if (plain.length <= maxLen) return plain;
 
@@ -226,8 +226,8 @@ export async function fetchFeed(url: string): Promise<FeedResult> {
           extractTagContent(entry, "content") ||
           extractTagContent(entry, "summary");
         const fullText = stripTags(rawContent);
-        const description = fullText.slice(0, 200);
-        const content = fullText.slice(0, 1000);
+        const description = fullText.slice(0, 500);
+        const content = fullText.slice(0, 3000);
         const link = extractAtomLink(entry) || extractTagContent(entry, "id");
         return { title, description, content, link, source: feedTitle };
       });
@@ -257,8 +257,8 @@ export async function fetchFeed(url: string): Promise<FeedResult> {
         const rawDescription = contentEncoded ||
           stripCDATA(extractTagContent(item, "description"));
         const fullText = stripTags(rawDescription);
-        const description = fullText.slice(0, 200);
-        const content = fullText.slice(0, 1000);
+        const description = fullText.slice(0, 500);
+        const content = fullText.slice(0, 3000);
         const link = extractTagContent(item, "link");
         const pubDate = extractTagContent(item, "pubDate");
         return { title, description, content, link, source: feedTitle, pubDate };
