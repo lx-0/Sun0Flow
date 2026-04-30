@@ -61,30 +61,42 @@ const FALLBACK_TEMPLATES = [
   "A track exploring the world of {theme}. {texture}",
 ];
 
-/**
- * Extract the core theme from an excerpt — takes the first sentence or
- * a meaningful clause, keeping it concise for prompt injection.
- */
 function extractCoreTheme(excerpt: string): string {
-  const sentences: string[] = [];
-  let remaining = excerpt;
-  while (sentences.length < 3 && remaining.length > 0) {
-    const m = remaining.match(/^(.+?[.!?])\s/);
-    if (!m) {
-      sentences.push(remaining);
+  const sentenceMatch = excerpt.match(/^(.+?[.!?])\s/);
+  const sentence = sentenceMatch ? sentenceMatch[1] : excerpt;
+
+  if (sentence.length <= 120) return sentence.replace(/[.!?]+$/, "").trim();
+
+  const truncated = sentence.slice(0, 120);
+  const lastSpace = truncated.lastIndexOf(" ");
+  return (lastSpace > 40 ? truncated.slice(0, lastSpace) : truncated).trim();
+}
+
+function extractArticleContext(excerpt: string, maxLength: number): string {
+  const sentences = excerpt
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 15);
+
+  const candidates = sentences.slice(1, 4);
+  if (candidates.length === 0) return "";
+
+  let result = "";
+  for (const sentence of candidates) {
+    const next = result ? `${result} ${sentence}` : sentence;
+    if (next.length > maxLength) {
+      if (!result) {
+        const truncated = sentence.slice(0, maxLength);
+        const lastSpace = truncated.lastIndexOf(" ");
+        result = (lastSpace > 40 ? truncated.slice(0, lastSpace) : truncated).trim();
+        if (!/[.!?]$/.test(result)) result += ".";
+      }
       break;
     }
-    sentences.push(m[1]);
-    remaining = remaining.slice(m[0].length);
+    result = next;
   }
 
-  const result = sentences.join(" ");
-
-  if (result.length <= 500) return result.replace(/[.!?]+$/, "").trim();
-
-  const truncated = result.slice(0, 500);
-  const lastSpace = truncated.lastIndexOf(" ");
-  return (lastSpace > 100 ? truncated.slice(0, lastSpace) : truncated).trim();
+  return result;
 }
 
 /**
@@ -127,6 +139,15 @@ function buildPromptFromItem(item: RssItem): { name: string; prompt: string; sty
     const template = templates[titleClean.length % templates.length];
 
     prompt = template.replace("{theme}", theme).replace("{texture}", texture);
+
+    const TARGET_MAX = 400;
+    const contextBudget = TARGET_MAX - prompt.length - 1;
+    if (contextBudget > 40) {
+      const context = extractArticleContext(excerpt, contextBudget);
+      if (context) {
+        prompt = `${prompt} ${context}`;
+      }
+    }
   } else {
     // ── Fallback: keyword-only prompt (original behavior) ──
     const parts: string[] = [];
