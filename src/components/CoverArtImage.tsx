@@ -54,21 +54,39 @@ export function CoverArtImage({
   const [errored, setErrored] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
   const [refreshedSrc, setRefreshedSrc] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const didRefresh = useRef(false);
+  const didTryCache = useRef(false);
 
   const activeSrc = refreshedSrc ?? (useFallback && fallbackSrc ? fallbackSrc : src);
 
   const handleError = useCallback(() => {
-    if (refreshedSrc) {
-      setErrored(true);
+    if (refreshedSrc && !didTryCache.current && songId) {
+      didTryCache.current = true;
+      setRefreshedSrc(`/api/images/${songId}`);
+      return;
+    }
+
+    if (refreshedSrc && didTryCache.current) {
+      if (!useFallback && fallbackSrc) {
+        setRefreshedSrc(null);
+        setUseFallback(true);
+      } else {
+        setErrored(true);
+      }
       return;
     }
 
     if (songId && !didRefresh.current && !activeSrc.startsWith("data:")) {
       didRefresh.current = true;
+      setIsLoading(true);
       refreshCoverUrl(songId).then((newUrl) => {
+        setIsLoading(false);
         if (newUrl && newUrl !== src) {
           setRefreshedSrc(newUrl);
+        } else if (songId && !didTryCache.current) {
+          didTryCache.current = true;
+          setRefreshedSrc(`/api/images/${songId}`);
         } else if (fallbackSrc && !useFallback) {
           setUseFallback(true);
         } else {
@@ -85,7 +103,37 @@ export function CoverArtImage({
     }
   }, [songId, src, fallbackSrc, useFallback, activeSrc, refreshedSrc]);
 
-  if (errored) return null;
+  if (errored) {
+    if (fallbackSrc) {
+      return (
+        <Image
+          src={fallbackSrc}
+          alt={alt}
+          fill={fill}
+          sizes={sizes}
+          width={!fill ? width : undefined}
+          height={!fill ? height : undefined}
+          className={className}
+          priority={priority}
+          loading={loading}
+        />
+      );
+    }
+    return null;
+  }
+
+  if (isLoading) {
+    return (
+      <div
+        className={
+          fill
+            ? `absolute inset-0 w-full h-full animate-pulse bg-gray-700/50 ${className}`
+            : `animate-pulse bg-gray-700/50 ${className}`
+        }
+        style={!fill && width && height ? { width, height } : undefined}
+      />
+    );
+  }
 
   if (activeSrc.startsWith("data:")) {
     return (

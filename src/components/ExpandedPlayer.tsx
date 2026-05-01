@@ -110,6 +110,7 @@ export function ExpandedPlayer({
               className="object-cover"
               sizes="288px"
               songId={currentSong.id}
+              fallbackSrc="/icons/icon-512.png"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">

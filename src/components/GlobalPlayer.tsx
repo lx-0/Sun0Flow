@@ -425,6 +425,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
                 className="object-cover"
                 sizes="40px"
                 songId={currentSong.id}
+                fallbackSrc="/icons/icon-512.png"
               />
             ) : (
               <MusicalNoteIcon className="w-5 h-5 text-gray-500" aria-hidden="true" />
@@ -443,6 +444,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
                 className="object-cover"
                 sizes="40px"
                 songId={currentSong.id}
+                fallbackSrc="/icons/icon-512.png"
               />
             ) : (
               <MusicalNoteIcon className="w-5 h-5 text-gray-500" aria-hidden="true" />
