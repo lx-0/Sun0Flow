@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
+
+vi.mock("@/lib/env", () => ({
+  get DATABASE_URL() { return "postgres://test:test@localhost:5432/test"; },
+  get AUTH_SECRET() { return "test-secret"; },
+  get NEXTAUTH_URL() { return "http://localhost:3000"; },
+  get SUNOAPI_KEY() { return "test-key"; },
+  get SUNO_API_TIMEOUT_MS() { return 30000; },
+  get RATE_LIMIT_MAX_GENERATIONS() { return 10; },
+  env: {},
+}));
 
 const mockResolveUser = vi.fn();
 vi.mock("@/lib/auth-resolver", () => ({
@@ -26,12 +37,16 @@ vi.mock("@/lib/cache", () => ({
   invalidateByPrefix: vi.fn(),
 }));
 
+vi.mock("@/lib/error-logger", () => ({
+  logServerError: vi.fn(),
+}));
+
 import { GET, POST } from "./route";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function makeRequest(url: string, init?: RequestInit) {
-  return new Request(url, init);
+  return new NextRequest(url, init as never);
 }
 
 const USER_ID = "user-123";
