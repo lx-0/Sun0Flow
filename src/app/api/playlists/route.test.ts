@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 import { GET, POST } from "./route";
 
 vi.mock("@/lib/env", () => ({
@@ -33,6 +34,14 @@ vi.mock("@/lib/cache", () => ({
   CacheControl: { privateShort: "private, max-age=10, must-revalidate" },
 }));
 
+vi.mock("@/lib/error-logger", () => ({
+  logServerError: vi.fn(),
+}));
+
+vi.mock("@/lib/activity", () => ({
+  recordActivity: vi.fn(),
+}));
+
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
@@ -46,15 +55,15 @@ const basePlaylist = {
   _count: { songs: 0 },
 };
 
-function makeRequest(body?: Record<string, unknown>): Request {
+function makeRequest(body?: Record<string, unknown>): NextRequest {
   if (body) {
-    return new Request("http://localhost/api/playlists", {
+    return new NextRequest("http://localhost/api/playlists", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   }
-  return new Request("http://localhost/api/playlists");
+  return new NextRequest("http://localhost/api/playlists");
 }
 
 beforeEach(() => {
