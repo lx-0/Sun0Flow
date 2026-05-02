@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { SongFilters, SongSelect } from "@/lib/songs";
 
 export interface PublicVariant {
   id: string;
@@ -10,17 +11,6 @@ export interface PublicVariant {
   publicSlug: string | null;
   createdAt: Date;
 }
-
-const VARIANT_SELECT = {
-  id: true,
-  title: true,
-  audioUrl: true,
-  imageUrl: true,
-  duration: true,
-  tags: true,
-  publicSlug: true,
-  createdAt: true,
-} as const;
 
 export async function getVariantFamily(
   songId: string,
@@ -44,13 +34,8 @@ export async function getVariantFamily(
   }
 
   return prisma.song.findMany({
-    where: {
-      OR: [{ id: rootId }, { parentSongId: rootId }],
-      generationStatus: "ready",
-      archivedAt: null,
-      isHidden: false,
-    },
-    select: VARIANT_SELECT,
+    where: SongFilters.variantFamily(rootId),
+    select: SongSelect.variant,
     orderBy: { createdAt: "asc" },
   });
 }

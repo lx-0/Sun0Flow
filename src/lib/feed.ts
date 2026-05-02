@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { SongFilters, SongSelect } from "@/lib/songs";
 
 export type FeedReason =
   | "recommended"
@@ -38,21 +39,7 @@ export interface FeedResult {
 const PAGE_SIZE = 20;
 const BUCKET_SIZE = 60;
 
-const songPublicSelect = {
-  id: true,
-  userId: true,
-  title: true,
-  tags: true,
-  imageUrl: true,
-  audioUrl: true,
-  duration: true,
-  rating: true,
-  playCount: true,
-  downloadCount: true,
-  publicSlug: true,
-  createdAt: true,
-  user: { select: { id: true, name: true, username: true } },
-} satisfies Prisma.SongSelect;
+const songPublicSelect = SongSelect.public;
 
 type SongRow = {
   id: string;
@@ -95,25 +82,10 @@ function affinityScore(songTags: Set<string>, preferredTags: Map<string, number>
 }
 
 function baseWhere(filters: FeedFilters): Prisma.SongWhereInput {
-  const base: Prisma.SongWhereInput = {
-    isPublic: true,
-    isHidden: false,
-    archivedAt: null,
-    generationStatus: "ready",
-  };
-  const tag = filters.tag || "";
-  const mood = filters.mood || "";
-  if (tag && mood) {
-    base.AND = [
-      { tags: { contains: tag, mode: "insensitive" } },
-      { tags: { contains: mood, mode: "insensitive" } },
-    ];
-  } else if (tag) {
-    base.tags = { contains: tag, mode: "insensitive" };
-  } else if (mood) {
-    base.tags = { contains: mood, mode: "insensitive" };
-  }
-  return base;
+  let where = SongFilters.publicDiscovery();
+  const tags = [filters.tag, filters.mood].filter(Boolean) as string[];
+  where = SongFilters.withTagContains(where, tags);
+  return where;
 }
 
 function toFeedItem(song: SongRow, reason: FeedReason, reasonLabel: string): FeedItem {
