@@ -1,30 +1,21 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
-import { addVocals, SunoApiError } from "@/lib/sunoapi";
+import { addVocals } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { sanitizeText } from "@/lib/sanitize";
+import {
+  userFriendlyError,
+  enforceRateLimit,
+  createMockSongRecord,
+  createPendingSongRecord,
+  createFailedSongRecord,
+} from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
 
-function userFriendlyError(error: unknown): string {
-  if (error instanceof SunoApiError) {
-    if (error.status === 402) return "Insufficient credits. Please check your balance or top up to continue.";
-    if (error.status === 409) return "A conflicting request is already in progress. Please wait and try again.";
-    if (error.status === 422) return `Validation error: ${error.message}`;
-    if (error.status === 429) return "The music generation service is busy. Please try again in a few minutes.";
-    if (error.status === 451) return "This request was blocked for compliance reasons. Please modify your prompt and try again.";
-    if (error.status === 400) return "Invalid parameters. Please adjust your settings and try again.";
-    if (error.status === 401 || error.status === 403) return "API authentication failed. Please check your API key in settings.";
-    if (error.status >= 500) return "The music generation service is temporarily unavailable. Please try again later.";
-  }
-  return "Adding vocals failed. Please try again.";
-}
-
-/** POST /api/songs/[id]/add-vocals — add vocals over an instrumental track */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -54,14 +45,9 @@ export async function POST(
       );
     }
 
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
-    if (!acquired) {
-      const retryAfterSec = Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000));
-      return NextResponse.json(
-        { error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, code: "RATE_LIMIT", resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
-      );
-    }
+    const rateLimitResult = await enforceRateLimit(userId);
+    if (rateLimitResult.limited) return rateLimitResult.response;
+    const rateLimitStatus = rateLimitResult.status;
 
     const body = await request.json();
 
@@ -91,25 +77,17 @@ export async function POST(
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
+    const songParams = {
+      title: title || null,
+      prompt,
+      tags: style || null,
+      isInstrumental: false,
+      parentSongId: rootId,
+    };
+
     let savedSong;
     if (!hasApiKey) {
-      const mock = mockSongs[0];
-      savedSong = await prisma.song.create({
-        data: {
-          userId,
-          parentSongId: rootId,
-          title: title || mock.title || null,
-          prompt,
-          tags: style || mock.tags || null,
-          audioUrl: mock.audioUrl || null,
-          imageUrl: mock.imageUrl || null,
-          duration: mock.duration ?? null,
-          lyrics: mock.lyrics || null,
-          sunoModel: mock.model || null,
-          isInstrumental: false,
-          generationStatus: "ready",
-        },
-      });
+      savedSong = await createMockSongRecord(userId, mockSongs[0], songParams);
     } else {
       if (!parentSong.audioUrl) {
         return NextResponse.json({ error: "Parent song has no audio URL to add vocals to.", code: "VALIDATION_ERROR" }, { status: 400 });
@@ -125,33 +103,11 @@ export async function POST(
           userApiKey
         );
 
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: rootId,
-            sunoJobId: result.taskId,
-            title: title || null,
-            prompt,
-            tags: style || null,
-            isInstrumental: false,
-            generationStatus: "pending",
-          },
-        });
+        savedSong = await createPendingSongRecord(userId, result.taskId, songParams);
       } catch (apiError) {
         logServerError("add-vocals-api", apiError, { userId, route: `/api/songs/${parentId}/add-vocals` });
-        const errorMsg = userFriendlyError(apiError);
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: rootId,
-            title: title || null,
-            prompt,
-            tags: style || null,
-            isInstrumental: false,
-            generationStatus: "failed",
-            errorMessage: errorMsg,
-          },
-        });
+        const { message: errorMsg } = userFriendlyError(apiError);
+        savedSong = await createFailedSongRecord(userId, errorMsg, songParams);
 
         return NextResponse.json({ song: savedSong, error: errorMsg, rateLimit: rateLimitStatus }, { status: 201 });
       }

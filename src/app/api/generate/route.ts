@@ -5,53 +5,33 @@ import { generateSong, SunoApiError, getRemainingCredits } from "@/lib/sunoapi";
 import { CircuitOpenError, onCircuitClose } from "@/lib/circuit-breaker";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { prisma } from "@/lib/prisma";
-import { acquireRateLimitSlot, releaseRateLimitSlot } from "@/lib/rate-limit";
+import { releaseRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
 import { invalidateByPrefix } from "@/lib/cache";
 import { SUNOAPI_KEY } from "@/lib/env";
-import { recordCreditUsage, shouldNotifyLowCredits, createLowCreditNotification, getMonthlyCreditUsage, CREDIT_COSTS } from "@/lib/credits";
-import { badRequest, rateLimited, internalError, insufficientCredits, ErrorCode } from "@/lib/api-error";
+import { CREDIT_COSTS } from "@/lib/credits";
+import { badRequest, internalError, ErrorCode } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
 import { recordGenerationStart, recordGenerationEnd } from "@/lib/metrics";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 import { drainGenerationQueue } from "@/lib/queue-processor";
+import {
+  userFriendlyError,
+  enforceRateLimit,
+  checkCreditBalance,
+  recordCreditsAndNotify,
+  createMockSongRecord,
+  createPendingSongRecord,
+  createFailedSongRecord,
+} from "@/lib/generation";
 
-// Register queue drain callback so it fires whenever the circuit closes.
-// Module-level registration runs once when this route module is first loaded.
 onCircuitClose(() => {
   drainGenerationQueue().catch((err) => {
     logger.error({ err }, "generation: queue drain failed after circuit close");
   });
 });
-
-/** Map API errors to user-friendly messages */
-function userFriendlyError(error: unknown): { message: string; code: string; details?: Record<string, unknown> } {
-  if (error instanceof SunoApiError) {
-    if (error.status === 402)
-      return { message: "Insufficient credits. Please check your balance or top up to continue.", code: ErrorCode.INSUFFICIENT_CREDITS };
-    if (error.status === 409)
-      return { message: "A conflicting request is already in progress. Please wait and try again.", code: ErrorCode.CONFLICT };
-    if (error.status === 422)
-      return { message: `Validation error: ${error.message}`, code: ErrorCode.VALIDATION_ERROR, details: error.details };
-    if (error.status === 429)
-      return { message: "The music generation service is busy. Please try again in a few minutes.", code: ErrorCode.SUNO_RATE_LIMIT };
-    if (error.status === 451)
-      return { message: "This request was blocked for compliance reasons. Please modify your prompt and try again.", code: ErrorCode.COMPLIANCE_BLOCK };
-    if (error.status === 400)
-      return { message: "Invalid generation parameters. Please adjust your prompt and try again.", code: ErrorCode.VALIDATION_ERROR };
-    if (error.status === 401 || error.status === 403)
-      return { message: "API authentication failed. Please check your API key in settings.", code: ErrorCode.SUNO_AUTH_ERROR };
-    if (error.status >= 500)
-      return { message: "The music generation service is temporarily unavailable — please try again in a moment.", code: ErrorCode.SERVICE_UNAVAILABLE };
-    return { message: `Generation failed: ${error.message}`, code: ErrorCode.SUNO_API_ERROR };
-  }
-  if (error instanceof TypeError && (error.message.includes("fetch") || error.message.includes("network"))) {
-    return { message: "Could not reach the music generation service. Please check your connection and try again.", code: ErrorCode.SERVICE_UNAVAILABLE };
-  }
-  return { message: "Song generation failed. Please try again.", code: ErrorCode.INTERNAL_ERROR };
-}
 
 export async function POST(request: Request) {
   try {
@@ -59,32 +39,13 @@ export async function POST(request: Request) {
 
     if (authError) return authError;
 
-    // Resolve personal API key early so we can skip rate limits/credits if active
     const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
 
-    // Atomically check and claim a rate limit slot (admins and personal-key users are exempt)
     let rateLimitStatus;
     if (!isAdmin && !usingPersonalKey) {
-      const { acquired, status } = await acquireRateLimitSlot(userId);
-      if (!acquired) {
-        const retryAfterSec = Math.max(
-          1,
-          Math.ceil((new Date(status.resetAt).getTime() - Date.now()) / 1000)
-        );
-        logger.warn({ userId, action: "generate", limit: status.limit, resetAt: status.resetAt }, "rate-limit: generation limit exceeded");
-        Sentry.addBreadcrumb({
-          category: "rate-limit",
-          message: "Generation rate limit exceeded",
-          level: "warning",
-          data: { userId, action: "generate", limit: status.limit, resetAt: status.resetAt },
-        });
-        return rateLimited(
-          `Rate limit exceeded. You can generate up to ${status.limit} songs per hour.`,
-          { resetAt: status.resetAt, rateLimit: status },
-          { "Retry-After": String(retryAfterSec) }
-        );
-      }
-      rateLimitStatus = status;
+      const result = await enforceRateLimit(userId);
+      if (result.limited) return result.response;
+      rateLimitStatus = result.status;
     }
 
     const { prompt, title, tags, makeInstrumental, personaId, parentSongId } = await request.json();
@@ -112,38 +73,23 @@ export async function POST(request: Request) {
       instrumental: Boolean(makeInstrumental),
     };
 
-    // Check credit balance before consuming any upstream resources (skip for personal key users)
     if (!usingPersonalKey) {
-      const creditUsage = await getMonthlyCreditUsage(userId);
-      if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
-        return insufficientCredits(
-          `Insufficient credits. You need ${CREDIT_COSTS.generate} credits but only have ${creditUsage.creditsRemaining} remaining.`
-        );
-      }
+      const denied = await checkCreditBalance(userId, "generate");
+      if (denied) return denied;
     }
 
-    // If no API key at all (env or user), fall back to mock for demo mode
     const hasApiKey = !!(userApiKey || SUNOAPI_KEY);
+    const songParams = {
+      title: generationParams.title || null,
+      prompt: generationParams.prompt,
+      tags: generationParams.style || null,
+      isInstrumental: Boolean(makeInstrumental),
+      parentSongId: typeof parentSongId === "string" && parentSongId ? parentSongId : null,
+    };
 
     let savedSongs;
     if (!hasApiKey) {
-      const mock = mockSongs[0];
-      const song = await prisma.song.create({
-        data: {
-          userId,
-          title: mock.title || generationParams.title || null,
-          prompt: generationParams.prompt,
-          tags: mock.tags || generationParams.style || null,
-          audioUrl: mock.audioUrl || null,
-          imageUrl: mock.imageUrl || null,
-          duration: mock.duration ?? null,
-          lyrics: mock.lyrics || null,
-          sunoModel: mock.model || null,
-          isInstrumental: Boolean(makeInstrumental),
-          generationStatus: "ready",
-          parentSongId: typeof parentSongId === "string" && parentSongId ? parentSongId : null,
-        },
-      });
+      const song = await createMockSongRecord(userId, mockSongs[0], songParams);
       savedSongs = [song];
     } else {
       try {
@@ -168,21 +114,8 @@ export async function POST(request: Request) {
         recordGenerationEnd(genMs, true);
         logger.info({ userId, taskId: result.taskId, durationMs: genMs }, "generation: api call succeeded");
 
-        const song = await prisma.song.create({
-          data: {
-            userId,
-            sunoJobId: result.taskId,
-            title: generationParams.title || null,
-            prompt: generationParams.prompt,
-            tags: generationParams.style || null,
-            isInstrumental: Boolean(makeInstrumental),
-            generationStatus: "pending",
-            parentSongId: typeof parentSongId === "string" && parentSongId ? parentSongId : null,
-          },
-        });
+        const song = await createPendingSongRecord(userId, result.taskId, songParams);
 
-        // Auto-assign a placeholder cover art so songs have a visual fingerprint
-        // immediately — the Suno-returned imageUrl will overwrite this on completion.
         try {
           const [placeholderVariant] = generateCoverArtVariants({
             songId: song.id,
@@ -194,22 +127,19 @@ export async function POST(request: Request) {
             data: { imageUrl: placeholderVariant.dataUrl },
           }).catch(() => {});
         } catch {
-          // Non-critical — generation still succeeds without a placeholder image.
+          // Non-critical
         }
 
         savedSongs = [song];
       } catch (apiError) {
-        // ── Circuit open: queue the request instead of failing ─────────────────
         if (apiError instanceof CircuitOpenError) {
           recordGenerationEnd(0, false);
           logger.warn({ userId }, "generation: circuit open — queuing request");
 
-          // Release the rate limit slot; the slot will be re-acquired when drained.
           if (!isAdmin && !usingPersonalKey) {
             await releaseRateLimitSlot(userId).catch(() => {});
           }
 
-          // Add to queue (find current max position first).
           const maxPos = await prisma.generationQueueItem.aggregate({
             _max: { position: true },
             where: { userId, status: "pending" },
@@ -232,15 +162,13 @@ export async function POST(request: Request) {
           return NextResponse.json(
             {
               queued: true,
-              message:
-                "Music generation is temporarily unavailable. Your request has been queued and will be processed automatically when the service recovers.",
+              message: "Music generation is temporarily unavailable. Your request has been queued and will be processed automatically when the service recovers.",
               code: ErrorCode.SERVICE_UNAVAILABLE,
             },
             { status: 503 }
           );
         }
 
-        // ── Normal API error ───────────────────────────────────────────────────
         recordGenerationEnd(0, false);
         const correlationId = logServerError("generate-api", apiError, {
           userId,
@@ -248,26 +176,12 @@ export async function POST(request: Request) {
           params: generationParams,
         });
 
-        // Release the rate limit slot so the failed attempt doesn't count
         if (!isAdmin && !usingPersonalKey) {
           await releaseRateLimitSlot(userId).catch(() => {});
         }
 
-        // Save a failed record so the user can see it in history and retry
         const { message: errorMsg, code: errorCode, details: errorDetails } = userFriendlyError(apiError);
-        const song = await prisma.song.create({
-          data: {
-            userId,
-            title: generationParams.title || null,
-            prompt: generationParams.prompt,
-            tags: generationParams.style || null,
-            isInstrumental: Boolean(makeInstrumental),
-            generationStatus: "failed",
-            errorMessage: errorMsg,
-            parentSongId: typeof parentSongId === "string" && parentSongId ? parentSongId : null,
-          },
-        });
-
+        const song = await createFailedSongRecord(userId, errorMsg, songParams);
         savedSongs = [song];
 
         let creditBalance: number | undefined;
@@ -290,28 +204,13 @@ export async function POST(request: Request) {
       }
     }
 
-    // Record credit usage (skip for personal key users — they consume their own quota)
     if (!usingPersonalKey) {
-      const songId = savedSongs[0]?.id;
-      await recordCreditUsage(userId, "generate", {
-        songId,
-        creditCost: CREDIT_COSTS.generate,
+      await recordCreditsAndNotify(userId, "generate", {
+        songId: savedSongs[0]?.id,
         description: `Song generation: ${generationParams.title || "Untitled"}`,
       });
-
-      // Check if user should be warned about low credits
-      try {
-        const shouldNotify = await shouldNotifyLowCredits(userId);
-        if (shouldNotify) {
-          const usage = await getMonthlyCreditUsage(userId);
-          await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
-        }
-      } catch {
-        // Non-critical — don't block generation
-      }
     }
 
-    // Rate limit slot already claimed above
     invalidateByPrefix(`dashboard-stats:${userId}`);
 
     return NextResponse.json(

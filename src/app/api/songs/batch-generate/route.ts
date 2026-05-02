@@ -9,17 +9,15 @@ import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import {
-  recordCreditUsage,
-  getMonthlyCreditUsage,
-  CREDIT_COSTS,
-} from "@/lib/credits";
-import {
-  badRequest,
-  internalError,
-  insufficientCredits,
-} from "@/lib/api-error";
+import { recordCreditUsage, CREDIT_COSTS } from "@/lib/credits";
+import { badRequest, internalError } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
+import {
+  checkCreditBalance,
+  createMockSongRecord,
+  createPendingSongRecord,
+  createFailedSongRecord,
+} from "@/lib/generation";
 
 const MIN_BATCH = 2;
 const MAX_BATCH = 5;
@@ -68,15 +66,9 @@ export async function POST(request: Request) {
       }
     }
 
-    const totalCost = CREDIT_COSTS.generate * configs.length;
-
     if (!usingPersonalKey) {
-      const creditUsage = await getMonthlyCreditUsage(userId);
-      if (creditUsage.creditsRemaining < totalCost) {
-        return insufficientCredits(
-          `Insufficient credits. You need ${totalCost} credits (${CREDIT_COSTS.generate} x ${configs.length}) but only have ${creditUsage.creditsRemaining} remaining.`
-        );
-      }
+      const denied = await checkCreditBalance(userId, "generate", configs.length);
+      if (denied) return denied;
     }
 
     const batchId = randomBytes(8).toString("hex");
@@ -99,24 +91,20 @@ export async function POST(request: Request) {
         instrumental: Boolean(c.makeInstrumental),
       };
 
+      const songParams = {
+        title: genParams.title || null,
+        prompt: genParams.prompt,
+        tags: genParams.style || null,
+        isInstrumental: genParams.instrumental,
+        batchId,
+      };
+
       if (!hasApiKey) {
-        const mock = mockSongs[i % mockSongs.length];
-        const song = await prisma.song.create({
-          data: {
-            userId,
-            title: mock.title || genParams.title || null,
-            prompt: genParams.prompt,
-            tags: mock.tags || genParams.style || null,
-            audioUrl: mock.audioUrl || null,
-            imageUrl: mock.imageUrl || null,
-            duration: mock.duration ?? null,
-            lyrics: mock.lyrics || null,
-            sunoModel: mock.model || null,
-            isInstrumental: genParams.instrumental,
-            generationStatus: "ready",
-            batchId,
-          },
-        });
+        const song = await createMockSongRecord(
+          userId,
+          mockSongs[i % mockSongs.length],
+          songParams
+        );
         results.push({
           index: i,
           songId: song.id,
@@ -151,18 +139,7 @@ export async function POST(request: Request) {
             )
         );
 
-        const song = await prisma.song.create({
-          data: {
-            userId,
-            sunoJobId: result.taskId,
-            title: genParams.title || null,
-            prompt: genParams.prompt,
-            tags: genParams.style || null,
-            isInstrumental: genParams.instrumental,
-            generationStatus: "pending",
-            batchId,
-          },
-        });
+        const song = await createPendingSongRecord(userId, result.taskId, songParams);
 
         results.push({
           index: i,
@@ -190,18 +167,7 @@ export async function POST(request: Request) {
           params: { batchId, index: i },
         });
 
-        const song = await prisma.song.create({
-          data: {
-            userId,
-            title: genParams.title || null,
-            prompt: genParams.prompt,
-            tags: genParams.style || null,
-            isInstrumental: genParams.instrumental,
-            generationStatus: "failed",
-            errorMessage: errorMsg,
-            batchId,
-          },
-        });
+        const song = await createFailedSongRecord(userId, errorMsg, songParams);
 
         results.push({
           index: i,
