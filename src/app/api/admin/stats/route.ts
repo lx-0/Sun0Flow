@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
-  const { error } = await requireAdmin();
-  if (error) return error;
+export const GET = adminRoute(async () => {
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -83,4 +81,4 @@ export async function GET() {
     recentErrors,
     dailyGenerations: chartData,
   });
-}
+});

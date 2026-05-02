@@ -1,54 +1,40 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { NextResponse } from "next/server";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
-import { logServerError } from "@/lib/error-logger";
 import { broadcast } from "@/lib/event-bus";
 import { CacheControl, cached, invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { badRequest } from "@/lib/api-error";
 
-// GET /api/notifications — list notifications for current user
-export async function GET(request: NextRequest) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
+export const GET = authRoute(async (request, { auth }) => {
+  const searchParams = request.nextUrl.searchParams;
+  const limitParam = parseInt(searchParams.get("limit") || "", 10);
+  const limit =
+    !isNaN(limitParam) && limitParam >= 1 && limitParam <= 100
+      ? limitParam
+      : 20;
+  const cursor = searchParams.get("cursor") || "";
 
-    if (authError) return authError;
+  const notifications = await prisma.notification.findMany({
+    where: { userId: auth.userId },
+    orderBy: { createdAt: "desc" },
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+  });
 
-    const params = request.nextUrl.searchParams;
-    const limitParam = parseInt(params.get("limit") || "", 10);
-    const limit =
-      !isNaN(limitParam) && limitParam >= 1 && limitParam <= 100
-        ? limitParam
-        : 20;
-    const cursor = params.get("cursor") || "";
+  const hasMore = notifications.length > limit;
+  const sliced = hasMore ? notifications.slice(0, limit) : notifications;
+  const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
 
-    const notifications = await prisma.notification.findMany({
-      where: { userId: userId },
-      orderBy: { createdAt: "desc" },
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    });
+  const unreadCount = await cached(
+    cacheKey("notifications-unread", auth.userId),
+    () => prisma.notification.count({ where: { userId: auth.userId, read: false } }),
+    10_000
+  );
 
-    const hasMore = notifications.length > limit;
-    const sliced = hasMore ? notifications.slice(0, limit) : notifications;
-    const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
-
-    // Cache unread count for 10s — refreshed on mutation
-    const unreadCount = await cached(
-      cacheKey("notifications-unread", userId),
-      () => prisma.notification.count({ where: { userId: userId, read: false } }),
-      10_000
-    );
-
-    return NextResponse.json({ notifications: sliced, nextCursor, unreadCount }, {
-      headers: { "Cache-Control": CacheControl.privateNoCache },
-    });
-  } catch (error) {
-    logServerError("notifications-list", error, { route: "/api/notifications" });
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+  return NextResponse.json({ notifications: sliced, nextCursor, unreadCount }, {
+    headers: { "Cache-Control": CacheControl.privateNoCache },
+  });
+}, { route: "/api/notifications" });
 
 const VALID_TYPES = [
   "generation_complete",
@@ -66,43 +52,31 @@ const VALID_TYPES = [
   "milestone_earned",
 ];
 
-// POST /api/notifications — create a notification for current user
-export async function POST(request: NextRequest) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
+export const POST = authRoute(async (request, { auth }) => {
+  const body = await request.json();
+  const { type, title, message, href, songId } = body;
 
-    if (authError) return authError;
-
-    const body = await request.json();
-    const { type, title, message, href, songId } = body;
-
-    if (!type || !title || !message || !VALID_TYPES.includes(type)) {
-      return NextResponse.json({ error: "Invalid input", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-
-    const notification = await prisma.notification.create({
-      data: {
-        userId: userId,
-        type,
-        title,
-        message,
-        href: href || null,
-        songId: songId || null,
-      },
-    });
-
-    invalidateByPrefix(cacheKey("notifications-unread", userId));
-
-    broadcast(userId, {
-      type: "notification",
-      data: { id: notification.id, type, title, message, href: href || null, songId: songId || null },
-    });
-
-    return NextResponse.json({ notification }, { status: 201 });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
+  if (!type || !title || !message || !VALID_TYPES.includes(type)) {
+    return badRequest("Invalid input");
   }
-}
+
+  const notification = await prisma.notification.create({
+    data: {
+      userId: auth.userId,
+      type,
+      title,
+      message,
+      href: href || null,
+      songId: songId || null,
+    },
+  });
+
+  invalidateByPrefix(cacheKey("notifications-unread", auth.userId));
+
+  broadcast(auth.userId, {
+    type: "notification",
+    data: { id: notification.id, type, title, message, href: href || null, songId: songId || null },
+  });
+
+  return NextResponse.json({ notification }, { status: 201 });
+}, { route: "/api/notifications" });
