@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
-import { broadcast } from "@/lib/event-bus";
-import { CacheControl, cached, invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { CacheControl, cached, cacheKey } from "@/lib/cache";
 import { badRequest } from "@/lib/api-error";
+import { createNotification, NOTIFICATION_TYPES } from "@/lib/notifications";
+import type { NotificationType } from "@/lib/notifications";
 
 export const GET = authRoute(async (request, { auth }) => {
   const searchParams = request.nextUrl.searchParams;
@@ -36,46 +37,21 @@ export const GET = authRoute(async (request, { auth }) => {
   });
 }, { route: "/api/notifications" });
 
-const VALID_TYPES = [
-  "generation_complete",
-  "generation_failed",
-  "import_complete",
-  "error",
-  "rate_limit_reset",
-  "announcement",
-  "credit_update",
-  "payment_failed",
-  "song_comment",
-  "new_follower",
-  "new_song_from_following",
-  "playlist_invite",
-  "milestone_earned",
-];
-
 export const POST = authRoute(async (request, { auth }) => {
   const body = await request.json();
   const { type, title, message, href, songId } = body;
 
-  if (!type || !title || !message || !VALID_TYPES.includes(type)) {
+  if (!type || !title || !message || !(NOTIFICATION_TYPES as readonly string[]).includes(type)) {
     return badRequest("Invalid input");
   }
 
-  const notification = await prisma.notification.create({
-    data: {
-      userId: auth.userId,
-      type,
-      title,
-      message,
-      href: href || null,
-      songId: songId || null,
-    },
-  });
-
-  invalidateByPrefix(cacheKey("notifications-unread", auth.userId));
-
-  broadcast(auth.userId, {
-    type: "notification",
-    data: { id: notification.id, type, title, message, href: href || null, songId: songId || null },
+  const notification = await createNotification({
+    userId: auth.userId,
+    type: type as NotificationType,
+    title,
+    message,
+    href: href || null,
+    songId: songId || null,
   });
 
   return NextResponse.json({ notification }, { status: 201 });

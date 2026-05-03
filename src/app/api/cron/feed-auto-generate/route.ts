@@ -6,6 +6,7 @@ import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
 import { getMonthlyCreditUsage, recordCreditUsage, CREDIT_COSTS } from "@/lib/credits";
 import { logger } from "@/lib/logger";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
+import { createNotification } from "@/lib/notifications";
 
 /**
  * POST /api/cron/feed-auto-generate
@@ -218,14 +219,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Notify user that auto-generation has started
-        await prisma.notification.create({
-          data: {
-            userId,
-            type: "generation_complete",
-            title: "Auto-generation started",
-            message: `Generating a song from "${feed.title ?? "RSS feed"}" — inspired by "${item.title?.slice(0, 80) ?? "a new item"}"`,
-            songId: song.id,
-          },
+        await createNotification({
+          userId,
+          type: "generation_complete",
+          title: "Auto-generation started",
+          message: `Generating a song from "${feed.title ?? "RSS feed"}" — inspired by "${item.title?.slice(0, 80) ?? "a new item"}"`,
+          songId: song.id,
         }).catch(() => {});
 
         // Update lastCheckedAt

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { broadcast } from "@/lib/event-bus";
+import { createNotification } from "@/lib/notifications";
 import { checkFirstFollowerMilestone } from "@/lib/streaks";
 import { sendPushToUser } from "@/lib/push";
 
@@ -64,18 +64,12 @@ export async function POST(
         });
         const followerName = follower?.name ?? follower?.username ?? "Someone";
         const profileHref = follower?.username ? `/u/${follower.username}` : undefined;
-        const notification = await prisma.notification.create({
-          data: {
-            userId: followingId,
-            type: "new_follower",
-            title: "New follower",
-            message: `${followerName} started following you`,
-            href: profileHref ?? null,
-          },
-        });
-        broadcast(followingId, {
-          type: "notification",
-          data: { id: notification.id, type: "new_follower" },
+        await createNotification({
+          userId: followingId,
+          type: "new_follower",
+          title: "New follower",
+          message: `${followerName} started following you`,
+          href: profileHref ?? null,
         });
         if (followedUser?.pushNewFollower !== false) {
           sendPushToUser(followingId, {

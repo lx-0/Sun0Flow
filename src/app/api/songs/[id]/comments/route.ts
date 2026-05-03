@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { broadcast } from "@/lib/event-bus";
+import { createNotification } from "@/lib/notifications";
 import { sendPushToUser } from "@/lib/push";
 import { stripHtml } from "@/lib/sanitize";
 
@@ -161,19 +161,13 @@ export async function POST(
           where: { id: song.userId },
           select: { pushSongComment: true },
         });
-        const notification = await prisma.notification.create({
-          data: {
-            userId: song.userId,
-            type: "song_comment",
-            title: "New comment",
-            message: `${commenterName} commented on "${songTitle}"`,
-            href: `/songs/${song.id}`,
-            songId: song.id,
-          },
-        });
-        broadcast(song.userId, {
-          type: "notification",
-          data: { id: notification.id, type: "song_comment" },
+        await createNotification({
+          userId: song.userId,
+          type: "song_comment",
+          title: "New comment",
+          message: `${commenterName} commented on "${songTitle}"`,
+          href: `/songs/${song.id}`,
+          songId: song.id,
         });
         if (songOwner?.pushSongComment !== false) {
           sendPushToUser(song.userId, {

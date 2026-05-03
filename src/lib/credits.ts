@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { TIER_LIMITS } from "@/lib/billing";
+import { createNotification } from "@/lib/notifications";
 
 /** Estimated credit cost per action type */
 export const CREDIT_COSTS: Record<string, number> = {
@@ -216,13 +217,11 @@ export async function createLowCreditNotification(
   creditsRemaining: number,
   budget: number = DEFAULT_MONTHLY_BUDGET
 ) {
-  return prisma.notification.create({
-    data: {
-      userId,
-      type: "low_credits",
-      title: "Low Credits Warning",
-      message: `You have approximately ${creditsRemaining} credits remaining this month (out of ${budget}). Consider reducing usage to avoid running out.`,
-      href: "/analytics",
-    },
+  return createNotification({
+    userId,
+    type: "low_credits",
+    title: "Low Credits Warning",
+    message: `You have approximately ${creditsRemaining} credits remaining this month (out of ${budget}). Consider reducing usage to avoid running out.`,
+    href: "/analytics",
   });
 }

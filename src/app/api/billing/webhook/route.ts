@@ -6,6 +6,7 @@ import { tierFromPriceId, TIER_LIMITS } from "@/lib/billing";
 import { logger } from "@/lib/logger";
 import { logServerError } from "@/lib/error-logger";
 import { SubscriptionStatus } from "@prisma/client";
+import { createNotification } from "@/lib/notifications";
 
 // POST /api/billing/webhook
 // Handles Stripe webhook events. Stripe signature verified via STRIPE_WEBHOOK_SECRET.
@@ -247,14 +248,12 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
     if (sub && sub.tier !== "free") {
       const credits = TIER_LIMITS[sub.tier]?.creditsPerMonth;
       if (credits) {
-        await prisma.notification.create({
-          data: {
-            userId,
-            type: "credit_update",
-            title: "Credits refreshed",
-            message: `Your monthly ${credits.toLocaleString()} credits are ready to use.`,
-            href: "/settings/billing",
-          },
+        await createNotification({
+          userId,
+          type: "credit_update",
+          title: "Credits refreshed",
+          message: `Your monthly ${credits.toLocaleString()} credits are ready to use.`,
+          href: "/settings/billing",
         });
       }
     }
@@ -301,15 +300,13 @@ async function handleInvoicePaymentFailed(event: Stripe.Event) {
     });
 
     // Notify the user
-    await prisma.notification.create({
-      data: {
-        userId,
-        type: "payment_failed",
-        title: "Payment Failed",
-        message:
-          "Your latest payment failed. Please update your payment method to keep your subscription active.",
-        href: "/settings/billing",
-      },
+    await createNotification({
+      userId,
+      type: "payment_failed",
+      title: "Payment Failed",
+      message:
+        "Your latest payment failed. Please update your payment method to keep your subscription active.",
+      href: "/settings/billing",
     });
   }
 
@@ -401,14 +398,12 @@ async function handleTopupCheckoutCompleted(
   });
 
   // Notify user
-  await prisma.notification.create({
-    data: {
-      userId,
-      type: "credit_update",
-      title: "Credits added",
-      message: `${credits} credits have been added to your account and are ready to use.`,
-      href: "/settings/billing",
-    },
+  await createNotification({
+    userId,
+    type: "credit_update",
+    title: "Credits added",
+    message: `${credits} credits have been added to your account and are ready to use.`,
+    href: "/settings/billing",
   });
 
   logger.info(

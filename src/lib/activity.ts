@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { broadcast } from "@/lib/event-bus";
-import { invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { createNotification } from "@/lib/notifications";
 
 export async function recordActivity(params: {
   userId: string;
@@ -55,22 +54,15 @@ async function notifyFollowersOfNewSong(creatorId: string, songId: string) {
   const href = song.publicSlug ? `/s/${song.publicSlug}` : null;
 
   await Promise.allSettled(
-    followers.map(async ({ followerId }) => {
-      const notification = await prisma.notification.create({
-        data: {
-          userId: followerId,
-          type: "new_song_from_following",
-          title: "New song from someone you follow",
-          message: `${creatorName} published "${songTitle}"`,
-          href: href ?? null,
-          songId,
-        },
-      });
-      invalidateByPrefix(cacheKey("notifications-unread", followerId));
-      broadcast(followerId, {
-        type: "notification",
-        data: { id: notification.id, type: "new_song_from_following" },
-      });
-    })
+    followers.map(({ followerId }) =>
+      createNotification({
+        userId: followerId,
+        type: "new_song_from_following",
+        title: "New song from someone you follow",
+        message: `${creatorName} published "${songTitle}"`,
+        href: href ?? null,
+        songId,
+      })
+    )
   );
 }

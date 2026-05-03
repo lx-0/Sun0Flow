@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
-import { broadcast } from "@/lib/event-bus";
+import { createNotification } from "@/lib/notifications";
 import crypto from "crypto";
 
 const INVITE_TTL_DAYS = 7;
@@ -139,18 +139,12 @@ export async function POST(
           select: { name: true },
         });
         const inviterName = inviterUser?.name ?? "Someone";
-        const notification = await prisma.notification.create({
-          data: {
-            userId: targetUser.id,
-            type: "playlist_invite",
-            title: "Playlist invite",
-            message: `${inviterName} invited you to collaborate on "${playlist.name}"`,
-            href: `/playlists/${playlist.id}`,
-          },
-        });
-        broadcast(targetUser.id, {
-          type: "notification",
-          data: { id: notification.id, type: "playlist_invite" },
+        await createNotification({
+          userId: targetUser.id,
+          type: "playlist_invite",
+          title: "Playlist invite",
+          message: `${inviterName} invited you to collaborate on "${playlist.name}"`,
+          href: `/playlists/${playlist.id}`,
         });
       } catch {
         // Non-critical

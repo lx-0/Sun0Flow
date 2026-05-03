@@ -17,7 +17,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { broadcast } from "@/lib/event-bus";
+import { createNotification } from "@/lib/notifications";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -141,27 +141,13 @@ async function awardMilestone(userId: string, type: MilestoneType): Promise<void
 
   await prisma.userMilestone.create({ data: { userId, type } });
 
-  // Create an in-app notification
   try {
-    const notification = await prisma.notification.create({
-      data: {
-        userId,
-        type: "milestone_earned",
-        title: `${meta.emoji} ${meta.label} unlocked!`,
-        message: meta.description,
-        href: "/profile",
-      },
-    });
-
-    broadcast(userId, {
-      type: "notification",
-      data: {
-        id: notification.id,
-        type: "milestone_earned",
-        title: notification.title,
-        message: notification.message,
-        href: notification.href,
-      },
+    await createNotification({
+      userId,
+      type: "milestone_earned",
+      title: `${meta.emoji} ${meta.label} unlocked!`,
+      message: meta.description,
+      href: "/profile",
     });
   } catch {
     // Non-critical — milestone row is already written

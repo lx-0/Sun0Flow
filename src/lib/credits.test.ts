@@ -23,10 +23,14 @@ const mockCreditUsageCreate = vi.fn();
 const mockCreditUsageAggregate = vi.fn();
 const mockCreditTopUpAggregate = vi.fn();
 const mockNotificationFindFirst = vi.fn();
-const mockNotificationCreate = vi.fn();
+const mockCreateNotification = vi.fn().mockResolvedValue({ id: "notif-new" });
 const mockQueryRaw = vi.fn();
 const mockUserFindUnique = vi.fn();
 const mockSubscriptionFindUnique = vi.fn();
+
+vi.mock("@/lib/notifications", () => ({
+  createNotification: (...args: unknown[]) => mockCreateNotification(...args),
+}));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -39,7 +43,6 @@ vi.mock("@/lib/prisma", () => ({
     },
     notification: {
       findFirst: (...args: unknown[]) => mockNotificationFindFirst(...args),
-      create: (...args: unknown[]) => mockNotificationCreate(...args),
     },
     user: {
       findUnique: (...args: unknown[]) => mockUserFindUnique(...args),
@@ -264,31 +267,27 @@ describe("shouldNotifyLowCredits", () => {
 
 describe("createLowCreditNotification", () => {
   it("creates a notification with correct message", async () => {
-    mockNotificationCreate.mockResolvedValue({ id: "notif-new" });
-
     await createLowCreditNotification("user-1", 50);
 
-    expect(mockNotificationCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
         userId: "user-1",
         type: "low_credits",
         title: "Low Credits Warning",
         href: "/analytics",
       }),
-    });
+    );
 
-    const call = mockNotificationCreate.mock.calls[0][0];
-    expect(call.data.message).toContain("50");
-    expect(call.data.message).toContain("500");
+    const call = mockCreateNotification.mock.calls[0][0];
+    expect(call.message).toContain("50");
+    expect(call.message).toContain("500");
   });
 
   it("creates a notification with custom budget", async () => {
-    mockNotificationCreate.mockResolvedValue({ id: "notif-new" });
-
     await createLowCreditNotification("user-1", 100, 1500);
 
-    const call = mockNotificationCreate.mock.calls[0][0];
-    expect(call.data.message).toContain("100");
-    expect(call.data.message).toContain("1500");
+    const call = mockCreateNotification.mock.calls[0][0];
+    expect(call.message).toContain("100");
+    expect(call.message).toContain("1500");
   });
 });
