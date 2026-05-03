@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import * as Sentry from "@sentry/nextjs";
 import { resolveUser } from "@/lib/auth-resolver";
-import { generateSong, SunoApiError } from "@/lib/sunoapi";
-import { prisma } from "@/lib/prisma";
+import { generateSong } from "@/lib/sunoapi";
 import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
@@ -14,7 +13,8 @@ import { badRequest, internalError } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
 import {
   checkCreditBalance,
-  createSongRecord,
+  executeGeneration,
+  type GenerationOutcome,
 } from "@/lib/generation";
 
 const MIN_BATCH = 2;
@@ -89,92 +89,77 @@ export async function POST(request: Request) {
         instrumental: Boolean(c.makeInstrumental),
       };
 
-      const songParams = {
-        title: genParams.title || null,
-        prompt: genParams.prompt,
-        tags: genParams.style || null,
-        isInstrumental: genParams.instrumental,
-        batchId,
-      };
+      const outcome: GenerationOutcome = await executeGeneration({
+        userId,
+        action: "generate",
+        songParams: {
+          title: genParams.title || null,
+          prompt: genParams.prompt,
+          tags: genParams.style || null,
+          isInstrumental: genParams.instrumental,
+          batchId,
+        },
+        hasApiKey,
+        mockFallback: mockSongs[i % mockSongs.length],
+        skipCredits: true,
+        skipRateLimit: true,
+        description: `Batch generation ${i + 1}/${configs.length}: ${genParams.title || "Untitled"}`,
+        apiCall: () =>
+          Sentry.startSpan(
+            {
+              name: "suno.generateSong.batch",
+              op: "http.client",
+              attributes: { "batch.index": i, "batch.id": batchId },
+            },
+            () =>
+              generateSong(
+                genParams.prompt,
+                {
+                  title: genParams.title,
+                  style: genParams.style,
+                  instrumental: genParams.instrumental,
+                  model: (c.model as never) || undefined,
+                },
+                userApiKey
+              )
+          ),
+      });
 
-      if (!hasApiKey) {
-        const song = await createSongRecord(
-          userId,
-          songParams,
-          { status: "ready", mock: mockSongs[i % mockSongs.length] }
-        );
-        results.push({
-          index: i,
-          songId: song.id,
-          sunoJobId: null,
-          status: "ready",
-        });
+      if (outcome.status === "denied") {
+        results.push({ index: i, songId: "", sunoJobId: null, status: "failed", error: "denied" });
         continue;
       }
 
-      try {
-        logger.info(
-          { userId, batchId, index: i, title: genParams.title },
-          "batch-generate: starting generation"
-        );
-
-        const result = await Sentry.startSpan(
-          {
-            name: "suno.generateSong.batch",
-            op: "http.client",
-            attributes: { "batch.index": i, "batch.id": batchId },
-          },
-          () =>
-            generateSong(
-              genParams.prompt,
-              {
-                title: genParams.title,
-                style: genParams.style,
-                instrumental: genParams.instrumental,
-                model: (c.model as never) || undefined,
-              },
-              userApiKey
-            )
-        );
-
-        const song = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
-
-        results.push({
-          index: i,
-          songId: song.id,
-          sunoJobId: result.taskId,
-          status: "pending",
-        });
-
-        if (!usingPersonalKey) {
-          await recordCreditUsage(userId, "generate", {
-            songId: song.id,
-            creditCost: CREDIT_COSTS.generate,
-            description: `Batch generation ${i + 1}/${configs.length}: ${genParams.title || "Untitled"}`,
-          });
-        }
-      } catch (apiError) {
-        const errorMsg =
-          apiError instanceof SunoApiError
-            ? `Generation failed: ${apiError.message}`
-            : "Song generation failed";
-
-        logServerError("batch-generate", apiError, {
+      if (outcome.status === "failed") {
+        logServerError("batch-generate", outcome.rawError, {
           userId,
           route: "/api/songs/batch-generate",
           params: { batchId, index: i },
         });
-
-        const song = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
-
         results.push({
           index: i,
-          songId: song.id,
+          songId: outcome.song.id,
           sunoJobId: null,
           status: "failed",
-          error: errorMsg,
+          error: outcome.error,
+        });
+        continue;
+      }
+
+      if (!usingPersonalKey) {
+        await recordCreditUsage(userId, "generate", {
+          songId: outcome.song.id,
+          creditCost: CREDIT_COSTS.generate,
+          description: `Batch generation ${i + 1}/${configs.length}: ${genParams.title || "Untitled"}`,
         });
       }
+
+      results.push({
+        index: i,
+        songId: outcome.song.id,
+        sunoJobId: outcome.song.sunoJobId ?? null,
+        status: outcome.song.generationStatus as "pending" | "ready",
+      });
     }
 
     const succeeded = results.filter((r) => r.status !== "failed").length;
