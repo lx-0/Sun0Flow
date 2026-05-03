@@ -12,9 +12,7 @@ import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import {
   userFriendlyError,
   recordCreditsAndNotify,
-  createMockSongRecord,
-  createPendingSongRecord,
-  createFailedSongRecord,
+  createSongRecord,
 } from "@/lib/generation";
 
 export async function POST(request: Request) {
@@ -68,7 +66,7 @@ export async function POST(request: Request) {
     let song;
 
     if (!hasApiKey) {
-      song = await createMockSongRecord(userId, mockSongs[0], songParams);
+      song = await createSongRecord(userId, songParams, { status: "ready", mock: mockSongs[0] });
     } else {
       try {
         const result = await generateSong(
@@ -82,7 +80,7 @@ export async function POST(request: Request) {
           userApiKey
         );
 
-        song = await createPendingSongRecord(userId, result.taskId, songParams);
+        song = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
       } catch (apiError) {
         const correlationId = logServerError("queue-process", apiError, {
           userId,
@@ -91,7 +89,7 @@ export async function POST(request: Request) {
         });
         const { message: errorMsg, code: errorCode, details: errorDetails } = userFriendlyError(apiError);
 
-        song = await createFailedSongRecord(userId, errorMsg, songParams);
+        song = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
 
         await prisma.generationQueueItem.update({
           where: { id: nextItem.id },

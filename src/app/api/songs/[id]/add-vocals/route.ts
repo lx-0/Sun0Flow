@@ -9,9 +9,7 @@ import { sanitizeText } from "@/lib/sanitize";
 import {
   userFriendlyError,
   enforceRateLimit,
-  createMockSongRecord,
-  createPendingSongRecord,
-  createFailedSongRecord,
+  createSongRecord,
 } from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
@@ -87,7 +85,7 @@ export async function POST(
 
     let savedSong;
     if (!hasApiKey) {
-      savedSong = await createMockSongRecord(userId, mockSongs[0], songParams);
+      savedSong = await createSongRecord(userId, songParams, { status: "ready", mock: mockSongs[0] });
     } else {
       if (!parentSong.audioUrl) {
         return NextResponse.json({ error: "Parent song has no audio URL to add vocals to.", code: "VALIDATION_ERROR" }, { status: 400 });
@@ -103,11 +101,11 @@ export async function POST(
           userApiKey
         );
 
-        savedSong = await createPendingSongRecord(userId, result.taskId, songParams);
+        savedSong = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
       } catch (apiError) {
         logServerError("add-vocals-api", apiError, { userId, route: `/api/songs/${parentId}/add-vocals` });
         const { message: errorMsg } = userFriendlyError(apiError);
-        savedSong = await createFailedSongRecord(userId, errorMsg, songParams);
+        savedSong = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
 
         return NextResponse.json({ song: savedSong, error: errorMsg, rateLimit: rateLimitStatus }, { status: 201 });
       }

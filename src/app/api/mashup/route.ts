@@ -14,8 +14,7 @@ import { canUseFeature, SubscriptionTier } from "@/lib/feature-gates";
 import {
   userFriendlyError,
   enforceRateLimit,
-  createPendingSongRecord,
-  createFailedSongRecord,
+  createSongRecord,
 } from "@/lib/generation";
 
 const EXPIRY_BUFFER_MS = 60 * 60 * 1000;
@@ -167,7 +166,7 @@ export async function POST(request: Request) {
         userApiKey
       );
 
-      const song = await createPendingSongRecord(userId, result.taskId, songParams);
+      const song = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
 
       invalidateByPrefix(`dashboard-stats:${userId}`);
 
@@ -182,7 +181,7 @@ export async function POST(request: Request) {
       });
 
       const { message: errorMsg } = userFriendlyError(apiError);
-      const song = await createFailedSongRecord(userId, errorMsg, songParams);
+      const song = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
 
       return NextResponse.json(
         { songs: [song], error: errorMsg, rateLimit: rateLimitStatus },

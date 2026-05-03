@@ -10,7 +10,7 @@ export interface SongParams {
   batchId?: string;
 }
 
-interface MockData {
+export interface MockData {
   title?: string | null;
   tags?: string | null;
   audioUrl?: string | null;
@@ -20,66 +20,56 @@ interface MockData {
   model?: string | null;
 }
 
-export function createMockSongRecord(
-  userId: string,
-  mock: MockData,
-  params: SongParams
-): Promise<Song> {
-  return prisma.song.create({
-    data: {
-      userId,
-      title: mock.title || params.title || null,
-      prompt: params.prompt,
-      tags: mock.tags || params.tags || null,
-      audioUrl: mock.audioUrl || null,
-      imageUrl: mock.imageUrl || null,
-      duration: mock.duration ?? null,
-      lyrics: mock.lyrics || null,
-      sunoModel: mock.model || null,
-      isInstrumental: params.isInstrumental,
-      generationStatus: "ready",
-      parentSongId: params.parentSongId ?? null,
-      batchId: params.batchId,
-    },
-  });
-}
+export type SongRecordInput =
+  | { status: "ready"; mock: MockData }
+  | { status: "pending"; sunoJobId: string }
+  | { status: "failed"; errorMessage: string };
 
-export function createPendingSongRecord(
+export function createSongRecord(
   userId: string,
-  sunoJobId: string,
-  params: SongParams
+  params: SongParams,
+  input: SongRecordInput
 ): Promise<Song> {
-  return prisma.song.create({
-    data: {
-      userId,
-      sunoJobId,
-      title: params.title || null,
-      prompt: params.prompt,
-      tags: params.tags || null,
-      isInstrumental: params.isInstrumental,
-      generationStatus: "pending",
-      parentSongId: params.parentSongId ?? null,
-      batchId: params.batchId,
-    },
-  });
-}
+  const base = {
+    userId,
+    title: params.title || null,
+    prompt: params.prompt,
+    tags: params.tags || null,
+    isInstrumental: params.isInstrumental,
+    parentSongId: params.parentSongId ?? null,
+    batchId: params.batchId,
+  };
 
-export function createFailedSongRecord(
-  userId: string,
-  errorMessage: string,
-  params: SongParams
-): Promise<Song> {
-  return prisma.song.create({
-    data: {
-      userId,
-      title: params.title || null,
-      prompt: params.prompt,
-      tags: params.tags || null,
-      isInstrumental: params.isInstrumental,
-      generationStatus: "failed",
-      errorMessage,
-      parentSongId: params.parentSongId ?? null,
-      batchId: params.batchId,
-    },
-  });
+  switch (input.status) {
+    case "ready":
+      return prisma.song.create({
+        data: {
+          ...base,
+          title: input.mock.title || base.title,
+          tags: input.mock.tags || base.tags,
+          audioUrl: input.mock.audioUrl || null,
+          imageUrl: input.mock.imageUrl || null,
+          duration: input.mock.duration ?? null,
+          lyrics: input.mock.lyrics || null,
+          sunoModel: input.mock.model || null,
+          generationStatus: "ready",
+        },
+      });
+    case "pending":
+      return prisma.song.create({
+        data: {
+          ...base,
+          sunoJobId: input.sunoJobId,
+          generationStatus: "pending",
+        },
+      });
+    case "failed":
+      return prisma.song.create({
+        data: {
+          ...base,
+          errorMessage: input.errorMessage,
+          generationStatus: "failed",
+        },
+      });
+  }
 }

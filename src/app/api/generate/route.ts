@@ -22,9 +22,7 @@ import {
   enforceRateLimit,
   checkCreditBalance,
   recordCreditsAndNotify,
-  createMockSongRecord,
-  createPendingSongRecord,
-  createFailedSongRecord,
+  createSongRecord,
 } from "@/lib/generation";
 
 onCircuitClose(() => {
@@ -89,7 +87,7 @@ export async function POST(request: Request) {
 
     let savedSongs;
     if (!hasApiKey) {
-      const song = await createMockSongRecord(userId, mockSongs[0], songParams);
+      const song = await createSongRecord(userId, songParams, { status: "ready", mock: mockSongs[0] });
       savedSongs = [song];
     } else {
       try {
@@ -114,7 +112,7 @@ export async function POST(request: Request) {
         recordGenerationEnd(genMs, true);
         logger.info({ userId, taskId: result.taskId, durationMs: genMs }, "generation: api call succeeded");
 
-        const song = await createPendingSongRecord(userId, result.taskId, songParams);
+        const song = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
 
         try {
           const [placeholderVariant] = generateCoverArtVariants({
@@ -181,7 +179,7 @@ export async function POST(request: Request) {
         }
 
         const { message: errorMsg, code: errorCode, details: errorDetails } = userFriendlyError(apiError);
-        const song = await createFailedSongRecord(userId, errorMsg, songParams);
+        const song = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
         savedSongs = [song];
 
         let creditBalance: number | undefined;

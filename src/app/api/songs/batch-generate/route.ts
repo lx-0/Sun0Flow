@@ -14,9 +14,7 @@ import { badRequest, internalError } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
 import {
   checkCreditBalance,
-  createMockSongRecord,
-  createPendingSongRecord,
-  createFailedSongRecord,
+  createSongRecord,
 } from "@/lib/generation";
 
 const MIN_BATCH = 2;
@@ -100,10 +98,10 @@ export async function POST(request: Request) {
       };
 
       if (!hasApiKey) {
-        const song = await createMockSongRecord(
+        const song = await createSongRecord(
           userId,
-          mockSongs[i % mockSongs.length],
-          songParams
+          songParams,
+          { status: "ready", mock: mockSongs[i % mockSongs.length] }
         );
         results.push({
           index: i,
@@ -139,7 +137,7 @@ export async function POST(request: Request) {
             )
         );
 
-        const song = await createPendingSongRecord(userId, result.taskId, songParams);
+        const song = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
 
         results.push({
           index: i,
@@ -167,7 +165,7 @@ export async function POST(request: Request) {
           params: { batchId, index: i },
         });
 
-        const song = await createFailedSongRecord(userId, errorMsg, songParams);
+        const song = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
 
         results.push({
           index: i,
