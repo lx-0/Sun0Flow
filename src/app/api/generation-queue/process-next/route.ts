@@ -10,9 +10,9 @@ import { rateLimited, internalError } from "@/lib/api-error";
 import { invalidateByPrefix } from "@/lib/cache";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import {
+  executeGeneration,
   userFriendlyError,
   recordCreditsAndNotify,
-  createSongRecord,
 } from "@/lib/generation";
 
 export async function POST(request: Request) {
@@ -56,20 +56,20 @@ export async function POST(request: Request) {
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || SUNOAPI_KEY);
 
-    const songParams = {
-      title: nextItem.title || null,
-      prompt: nextItem.prompt,
-      tags: nextItem.tags || null,
-      isInstrumental: nextItem.makeInstrumental,
-    };
-
-    let song;
-
-    if (!hasApiKey) {
-      song = await createSongRecord(userId, songParams, { status: "ready", mock: mockSongs[0] });
-    } else {
-      try {
-        const result = await generateSong(
+    const outcome = await executeGeneration({
+      userId,
+      action: "generate",
+      songParams: {
+        title: nextItem.title || null,
+        prompt: nextItem.prompt,
+        tags: nextItem.tags || null,
+        isInstrumental: nextItem.makeInstrumental,
+      },
+      hasApiKey,
+      mockFallback: mockSongs[0],
+      description: `Song generation (queued): ${nextItem.title || "Untitled"}`,
+      apiCall: () =>
+        generateSong(
           nextItem.prompt,
           {
             title: nextItem.title || undefined,
@@ -78,58 +78,68 @@ export async function POST(request: Request) {
             personaId: nextItem.personaId || undefined,
           },
           userApiKey
-        );
+        ),
+      skipRateLimit: true,
+      skipCredits: true,
+    });
 
-        song = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
-      } catch (apiError) {
-        const correlationId = logServerError("queue-process", apiError, {
-          userId,
-          route: "/api/generation-queue/process-next",
-          params: { queueItemId: nextItem.id },
-        });
-        const { message: errorMsg, code: errorCode, details: errorDetails } = userFriendlyError(apiError);
-
-        song = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
-
-        await prisma.generationQueueItem.update({
-          where: { id: nextItem.id },
-          data: { status: "failed", songId: song.id, errorMessage: errorMsg },
-        });
-
-        let creditBalance: number | undefined;
-        if (apiError instanceof SunoApiError && apiError.status === 402) {
-          creditBalance = await getRemainingCredits().catch(() => undefined);
-        }
-
-        return NextResponse.json(
-          {
-            item: { ...nextItem, status: "failed", songId: song.id, errorMessage: errorMsg },
-            song,
-            error: errorMsg,
-            code: errorCode,
-            ...(errorDetails && { details: errorDetails }),
-            ...(creditBalance !== undefined && { creditBalance }),
-            correlationId,
-          },
-          { status: 201 }
-        );
-      }
+    if (outcome.status === "denied") {
+      await prisma.generationQueueItem.update({
+        where: { id: nextItem.id },
+        data: { status: "failed", errorMessage: "Generation denied" },
+      });
+      return outcome.response;
     }
 
-    const queueStatus = song.generationStatus === "ready" ? "done" : "processing";
+    if (outcome.status === "failed") {
+      const correlationId = logServerError("queue-process", outcome.rawError, {
+        userId,
+        route: "/api/generation-queue/process-next",
+        params: { queueItemId: nextItem.id },
+      });
+      const { code: errorCode, details: errorDetails } = userFriendlyError(outcome.rawError);
+
+      await prisma.generationQueueItem.update({
+        where: { id: nextItem.id },
+        data: { status: "failed", songId: outcome.song.id, errorMessage: outcome.error },
+      });
+
+      let creditBalance: number | undefined;
+      if (outcome.rawError instanceof SunoApiError && outcome.rawError.status === 402) {
+        creditBalance = await getRemainingCredits().catch(() => undefined);
+      }
+
+      return NextResponse.json(
+        {
+          item: { ...nextItem, status: "failed", songId: outcome.song.id, errorMessage: outcome.error },
+          song: outcome.song,
+          error: outcome.error,
+          code: errorCode,
+          ...(errorDetails && { details: errorDetails }),
+          ...(creditBalance !== undefined && { creditBalance }),
+          correlationId,
+        },
+        { status: 201 }
+      );
+    }
+
+    const queueStatus = outcome.song.generationStatus === "ready" ? "done" : "processing";
     await prisma.generationQueueItem.update({
       where: { id: nextItem.id },
-      data: { songId: song.id, status: queueStatus },
+      data: { songId: outcome.song.id, status: queueStatus },
     });
 
     await recordCreditsAndNotify(userId, "generate", {
-      songId: song.id,
+      songId: outcome.song.id,
       description: `Song generation (queued): ${nextItem.title || "Untitled"}`,
     });
 
     invalidateByPrefix(`dashboard-stats:${userId}`);
 
-    return NextResponse.json({ item: { ...nextItem, status: queueStatus, songId: song.id }, song }, { status: 201 });
+    return NextResponse.json(
+      { item: { ...nextItem, status: queueStatus, songId: outcome.song.id }, song: outcome.song },
+      { status: 201 }
+    );
   } catch (error) {
     logServerError("queue-process-route", error, { route: "/api/generation-queue/process-next" });
     return internalError();
