@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -16,8 +16,6 @@ import {
   ForwardIcon,
   MicrophoneIcon,
   SpeakerWaveIcon,
-  SpeakerXMarkIcon,
-  XMarkIcon,
   ScissorsIcon,
   PaintBrushIcon,
   FilmIcon,
@@ -29,125 +27,28 @@ import {
 } from "@heroicons/react/24/solid";
 import { HeartIcon as HeartOutlineIcon, HandThumbUpIcon as HandThumbUpOutlineIcon, HandThumbDownIcon as HandThumbDownOutlineIcon, DocumentDuplicateIcon } from "@heroicons/react/24/outline";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
+import { useSongStems } from "@/hooks/useSongStems";
 import type { SunoSong } from "@/lib/sunoapi";
 import { getRating, type SongRating } from "@/lib/ratings";
 import { useToast } from "./Toast";
 import { useQueue } from "./QueueContext";
+import { StarPicker } from "./StarPicker";
+import { StemsPlayer } from "./StemsPlayer";
+import { SeparateVocalsModal } from "./SeparateVocalsModal";
+import { type RemixAction } from "./RemixModal";
+const EmbedCodeModal = dynamic(() => import("./EmbedCodeModal").then((m) => m.EmbedCodeModal), { ssr: false });
+const CreateVariationModal = dynamic(() => import("./CreateVariationModal").then((m) => m.CreateVariationModal), { ssr: false });
+const RemixModal = dynamic(() => import("./RemixModal").then((m) => m.RemixModal), { ssr: false });
 const ReportModal = dynamic(() => import("./ReportModal").then((m) => m.ReportModal), { ssr: false });
-import { TagInput } from "./TagInput";
-// Lazy-load modal/tool components that are only shown on user interaction
 const SectionEditor = dynamic(() => import("./SectionEditor").then((m) => m.SectionEditor), { ssr: false });
 const CoverArtModal = dynamic(() => import("./CoverArtModal").then((m) => m.CoverArtModal), { ssr: false });
+const RecommendationSection = dynamic(() => import("./SongRecommendations").then((m) => m.RecommendationSection), { ssr: false });
+import { TagInput } from "./TagInput";
 import { CoverArtImage } from "./CoverArtImage";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
-// Lazy-load below-fold recommendations to reduce initial bundle
-const RecommendationSection = dynamic(() => import("./SongRecommendations").then((m) => m.RecommendationSection), { ssr: false });
 import { SongMetadataCard } from "./SongMetadataCard";
 import { SongActionsBar } from "./SongActionsBar";
 import { SongLyricsSection } from "./SongLyricsSection";
-
-// ─── EmbedCodeModal ───────────────────────────────────────────────────────────
-
-function EmbedCodeModal({
-  songId,
-  theme,
-  autoplay,
-  onThemeChange,
-  onAutoplayChange,
-  onClose,
-}: {
-  songId: string;
-  theme: "dark" | "light";
-  autoplay: boolean;
-  onThemeChange: (t: "dark" | "light") => void;
-  onAutoplayChange: (v: boolean) => void;
-  onClose: () => void;
-}) {
-  const [copied, setCopied] = useState(false);
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const autoplayParam = autoplay ? "&autoplay=1" : "";
-  const src = `${origin}/embed/${songId}?theme=${theme}${autoplayParam}`;
-  const snippet = `<iframe\n  src="${src}"\n  width="100%"\n  height="96"\n  frameborder="0"\n  allow="autoplay"\n  loading="lazy"\n  title="SunoFlow player"\n></iframe>`;
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(snippet);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Get Embed Code</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-            <XMarkIcon className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Options */}
-        <div className="flex flex-wrap gap-4">
-          {/* Theme */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Theme</p>
-            <div className="flex gap-2">
-              {(["dark", "light"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => onThemeChange(t)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-colors ${
-                    theme === t
-                      ? "bg-violet-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Autoplay */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Autoplay</p>
-            <button
-              onClick={() => onAutoplayChange(!autoplay)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                autoplay
-                  ? "bg-violet-600 text-white"
-                  : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-              }`}
-            >
-              {autoplay ? "On" : "Off"}
-            </button>
-          </div>
-        </div>
-
-        {/* Snippet */}
-        <div className="relative">
-          <pre className="bg-gray-950 text-green-400 text-xs rounded-xl p-4 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
-            {snippet}
-          </pre>
-          <button
-            onClick={handleCopy}
-            className="absolute top-2 right-2 px-2 py-1 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
-          >
-            {copied ? "Copied!" : "Copy"}
-          </button>
-        </div>
-
-        {/* Preview label */}
-        <p className="text-xs text-gray-400 dark:text-gray-500">
-          Paste this snippet into any HTML page to embed the player.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -156,769 +57,6 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-// ─── Star rating widget ────────────────────────────────────────────────────────
-
-interface StarPickerProps {
-  value: number;
-  onChange: (stars: number) => void;
-}
-
-function StarPicker({ value, onChange }: StarPickerProps) {
-  const [hovered, setHovered] = useState(0);
-
-  return (
-    <div className="flex gap-1" role="group" aria-label="Star rating">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <button
-          key={star}
-          onClick={() => onChange(star)}
-          onMouseEnter={() => setHovered(star)}
-          onMouseLeave={() => setHovered(0)}
-          aria-label={`${star} star${star !== 1 ? "s" : ""}`}
-          className="text-2xl min-w-[44px] min-h-[44px] flex items-center justify-center transition-transform hover:scale-110"
-        >
-          <span
-            className={
-              star <= (hovered || value) ? "text-yellow-400" : "text-gray-300 dark:text-gray-600"
-            }
-          >
-            ★
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ─── Create Variation Modal ───────────────────────────────────────────────────
-
-interface CreateVariationModalProps {
-  sourceSong: { prompt: string | null; tags: string | null; lyrics: string | null; title: string | null; isInstrumental?: boolean };
-  onClose: () => void;
-  onSubmit: (data: { prompt: string; tags: string; lyrics: string; title: string; makeInstrumental: boolean }) => void;
-  submitting: boolean;
-}
-
-const TEMPO_OPTIONS = [
-  { value: "", label: "Original tempo" },
-  { value: "faster tempo", label: "Faster" },
-  { value: "slower tempo", label: "Slower" },
-  { value: "uptempo", label: "Uptempo" },
-  { value: "downtempo", label: "Downtempo" },
-];
-
-const MOOD_OPTIONS = [
-  { value: "", label: "Original mood" },
-  { value: "happy", label: "Happy" },
-  { value: "melancholic", label: "Melancholic" },
-  { value: "dark", label: "Dark" },
-  { value: "energetic", label: "Energetic" },
-  { value: "chill", label: "Chill" },
-  { value: "romantic", label: "Romantic" },
-  { value: "epic", label: "Epic" },
-];
-
-function CreateVariationModal({ sourceSong, onClose, onSubmit, submitting }: CreateVariationModalProps) {
-  const [prompt, setPrompt] = useState(sourceSong.prompt ?? "");
-  const [tags, setTags] = useState(sourceSong.tags ?? "");
-  const [lyrics, setLyrics] = useState(sourceSong.lyrics ?? "");
-  const [title, setTitle] = useState(sourceSong.title ? `${sourceSong.title} (variation)` : "");
-  const [makeInstrumental, setMakeInstrumental] = useState(sourceSong.isInstrumental ?? false);
-  const [tempoShift, setTempoShift] = useState("");
-  const [moodModifier, setMoodModifier] = useState("");
-  const [instrumentSwap, setInstrumentSwap] = useState("");
-
-  function buildEnrichedTags(): string {
-    const modifiers = [tempoShift, moodModifier, instrumentSwap.trim()].filter(Boolean);
-    const base = tags.trim();
-    if (!modifiers.length) return base;
-    return base ? `${base}, ${modifiers.join(", ")}` : modifiers.join(", ");
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    onSubmit({ prompt, tags: buildEnrichedTags(), lyrics, title, makeInstrumental });
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Create Variation</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1">
-            <XMarkIcon className="w-5 h-5" />
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Pre-filled from the source song. Modify any field before generating.
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Prompt *</label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the song..."
-              rows={3}
-              required
-              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:border-violet-500 transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Style / tags (optional)</label>
-            <input
-              type="text"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="e.g. pop, rock, electronic"
-              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-violet-500 transition-colors"
-            />
-          </div>
-
-          {/* Variation parameters */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Variation parameters</p>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Tempo shift</label>
-                <select
-                  value={tempoShift}
-                  onChange={(e) => setTempoShift(e.target.value)}
-                  className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-violet-500 transition-colors"
-                >
-                  {TEMPO_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Mood</label>
-                <select
-                  value={moodModifier}
-                  onChange={(e) => setMoodModifier(e.target.value)}
-                  className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-violet-500 transition-colors"
-                >
-                  {MOOD_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Instrument swap (optional)</label>
-              <input
-                type="text"
-                value={instrumentSwap}
-                onChange={(e) => setInstrumentSwap(e.target.value)}
-                placeholder="e.g. piano, guitar, strings, synthesizer"
-                className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-violet-500 transition-colors"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Lyrics (optional)</label>
-            <textarea
-              value={lyrics}
-              onChange={(e) => setLyrics(e.target.value)}
-              placeholder="Enter lyrics or leave blank for AI-generated lyrics..."
-              rows={4}
-              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:border-violet-500 transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Title (optional)</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Variation title..."
-              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-violet-500 transition-colors"
-            />
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={makeInstrumental}
-              onChange={(e) => setMakeInstrumental(e.target.checked)}
-              className="w-4 h-4 accent-violet-600"
-            />
-            <span className="text-sm text-gray-700 dark:text-gray-300">Instrumental</span>
-          </label>
-
-          <button
-            type="submit"
-            disabled={submitting || !prompt.trim()}
-            className="w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
-          >
-            {submitting ? "Generating..." : "Create Variation"}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ─── Extend Modal ─────────────────────────────────────────────────────────────
-
-type RemixAction = "extend" | "add-vocals" | "add-instrumental";
-
-interface RemixModalProps {
-  action: RemixAction;
-  songTitle: string;
-  songTags: string | null;
-  songDuration: number | null;
-  onClose: () => void;
-  onSubmit: (action: RemixAction, data: Record<string, string | number | undefined>) => void;
-  submitting: boolean;
-}
-
-function RemixModal({ action, songTitle, songTags, songDuration, onClose, onSubmit, submitting }: RemixModalProps) {
-  const [prompt, setPrompt] = useState("");
-  const [style, setStyle] = useState(songTags || "");
-  const [title, setTitle] = useState("");
-  const [continueAt, setContinueAt] = useState("");
-
-  const actionLabel = action === "extend" ? "Extend Song" : action === "add-vocals" ? "Add Vocals" : "Add Instrumental";
-  const actionDesc =
-    action === "extend"
-      ? "Continue this song with AI-generated audio from a specific point."
-      : action === "add-vocals"
-      ? "Add AI-generated vocals over this instrumental track."
-      : "Generate instrumental backing for this vocal track.";
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const data: Record<string, string | number | undefined> = {};
-    if (action === "extend") {
-      data.prompt = prompt || undefined;
-      data.style = style || undefined;
-      data.title = title || undefined;
-      if (continueAt) data.continueAt = parseFloat(continueAt);
-    } else if (action === "add-vocals") {
-      data.prompt = prompt;
-      data.style = style || undefined;
-      data.title = title || undefined;
-    } else {
-      data.tags = style || undefined;
-      data.title = title || undefined;
-    }
-    onSubmit(action, data);
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-xl">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">{actionLabel}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1">
-            <XMarkIcon className="w-5 h-5" />
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400">{actionDesc}</p>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {(action === "extend" || action === "add-vocals") && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                {action === "add-vocals" ? "Vocal prompt *" : "Prompt (optional)"}
-              </label>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder={action === "add-vocals" ? "Describe the vocals you want..." : "Override the continuation prompt..."}
-                rows={3}
-                required={action === "add-vocals"}
-                className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:outline-none focus:border-violet-500 transition-colors"
-              />
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-              Style / tags {action === "add-instrumental" ? "*" : "(optional)"}
-            </label>
-            <input
-              type="text"
-              value={style}
-              onChange={(e) => setStyle(e.target.value)}
-              placeholder="e.g. pop, rock, electronic"
-              required={action === "add-instrumental"}
-              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-violet-500 transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Title (optional)</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={songTitle ? `${songTitle} (${action === "extend" ? "extended" : action === "add-vocals" ? "with vocals" : "instrumental"})` : ""}
-              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-violet-500 transition-colors"
-            />
-          </div>
-
-          {action === "extend" && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                Continue at (seconds, optional)
-              </label>
-              <input
-                type="number"
-                value={continueAt}
-                onChange={(e) => setContinueAt(e.target.value)}
-                placeholder={songDuration ? `0 – ${Math.floor(songDuration)}` : "e.g. 30"}
-                min={0}
-                max={songDuration ?? undefined}
-                step={1}
-                className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-violet-500 transition-colors"
-              />
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
-          >
-            {submitting ? "Generating..." : actionLabel}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ─── Separate Vocals Modal ───────────────────────────────────────────────────
-
-interface SeparateVocalsModalProps {
-  onClose: () => void;
-  onSubmit: (type: "separate_vocal" | "split_stem") => void;
-  submitting: boolean;
-}
-
-function SeparateVocalsModal({ onClose, onSubmit, submitting }: SeparateVocalsModalProps) {
-  const [mode, setMode] = useState<"separate_vocal" | "split_stem">("separate_vocal");
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-xl">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Separate Vocals</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1">
-            <XMarkIcon className="w-5 h-5" />
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Split this track into separate vocal and instrumental stems.
-        </p>
-
-        <div className="space-y-2">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Quality mode</label>
-          <button
-            onClick={() => setMode("separate_vocal")}
-            className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
-              mode === "separate_vocal"
-                ? "border-violet-500 bg-violet-50 dark:bg-violet-900/20"
-                : "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600"
-            }`}
-          >
-            <span className="text-sm font-medium text-gray-900 dark:text-white block">Standard</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">Vocals + Instrumental &middot; 10 credits</span>
-          </button>
-          <button
-            onClick={() => setMode("split_stem")}
-            className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
-              mode === "split_stem"
-                ? "border-violet-500 bg-violet-50 dark:bg-violet-900/20"
-                : "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600"
-            }`}
-          >
-            <span className="text-sm font-medium text-gray-900 dark:text-white block">High Quality</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">Full stem separation &middot; 50 credits</span>
-          </button>
-        </div>
-
-        <button
-          onClick={() => onSubmit(mode)}
-          disabled={submitting}
-          className="w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
-        >
-          {submitting ? "Separating..." : `Separate (${mode === "split_stem" ? "50" : "10"} credits)`}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Stems Player ────────────────────────────────────────────────────────────
-
-interface StemTrack {
-  id: string;
-  title: string | null;
-  audioUrl: string | null;
-  generationStatus: string;
-  duration: number | null;
-}
-
-interface TrackState {
-  muted: boolean;
-  soloed: boolean;
-  volume: number;
-}
-
-interface StemsPlayerProps {
-  stems: StemTrack[];
-  onDownload: (stem: StemTrack) => void;
-  onDownloadAll: () => void;
-  downloadingAll: boolean;
-}
-
-function StemsPlayer({ stems, onDownload, onDownloadAll, downloadingAll }: StemsPlayerProps) {
-  const readyStems = stems.filter((s) => s.generationStatus === "ready" && s.audioUrl);
-  const pendingStems = stems.filter((s) => s.generationStatus !== "ready" && s.generationStatus !== "failed");
-  const hasMultipleReady = readyStems.length > 1;
-
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [trackStates, setTrackStates] = useState<TrackState[]>(() =>
-    stems.map(() => ({ muted: false, soloed: false, volume: 1 }))
-  );
-
-  const audioRefs = useRef<(HTMLAudioElement | null)[]>([]);
-  const gainNodes = useRef<(GainNode | null)[]>([]);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const connectedRef = useRef(false);
-  const rafRef = useRef<number | null>(null);
-  const seekingRef = useRef(false);
-
-  // Sync track state array length with stems array
-  const stemsLength = stems.length;
-  useEffect(() => {
-    setTrackStates((prev) => {
-      if (prev.length === stemsLength) return prev;
-      return Array.from({ length: stemsLength }, (_, i) => prev[i] ?? { muted: false, soloed: false, volume: 1 });
-    });
-  }, [stemsLength]);
-
-  // Set duration from the first ready stem
-  useEffect(() => {
-    const first = readyStems[0];
-    if (first?.duration) setDuration(first.duration);
-  }, [readyStems]);
-
-  // RAF loop to update current time during playback
-  const startTimeTracking = useCallback(() => {
-    const tick = () => {
-      const lead = audioRefs.current.find((a) => a && !a.paused);
-      if (lead && !seekingRef.current) {
-        setCurrentTime(lead.currentTime);
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-  }, []);
-
-  const stopTimeTracking = useCallback(() => {
-    if (rafRef.current != null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    const audios = audioRefs.current;
-    const ctx = audioCtxRef;
-    return () => {
-      stopTimeTracking();
-      audios.forEach((a) => {
-        if (a) { a.pause(); a.src = ""; }
-      });
-      if (ctx.current) {
-        ctx.current.close().catch(() => {});
-      }
-    };
-  }, [stopTimeTracking]);
-
-  function getEffectiveGain(idx: number, states: TrackState[]): number {
-    const hasSolo = states.some((t) => t.soloed);
-    const t = states[idx];
-    if (!t) return 0;
-    if (hasSolo && !t.soloed) return 0;
-    if (t.muted) return 0;
-    return t.volume;
-  }
-
-  function applyGain(idx: number, states: TrackState[]) {
-    const gn = gainNodes.current[idx];
-    if (gn) gn.gain.value = getEffectiveGain(idx, states);
-  }
-
-  function connectWebAudio() {
-    if (connectedRef.current) return;
-    if (typeof AudioContext === "undefined") return;
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioContext();
-    }
-    const ctx = audioCtxRef.current;
-    readyStems.forEach((_, i) => {
-      const audio = audioRefs.current[i];
-      if (!audio) return;
-      if (gainNodes.current[i]) return; // already connected
-      try {
-        const src = ctx.createMediaElementSource(audio);
-        const gain = ctx.createGain();
-        gain.gain.value = getEffectiveGain(i, trackStates);
-        src.connect(gain);
-        gain.connect(ctx.destination);
-        gainNodes.current[i] = gain;
-      } catch {
-        // Already connected or not supported
-      }
-    });
-    connectedRef.current = true;
-  }
-
-  async function handlePlay() {
-    if (!hasMultipleReady) return;
-    connectWebAudio();
-    if (audioCtxRef.current?.state === "suspended") {
-      await audioCtxRef.current.resume();
-    }
-    // Sync all to leader's time first
-    const leader = audioRefs.current.find((a) => a);
-    const syncTime = leader?.currentTime ?? currentTime;
-    audioRefs.current.forEach((a) => {
-      if (a && Math.abs(a.currentTime - syncTime) > 0.1) {
-        a.currentTime = syncTime;
-      }
-    });
-    await Promise.all(
-      audioRefs.current
-        .filter((a): a is HTMLAudioElement => a !== null)
-        .map((a) => a.play().catch(() => {}))
-    );
-    setIsPlaying(true);
-    startTimeTracking();
-  }
-
-  function handlePause() {
-    audioRefs.current.forEach((a) => a?.pause());
-    setIsPlaying(false);
-    stopTimeTracking();
-  }
-
-  function handleSeek(value: number) {
-    seekingRef.current = true;
-    setCurrentTime(value);
-    audioRefs.current.forEach((a) => {
-      if (a) a.currentTime = value;
-    });
-    seekingRef.current = false;
-  }
-
-  function handleEnded() {
-    setIsPlaying(false);
-    setCurrentTime(0);
-    stopTimeTracking();
-    audioRefs.current.forEach((a) => { if (a) a.currentTime = 0; });
-  }
-
-  function toggleMute(idx: number) {
-    setTrackStates((prev) => {
-      const next = prev.map((t, i) => i === idx ? { ...t, muted: !t.muted } : t);
-      applyGain(idx, next);
-      return next;
-    });
-  }
-
-  function toggleSolo(idx: number) {
-    setTrackStates((prev) => {
-      const next = prev.map((t, i) => i === idx ? { ...t, soloed: !t.soloed } : t);
-      next.forEach((_, i) => applyGain(i, next));
-      return next;
-    });
-  }
-
-  function handleVolume(idx: number, value: number) {
-    setTrackStates((prev) => {
-      const next = prev.map((t, i) => i === idx ? { ...t, volume: value } : t);
-      applyGain(idx, next);
-      return next;
-    });
-  }
-
-  const hasSolo = trackStates.some((t) => t.soloed);
-
-  return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-          <ScissorsIcon className="w-4 h-4 text-violet-400" aria-hidden="true" />
-          Stems Preview
-        </h2>
-        {readyStems.length > 1 && (
-          <button
-            onClick={onDownloadAll}
-            disabled={downloadingAll}
-            className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 disabled:opacity-50 transition-colors"
-          >
-            <ArrowDownTrayIcon className="w-3.5 h-3.5" />
-            {downloadingAll ? "Preparing…" : "Download All"}
-          </button>
-        )}
-      </div>
-
-      {/* Pending stems notice */}
-      {pendingStems.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-yellow-600 dark:text-yellow-400">
-          <div className="w-3.5 h-3.5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-          Processing {pendingStems.length} stem{pendingStems.length > 1 ? "s" : ""}…
-        </div>
-      )}
-
-      {/* Stem tracks */}
-      <div className="space-y-2">
-        {stems.map((stem, idx) => {
-          const ts = trackStates[idx] ?? { muted: false, soloed: false, volume: 1 };
-          const isReady = stem.generationStatus === "ready" && stem.audioUrl;
-          const isSoloDimmed = hasSolo && !ts.soloed;
-          return (
-            <div
-              key={stem.id}
-              className={`flex items-center gap-2 p-2.5 rounded-lg border transition-colors ${
-                isSoloDimmed
-                  ? "border-gray-100 dark:border-gray-800 opacity-40"
-                  : "border-gray-200 dark:border-gray-700"
-              }`}
-            >
-              {/* Hidden audio element */}
-              {isReady && hasMultipleReady && (
-                <audio
-                  ref={(el) => { audioRefs.current[idx] = el; }}
-                  src={stem.audioUrl ?? ""}
-                  preload="auto"
-                  onEnded={handleEnded}
-                  onDurationChange={(e) => {
-                    if (idx === 0) setDuration((e.target as HTMLAudioElement).duration);
-                  }}
-                  className="hidden"
-                />
-              )}
-
-              {/* Track name */}
-              <div className="flex-1 min-w-0">
-                <span className="text-xs font-medium text-gray-900 dark:text-white block truncate">
-                  {stem.title || `Stem ${idx + 1}`}
-                </span>
-              </div>
-
-              {isReady ? (
-                <>
-                  {hasMultipleReady ? (
-                    <>
-                      {/* Volume slider */}
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={ts.volume}
-                        onChange={(e) => handleVolume(idx, parseFloat(e.target.value))}
-                        aria-label={`Volume for ${stem.title || "stem"}`}
-                        className="w-16 h-1 accent-violet-500 cursor-pointer"
-                      />
-                      {/* Mute button */}
-                      <button
-                        onClick={() => toggleMute(idx)}
-                        aria-label={ts.muted ? `Unmute ${stem.title || "stem"}` : `Mute ${stem.title || "stem"}`}
-                        className={`p-1.5 rounded transition-colors ${
-                          ts.muted
-                            ? "text-red-500 bg-red-100 dark:bg-red-900/30"
-                            : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                        }`}
-                      >
-                        {ts.muted ? <SpeakerXMarkIcon className="w-4 h-4" /> : <SpeakerWaveIcon className="w-4 h-4" />}
-                      </button>
-                      {/* Solo button */}
-                      <button
-                        onClick={() => toggleSolo(idx)}
-                        aria-label={ts.soloed ? `Unsolo ${stem.title || "stem"}` : `Solo ${stem.title || "stem"}`}
-                        className={`px-2 py-1 rounded text-xs font-bold transition-colors ${
-                          ts.soloed
-                            ? "bg-violet-500 text-white"
-                            : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-                        }`}
-                      >
-                        S
-                      </button>
-                    </>
-                  ) : (
-                    /* Single stem: show native audio control */
-                    <audio src={stem.audioUrl ?? ""} controls preload="none" className="h-8 w-36" />
-                  )}
-                  {/* Download */}
-                  <button
-                    onClick={() => onDownload(stem)}
-                    aria-label={`Download ${stem.title || "stem"}`}
-                    className="p-1.5 text-gray-500 hover:text-violet-500 dark:text-gray-400 dark:hover:text-violet-400 transition-colors flex-shrink-0"
-                  >
-                    <ArrowDownTrayIcon className="w-4 h-4" />
-                  </button>
-                </>
-              ) : stem.generationStatus === "failed" ? (
-                <span className="text-xs text-red-500">Failed</span>
-              ) : (
-                <div className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Shared transport for multi-track */}
-      {hasMultipleReady && (
-        <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-2">
-          {/* Seek bar */}
-          <input
-            type="range"
-            min={0}
-            max={duration || 1}
-            step={0.1}
-            value={currentTime}
-            onChange={(e) => handleSeek(parseFloat(e.target.value))}
-            aria-label="Seek"
-            className="w-full h-1 accent-violet-500 cursor-pointer"
-          />
-          <div className="flex items-center justify-between">
-            <button
-              onClick={isPlaying ? handlePause : handlePlay}
-              aria-label={isPlaying ? "Pause" : "Play all stems"}
-              className="flex items-center gap-2 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-colors min-w-[72px] justify-center"
-            >
-              {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-            <span className="text-xs text-gray-400 tabular-nums">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1019,8 +157,6 @@ export function SongDetailView({
   const [thumbsRating, setThumbsRating] = useState<ThumbsRating>(null);
   const [savingThumbs, setSavingThumbs] = useState(false);
 
-  // Download state is now managed inside DownloadButton
-
   // Share / visibility state
   const [isPublic, setIsPublic] = useState(initialIsPublic);
   const [publicSlug, setPublicSlug] = useState(initialPublicSlug);
@@ -1046,7 +182,6 @@ export function SongDetailView({
         body: JSON.stringify({ songId: song.id, reason: appealReason.trim() }),
       });
       if (res.status === 409) {
-        // Already submitted
         setAppealStatus("pending");
         setAppealOpen(false);
         toast("You already have a pending appeal for this song.");
@@ -1072,12 +207,8 @@ export function SongDetailView({
   const [embedTheme, setEmbedTheme] = useState<"dark" | "light">("dark");
   const [embedAutoplay, setEmbedAutoplay] = useState(false);
 
-  // Vocal separation state
-  const [separateModalOpen, setSeparateModalOpen] = useState(false);
-  const [separateSubmitting, setSeparateSubmitting] = useState(false);
-  const [stems, setStems] = useState<StemTrack[]>([]);
-  const [downloadingAll, setDownloadingAll] = useState(false);
-  const stemPollRef = useRef<NodeJS.Timeout | null>(null);
+  // Vocal separation — delegated to useSongStems hook
+  const stemHook = useSongStems({ songId: song.id, songTitle: song.title, toast });
 
   // Section editor state
   const [sectionEditorOpen, setSectionEditorOpen] = useState(false);
@@ -1107,7 +238,7 @@ export function SongDetailView({
 
   // Fallback: load from backend Rating model if no DB rating on Song
   useEffect(() => {
-    if (initialRating) return; // Song-level DB rating takes precedence
+    if (initialRating) return;
     let cancelled = false;
     getRating(song.id).then((existing) => {
       if (cancelled || !existing) return;
@@ -1232,7 +363,6 @@ export function SongDetailView({
 
   function handleVisibilityToggle() {
     if (!isPublic) {
-      // Going public — show confirmation first
       setConfirmPublicOpen(true);
     } else {
       setVisibility("private");
@@ -1243,20 +373,16 @@ export function SongDetailView({
     if (!publicSlug) return;
     const url = `${window.location.origin}/s/${publicSlug}`;
 
-    // Mobile: use native Web Share API if available
     if (typeof navigator.share === "function") {
       try {
         await navigator.share({ title: song.title ?? "Check out this song", url });
         track("song_shared", { songId: song.id, source: "song_detail", method: "web_share_api" });
         return;
       } catch (err) {
-        // User cancelled — do not fall through
         if (err instanceof Error && err.name === "AbortError") return;
-        // Other errors fall through to clipboard
       }
     }
 
-    // Desktop / fallback: clipboard copy
     await navigator.clipboard.writeText(url);
     toast("Link copied!", "success");
     track("song_link_copied", { songId: song.id, source: "song_detail" });
@@ -1270,158 +396,6 @@ export function SongDetailView({
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(url)}`;
     window.open(twitterUrl, "_blank", "noopener,noreferrer");
     track("song_shared", { songId: song.id, source: "song_detail", method: "twitter" });
-  }
-
-  // Fetch child stem tracks for a completed split_stem song and merge them in
-  async function loadChildStems(parentStemId: string) {
-    try {
-      const res = await fetch(`/api/songs/${parentStemId}/stems`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const children: StemTrack[] = (data.stems ?? []).map(
-        (s: { id: string; title: string | null; audioUrl: string | null; generationStatus: string; duration: number | null }) => ({
-          id: s.id,
-          title: s.title,
-          audioUrl: s.audioUrl,
-          generationStatus: s.generationStatus,
-          duration: s.duration,
-        })
-      );
-      if (children.length > 0) {
-        setStems((prev) => {
-          const existingIds = new Set(prev.map((s) => s.id));
-          const newOnes = children.filter((c) => !existingIds.has(c.id));
-          return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-        });
-        // Poll any pending children
-        children.forEach((c) => {
-          if (c.generationStatus !== "ready" && c.generationStatus !== "failed") {
-            pollStemStatus(c.id);
-          }
-        });
-      }
-    } catch {
-      // non-fatal
-    }
-  }
-
-  // Poll a stem song for status updates until terminal
-  function pollStemStatus(stemId: string) {
-    const poll = async () => {
-      try {
-        const res = await fetch(`/api/songs/${stemId}/status`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const updated = data.song;
-        setStems((prev) =>
-          prev.map((s) =>
-            s.id === stemId
-              ? { ...s, generationStatus: updated.generationStatus, audioUrl: updated.audioUrl, duration: updated.duration }
-              : s
-          )
-        );
-        if (updated.generationStatus === "ready") {
-          // Fetch any child stems created by the status route (split_stem yields 4 tracks)
-          loadChildStems(stemId);
-          return;
-        }
-        if (updated.generationStatus === "failed") {
-          return; // stop polling
-        }
-        stemPollRef.current = setTimeout(poll, 5000);
-      } catch {
-        // retry on network error
-        stemPollRef.current = setTimeout(poll, 10000);
-      }
-    };
-    stemPollRef.current = setTimeout(poll, 3000);
-  }
-
-  // Clean up stem polling on unmount
-  useEffect(() => {
-    return () => {
-      if (stemPollRef.current) clearTimeout(stemPollRef.current);
-    };
-  }, []);
-
-  async function handleSeparateVocals(type: "separate_vocal" | "split_stem") {
-    if (separateSubmitting) return;
-    setSeparateSubmitting(true);
-    try {
-      const res = await fetch(`/api/songs/${song.id}/separate-vocals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type }),
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        toast(result.error ?? "Vocal separation failed", "error");
-        return;
-      }
-      toast("Vocal separation started!", "success");
-      setSeparateModalOpen(false);
-      const newStem: StemTrack = {
-        id: result.song.id,
-        title: result.song.title,
-        audioUrl: result.song.audioUrl,
-        generationStatus: result.song.generationStatus,
-        duration: result.song.duration,
-      };
-      setStems((prev) => [...prev, newStem]);
-      if (newStem.generationStatus === "pending") {
-        pollStemStatus(newStem.id);
-      }
-    } catch {
-      toast("Vocal separation failed", "error");
-    } finally {
-      setSeparateSubmitting(false);
-    }
-  }
-
-  async function handleDownloadStem(stem: StemTrack) {
-    if (!stem.audioUrl) return;
-    try {
-      const a = document.createElement("a");
-      a.href = stem.audioUrl;
-      a.download = `${stem.title || "stem"}.mp3`;
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } catch {
-      toast("Download failed", "error");
-    }
-  }
-
-  async function handleDownloadAllStems() {
-    const readyStems = stems.filter((s) => s.generationStatus === "ready" && s.audioUrl);
-    if (readyStems.length === 0 || downloadingAll) return;
-    setDownloadingAll(true);
-    try {
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
-      await Promise.all(
-        readyStems.map(async (stem, idx) => {
-          const res = await fetch(stem.audioUrl!);
-          const blob = await res.blob();
-          const name = `${stem.title || `stem-${idx + 1}`}.mp3`.replace(/[/\\:*?"<>|]/g, "_");
-          zip.file(name, blob);
-        })
-      );
-      const content = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(content);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${song.title || "stems"}-stems.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      toast("Failed to download stems", "error");
-    } finally {
-      setDownloadingAll(false);
-    }
   }
 
   async function handleCreateVariation(data: { prompt: string; tags: string; lyrics: string; title: string; makeInstrumental: boolean }) {
@@ -2002,7 +976,7 @@ export function SongDetailView({
           )}
           {canSeparateVocals ? (
             <button
-              onClick={() => setSeparateModalOpen(true)}
+              onClick={stemHook.openSeparateModal}
               disabled={!hasAudio}
               className="flex items-center justify-center gap-2 px-3 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
             >
@@ -2075,11 +1049,11 @@ export function SongDetailView({
       )}
 
       {/* Separate Vocals modal */}
-      {separateModalOpen && (
+      {stemHook.separateModalOpen && (
         <SeparateVocalsModal
-          onClose={() => setSeparateModalOpen(false)}
-          onSubmit={handleSeparateVocals}
-          submitting={separateSubmitting}
+          onClose={stemHook.closeSeparateModal}
+          onSubmit={stemHook.separate}
+          submitting={stemHook.separateSubmitting}
         />
       )}
 
@@ -2101,8 +1075,8 @@ export function SongDetailView({
       )}
 
       {/* Stem viewer */}
-      {stems.length > 0 && (
-        <StemsPlayer stems={stems} onDownload={handleDownloadStem} onDownloadAll={handleDownloadAllStems} downloadingAll={downloadingAll} />
+      {stemHook.stems.length > 0 && (
+        <StemsPlayer stems={stemHook.stems} onDownload={stemHook.downloadStem} onDownloadAll={stemHook.downloadAllStems} downloadingAll={stemHook.downloadingAll} />
       )}
 
       {/* Parent link */}
