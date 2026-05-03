@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { invalidateByPrefix } from "@/lib/cache";
-import { badRequest, notFound } from "@/lib/api-error";
+import { notFound } from "@/lib/api-error";
 
 export const GET = authRoute(async (request, { auth }) => {
   const { searchParams } = new URL(request.url);
@@ -28,20 +29,14 @@ export const GET = authRoute(async (request, { auth }) => {
   return NextResponse.json({ ratings });
 }, { route: "/api/ratings" });
 
-export const POST = authRoute(async (request, { auth }) => {
-  const body = await request.json();
-  const { songId, value } = body;
+const createRatingBody = z.object({
+  songId: z.string().min(1, "songId is required"),
+  value: z.number().int().min(1).max(5, "value must be an integer between 1 and 5"),
+});
 
-  if (!songId || typeof songId !== "string") {
-    return badRequest("songId is required");
-  }
-
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 5) {
-    return badRequest("value must be an integer between 1 and 5");
-  }
-
+export const POST = authRoute(async (_request, { auth, body }) => {
   const song = await prisma.song.findUnique({
-    where: { id: songId },
+    where: { id: body.songId },
     select: { id: true },
   });
 
@@ -51,15 +46,15 @@ export const POST = authRoute(async (request, { auth }) => {
 
   const rating = await prisma.rating.upsert({
     where: {
-      userId_songId: { userId: auth.userId, songId },
+      userId_songId: { userId: auth.userId, songId: body.songId },
     },
     create: {
       userId: auth.userId,
-      songId,
-      value,
+      songId: body.songId,
+      value: body.value,
     },
     update: {
-      value,
+      value: body.value,
     },
   });
 
@@ -72,4 +67,4 @@ export const POST = authRoute(async (request, { auth }) => {
     createdAt: rating.createdAt,
     updatedAt: rating.updatedAt,
   });
-}, { route: "/api/ratings" });
+}, { route: "/api/ratings", body: createRatingBody });

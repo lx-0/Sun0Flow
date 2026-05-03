@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { stripHtml } from "@/lib/sanitize";
 import { badRequest, notFound } from "@/lib/api-error";
-
-const VALID_DIGEST_FREQUENCIES = ["daily", "weekly", "monthly", "off"] as const;
-type DigestFrequency = (typeof VALID_DIGEST_FREQUENCIES)[number];
 
 export const GET = authRoute(async (_request, { auth }) => {
   const user = await prisma.user.findUnique({
@@ -37,104 +35,38 @@ export const GET = authRoute(async (_request, { auth }) => {
   });
 }, { route: "/api/settings" });
 
-export const PATCH = authRoute(async (request, { auth }) => {
-  const body = await request.json();
-  const {
-    name,
-    bio,
-    avatarUrl,
-    emailWelcome,
-    emailGenerationComplete,
-    emailDigestFrequency,
-    quietHoursEnabled,
-    quietHoursStart,
-    quietHoursEnd,
-  } = body;
+const updateSettingsBody = z
+  .object({
+    name: z.string().min(1, "Name is required").max(100, "Name must be 100 characters or less").optional(),
+    bio: z.string().max(500, "Bio must be 500 characters or less").nullable().optional(),
+    avatarUrl: z.string().url("Invalid avatar URL").max(2048, "Avatar URL too long").nullable().optional(),
+    emailWelcome: z.boolean().optional(),
+    emailGenerationComplete: z.boolean().optional(),
+    emailDigestFrequency: z.enum(["daily", "weekly", "monthly", "off"]).optional(),
+    quietHoursEnabled: z.boolean().optional(),
+    quietHoursStart: z.number().int().min(0).max(23, "quietHoursStart must be an integer 0–23").optional(),
+    quietHoursEnd: z.number().int().min(0).max(23, "quietHoursEnd must be an integer 0–23").optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, "No fields to update");
 
+export const PATCH = authRoute(async (_request, { auth, body }) => {
   const data: Record<string, unknown> = {};
 
-  if (name !== undefined) {
-    if (typeof name !== "string" || !name.trim()) {
-      return badRequest("Name is required");
-    }
-    if (name.length > 100) {
-      return badRequest("Name must be 100 characters or less");
-    }
-    data.name = stripHtml(name).trim();
+  if (body.name !== undefined) {
+    data.name = stripHtml(body.name).trim();
   }
-
-  if (bio !== undefined) {
-    if (bio !== null && typeof bio !== "string") {
-      return badRequest("Bio must be a string");
-    }
-    if (typeof bio === "string" && bio.length > 500) {
-      return badRequest("Bio must be 500 characters or less");
-    }
-    data.bio = bio ? stripHtml(bio).trim() : null;
+  if (body.bio !== undefined) {
+    data.bio = body.bio ? stripHtml(body.bio).trim() : null;
   }
-
-  if (avatarUrl !== undefined) {
-    if (avatarUrl !== null && typeof avatarUrl !== "string") {
-      return badRequest("Avatar URL must be a string");
-    }
-    if (typeof avatarUrl === "string" && avatarUrl.length > 2048) {
-      return badRequest("Avatar URL too long");
-    }
-    if (typeof avatarUrl === "string" && avatarUrl) {
-      try {
-        new URL(avatarUrl);
-      } catch {
-        return badRequest("Invalid avatar URL");
-      }
-    }
-    data.avatarUrl = avatarUrl ? avatarUrl.trim() : null;
+  if (body.avatarUrl !== undefined) {
+    data.avatarUrl = body.avatarUrl ? body.avatarUrl.trim() : null;
   }
-
-  if (emailWelcome !== undefined) {
-    if (typeof emailWelcome !== "boolean") {
-      return badRequest("emailWelcome must be a boolean");
-    }
-    data.emailWelcome = emailWelcome;
-  }
-
-  if (emailGenerationComplete !== undefined) {
-    if (typeof emailGenerationComplete !== "boolean") {
-      return badRequest("emailGenerationComplete must be a boolean");
-    }
-    data.emailGenerationComplete = emailGenerationComplete;
-  }
-
-  if (emailDigestFrequency !== undefined) {
-    if (!VALID_DIGEST_FREQUENCIES.includes(emailDigestFrequency as DigestFrequency)) {
-      return badRequest(`emailDigestFrequency must be one of: ${VALID_DIGEST_FREQUENCIES.join(", ")}`);
-    }
-    data.emailDigestFrequency = emailDigestFrequency;
-  }
-
-  if (quietHoursEnabled !== undefined) {
-    if (typeof quietHoursEnabled !== "boolean") {
-      return badRequest("quietHoursEnabled must be a boolean");
-    }
-    data.quietHoursEnabled = quietHoursEnabled;
-  }
-
-  if (quietHoursStart !== undefined) {
-    if (typeof quietHoursStart !== "number" || quietHoursStart < 0 || quietHoursStart > 23) {
-      return badRequest("quietHoursStart must be an integer 0–23");
-    }
-    data.quietHoursStart = quietHoursStart;
-  }
-
-  if (quietHoursEnd !== undefined) {
-    if (typeof quietHoursEnd !== "number" || quietHoursEnd < 0 || quietHoursEnd > 23) {
-      return badRequest("quietHoursEnd must be an integer 0–23");
-    }
-    data.quietHoursEnd = quietHoursEnd;
-  }
-
-  if (Object.keys(data).length === 0) {
-    return badRequest("No fields to update");
-  }
+  if (body.emailWelcome !== undefined) data.emailWelcome = body.emailWelcome;
+  if (body.emailGenerationComplete !== undefined) data.emailGenerationComplete = body.emailGenerationComplete;
+  if (body.emailDigestFrequency !== undefined) data.emailDigestFrequency = body.emailDigestFrequency;
+  if (body.quietHoursEnabled !== undefined) data.quietHoursEnabled = body.quietHoursEnabled;
+  if (body.quietHoursStart !== undefined) data.quietHoursStart = body.quietHoursStart;
+  if (body.quietHoursEnd !== undefined) data.quietHoursEnd = body.quietHoursEnd;
 
   const user = await prisma.user.update({
     where: { id: auth.userId },
@@ -155,4 +87,4 @@ export const PATCH = authRoute(async (request, { auth }) => {
   });
 
   return NextResponse.json(user);
-}, { route: "/api/settings" });
+}, { route: "/api/settings", body: updateSettingsBody });

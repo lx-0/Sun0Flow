@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { resolveUser } from "@/lib/auth-resolver";
 import { requireAdmin } from "@/lib/admin-auth";
 import { logServerError } from "@/lib/error-logger";
-import { internalError } from "@/lib/api-error";
+import { badRequest, internalError } from "@/lib/api-error";
 
 export type AuthContext = {
   userId: string;
@@ -20,6 +21,27 @@ type RouteOptions = {
 
 type SegmentData<P> = { params: Promise<P> };
 
+async function parseBody<B>(
+  request: NextRequest,
+  schema: z.ZodType<B>
+): Promise<{ data: B; error?: never } | { data?: never; error: NextResponse }> {
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return { error: badRequest("Invalid JSON body") };
+  }
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => {
+      const path = i.path.join(".");
+      return path ? `${path}: ${i.message}` : i.message;
+    });
+    return { error: badRequest(messages.join("; ")) };
+  }
+  return { data: result.data };
+}
+
 /**
  * Wrap an authenticated route handler. Resolves auth, catches unhandled errors,
  * and logs them with request context.
@@ -29,13 +51,21 @@ type SegmentData<P> = { params: Promise<P> };
  *
  * Usage (with dynamic params):
  *   export const GET = authRoute<{ id: string }>(async (request, { auth, params }) => { ... });
+ *
+ * Usage (with body validation):
+ *   export const POST = authRoute(async (request, { auth, body }) => {
+ *     body.name // typed string
+ *   }, { body: z.object({ name: z.string().min(1) }) });
  */
-export function authRoute<P extends Record<string, string> = Record<string, never>>(
+export function authRoute<
+  P extends Record<string, string> = Record<string, never>,
+  B = undefined,
+>(
   handler: (
     request: NextRequest,
-    ctx: { auth: AuthContext; params: P }
+    ctx: { auth: AuthContext; params: P; body: B }
   ) => Promise<NextResponse>,
-  options?: RouteOptions
+  options?: RouteOptions & { body?: z.ZodType<B> }
 ) {
   return async (
     request: NextRequest,
@@ -48,6 +78,14 @@ export function authRoute<P extends Record<string, string> = Record<string, neve
       const params = segmentData
         ? await segmentData.params
         : ({} as P);
+
+      let body: B = undefined as B;
+      if (options?.body) {
+        const parsed = await parseBody(request, options.body);
+        if (parsed.error) return parsed.error;
+        body = parsed.data;
+      }
+
       return await handler(request, {
         auth: {
           userId: result.userId,
@@ -55,6 +93,7 @@ export function authRoute<P extends Record<string, string> = Record<string, neve
           isAdmin: result.isAdmin,
         },
         params,
+        body,
       });
     } catch (error) {
       logServerError("route-handler", error, {
@@ -72,13 +111,21 @@ export function authRoute<P extends Record<string, string> = Record<string, neve
  * Usage:
  *   export const GET = adminRoute(async (request, { admin }) => { ... });
  *   export const PATCH = adminRoute<{ id: string }>(async (request, { admin, params }) => { ... });
+ *
+ * Usage (with body validation):
+ *   export const POST = adminRoute(async (request, { admin, body }) => {
+ *     body.title // typed string
+ *   }, { body: z.object({ title: z.string() }) });
  */
-export function adminRoute<P extends Record<string, string> = Record<string, never>>(
+export function adminRoute<
+  P extends Record<string, string> = Record<string, never>,
+  B = undefined,
+>(
   handler: (
     request: NextRequest,
-    ctx: { admin: AdminContext; params: P }
+    ctx: { admin: AdminContext; params: P; body: B }
   ) => Promise<NextResponse>,
-  options?: RouteOptions
+  options?: RouteOptions & { body?: z.ZodType<B> }
 ) {
   return async (
     request: NextRequest,
@@ -91,9 +138,18 @@ export function adminRoute<P extends Record<string, string> = Record<string, nev
       const params = segmentData
         ? await segmentData.params
         : ({} as P);
+
+      let body: B = undefined as B;
+      if (options?.body) {
+        const parsed = await parseBody(request, options.body);
+        if (parsed.error) return parsed.error;
+        body = parsed.data;
+      }
+
       return await handler(request, {
         admin: { adminId: user!.id },
         params,
+        body,
       });
     } catch (error) {
       logServerError("admin-route-handler", error, {

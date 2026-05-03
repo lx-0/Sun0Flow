@@ -50,7 +50,8 @@
     "swagger-ui-react": "^5.32.1",
     "vaul": "^1.1.2",
     "wavesurfer.js": "^7.12.4",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "zod": "^4.4.2"
   },
   "pnpm": {
     "overrides": {

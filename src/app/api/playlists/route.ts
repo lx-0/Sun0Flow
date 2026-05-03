@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { stripHtml } from "@/lib/sanitize";
@@ -25,22 +26,12 @@ export const GET = authRoute(async (_request, { auth }) => {
   });
 }, { route: "/api/playlists" });
 
-export const POST = authRoute(async (request, { auth }) => {
-  const body = await request.json();
-  const { name, description } = body;
+const createPlaylistBody = z.object({
+  name: z.string().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
+  description: z.string().max(1000, "Description must be 1000 characters or less").optional(),
+});
 
-  if (!name || typeof name !== "string" || name.trim().length === 0) {
-    return badRequest("Name is required");
-  }
-
-  if (name.trim().length > 100) {
-    return badRequest("Name must be 100 characters or less");
-  }
-
-  if (description && typeof description === "string" && description.length > 1000) {
-    return badRequest("Description must be 1000 characters or less");
-  }
-
+export const POST = authRoute(async (_request, { auth, body }) => {
   const count = await prisma.playlist.count({
     where: { userId: auth.userId },
   });
@@ -51,8 +42,8 @@ export const POST = authRoute(async (request, { auth }) => {
 
   const playlist = await prisma.playlist.create({
     data: {
-      name: stripHtml(name).trim(),
-      description: description ? stripHtml(description).trim() || null : null,
+      name: stripHtml(body.name).trim(),
+      description: body.description ? stripHtml(body.description).trim() || null : null,
       userId: auth.userId,
     },
     include: { _count: { select: { songs: true } } },
@@ -61,4 +52,4 @@ export const POST = authRoute(async (request, { auth }) => {
   invalidateByPrefix(cacheKey("playlists", auth.userId));
   recordActivity({ userId: auth.userId, type: "playlist_created", playlistId: playlist.id });
   return NextResponse.json({ playlist }, { status: 201 });
-}, { route: "/api/playlists" });
+}, { route: "/api/playlists", body: createPlaylistBody });

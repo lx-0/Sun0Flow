@@ -29,7 +29,7 @@ importers:
         version: 2.2.0(react@18.3.1)
       '@modelcontextprotocol/sdk':
         specifier: ^1.28.0
-        version: 1.28.0(zod@4.3.6)
+        version: 1.28.0(zod@4.4.2)
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
@@ -68,7 +68,7 @@ importers:
         version: 6.0.11
       openai:
         specifier: ^6.32.0
-        version: 6.32.0(zod@4.3.6)
+        version: 6.32.0(zod@4.4.2)
       pino:
         specifier: ^10.3.1
         version: 10.3.1
@@ -99,6 +99,9 @@ importers:
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
+      zod:
+        specifier: ^4.4.2
+        version: 4.4.2
     devDependencies:
       '@next/bundle-analyzer':
         specifier: ^15.5.15
@@ -5355,8 +5358,8 @@ packages:
     peerDependencies:
       zod: ^3.25 || ^4
 
-  zod@4.3.6:
-    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+  zod@4.4.2:
+    resolution: {integrity: sha512-IynmDyxsEsb9RKzO3J9+4SxXnl2FTFSzNBaKKaMV6tsSk0rw9gYw9gs+JFCq/qk2LCZ78KDwyj+Z289TijSkUw==}
 
 snapshots:
 
@@ -5804,7 +5807,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@modelcontextprotocol/sdk@1.28.0(zod@4.3.6)':
+  '@modelcontextprotocol/sdk@1.28.0(zod@4.4.2)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.14)
       ajv: 8.18.0
@@ -5821,8 +5824,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.3.6
-      zod-to-json-schema: 3.25.1(zod@4.3.6)
+      zod: 4.4.2
+      zod-to-json-schema: 3.25.1(zod@4.4.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -9631,9 +9634,9 @@ snapshots:
     dependencies:
       mimic-function: 5.0.1
 
-  openai@6.32.0(zod@4.3.6):
+  openai@6.32.0(zod@4.4.2):
     optionalDependencies:
-      zod: 4.3.6
+      zod: 4.4.2
 
   openapi-path-templating@2.2.1:
     dependencies:
@@ -11168,8 +11171,8 @@ snapshots:
 
   zenscroll@4.0.2: {}
 
-  zod-to-json-schema@3.25.1(zod@4.3.6):
+  zod-to-json-schema@3.25.1(zod@4.4.2):
     dependencies:
-      zod: 4.3.6
+      zod: 4.4.2
 
-  zod@4.3.6: {}
+  zod@4.4.2: {}
