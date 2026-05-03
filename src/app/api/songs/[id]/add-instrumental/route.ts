@@ -1,28 +1,15 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
-import { addInstrumental, SunoApiError } from "@/lib/sunoapi";
+import { addInstrumental } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { sanitizeText } from "@/lib/sanitize";
+import { userFriendlyError } from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
-
-function userFriendlyError(error: unknown): string {
-  if (error instanceof SunoApiError) {
-    if (error.status === 402) return "Insufficient credits. Please check your balance or top up to continue.";
-    if (error.status === 409) return "A conflicting request is already in progress. Please wait and try again.";
-    if (error.status === 422) return `Validation error: ${error.message}`;
-    if (error.status === 429) return "The music generation service is busy. Please try again in a few minutes.";
-    if (error.status === 451) return "This request was blocked for compliance reasons. Please modify your prompt and try again.";
-    if (error.status === 400) return "Invalid parameters. Please adjust your settings and try again.";
-    if (error.status === 401 || error.status === 403) return "API authentication failed. Please check your API key in settings.";
-    if (error.status >= 500) return "The music generation service is temporarily unavailable. Please try again later.";
-  }
-  return "Adding instrumental failed. Please try again.";
-}
 
 /** POST /api/songs/[id]/add-instrumental — generate instrumental backing for a vocal track */
 export async function POST(
@@ -132,7 +119,7 @@ export async function POST(
         });
       } catch (apiError) {
         logServerError("add-instrumental-api", apiError, { userId, route: `/api/songs/${parentId}/add-instrumental` });
-        const errorMsg = userFriendlyError(apiError);
+        const errorMsg = userFriendlyError(apiError, "Adding instrumental failed. Please try again.").message;
         savedSong = await prisma.song.create({
           data: {
             userId,

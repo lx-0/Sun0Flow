@@ -7,7 +7,7 @@ export interface GenerationError {
   details?: Record<string, unknown>;
 }
 
-export function userFriendlyError(error: unknown): GenerationError {
+export function userFriendlyError(error: unknown, fallbackMessage?: string): GenerationError {
   if (error instanceof SunoApiError) {
     if (error.status === 402)
       return { message: "Insufficient credits. Please check your balance or top up to continue.", code: ErrorCode.INSUFFICIENT_CREDITS };
@@ -20,15 +20,15 @@ export function userFriendlyError(error: unknown): GenerationError {
     if (error.status === 451)
       return { message: "This request was blocked for compliance reasons. Please modify your prompt and try again.", code: ErrorCode.COMPLIANCE_BLOCK };
     if (error.status === 400)
-      return { message: "Invalid generation parameters. Please adjust your prompt and try again.", code: ErrorCode.VALIDATION_ERROR };
+      return { message: "Invalid parameters. Please adjust your settings and try again.", code: ErrorCode.VALIDATION_ERROR };
     if (error.status === 401 || error.status === 403)
       return { message: "API authentication failed. Please check your API key in settings.", code: ErrorCode.SUNO_AUTH_ERROR };
     if (error.status >= 500)
-      return { message: "The music generation service is temporarily unavailable — please try again in a moment.", code: ErrorCode.SERVICE_UNAVAILABLE };
-    return { message: `Generation failed: ${error.message}`, code: ErrorCode.SUNO_API_ERROR };
+      return { message: "The music generation service is temporarily unavailable. Please try again later.", code: ErrorCode.SERVICE_UNAVAILABLE };
+    return { message: `Operation failed: ${error.message}`, code: ErrorCode.SUNO_API_ERROR };
   }
   if (error instanceof TypeError && (error.message.includes("fetch") || error.message.includes("network"))) {
     return { message: "Could not reach the music generation service. Please check your connection and try again.", code: ErrorCode.SERVICE_UNAVAILABLE };
   }
-  return { message: "Song generation failed. Please try again.", code: ErrorCode.INTERNAL_ERROR };
+  return { message: fallbackMessage ?? "Operation failed. Please try again.", code: ErrorCode.INTERNAL_ERROR };
 }

@@ -1,26 +1,13 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
-import { separateVocals, SunoApiError } from "@/lib/sunoapi";
+import { separateVocals } from "@/lib/sunoapi";
 import type { SeparationType } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-
-function userFriendlyError(error: unknown): string {
-  if (error instanceof SunoApiError) {
-    if (error.status === 402) return "Insufficient credits. Please check your balance or top up to continue.";
-    if (error.status === 409) return "A conflicting request is already in progress. Please wait and try again.";
-    if (error.status === 422) return `Validation error: ${error.message}`;
-    if (error.status === 429) return "The music generation service is busy. Please try again in a few minutes.";
-    if (error.status === 451) return "This request was blocked for compliance reasons. Please modify your prompt and try again.";
-    if (error.status === 400) return "Invalid parameters. Please adjust your settings and try again.";
-    if (error.status === 401 || error.status === 403) return "API authentication failed. Please check your API key in settings.";
-    if (error.status >= 500) return "The music generation service is temporarily unavailable. Please try again later.";
-  }
-  return "Vocal separation failed. Please try again.";
-}
+import { userFriendlyError } from "@/lib/generation";
 
 /** POST /api/songs/[id]/separate-vocals — separate vocals/instruments from a track */
 export async function POST(
@@ -105,7 +92,7 @@ export async function POST(
         });
       } catch (apiError) {
         logServerError("separate-vocals-api", apiError, { userId, route: `/api/songs/${songId}/separate-vocals` });
-        const errorMsg = userFriendlyError(apiError);
+        const errorMsg = userFriendlyError(apiError, "Vocal separation failed. Please try again.").message;
         savedSong = await prisma.song.create({
           data: {
             userId,

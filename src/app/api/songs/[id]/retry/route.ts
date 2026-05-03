@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
-import { generateSong, SunoApiError } from "@/lib/sunoapi";
+import { generateSong } from "@/lib/sunoapi";
 import { prisma } from "@/lib/prisma";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
@@ -8,25 +8,7 @@ import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { broadcast } from "@/lib/event-bus";
-
-/** Map API errors to user-friendly messages without exposing internals */
-function userFriendlyError(error: unknown): string {
-  if (error instanceof SunoApiError) {
-    if (error.status === 402) return "Insufficient credits. Please check your balance or top up to continue.";
-    if (error.status === 409) return "A conflicting request is already in progress. Please wait and try again.";
-    if (error.status === 422) return `Validation error: ${error.message}`;
-    if (error.status === 429) return "The music generation service is busy. Please try again in a few minutes.";
-    if (error.status === 451) return "This request was blocked for compliance reasons. Please modify your prompt and try again.";
-    if (error.status === 400) return "Invalid generation parameters. Please adjust your prompt and try again.";
-    if (error.status === 401 || error.status === 403) return "API authentication failed. Please check your API key in settings.";
-    if (error.status >= 500) return "The music generation service is temporarily unavailable. Please try again later.";
-    return `Generation failed (Suno ${error.status}): ${error.message}`;
-  }
-  if (error instanceof TypeError && (error.message.includes("fetch") || error.message.includes("network"))) {
-    return "Could not reach the music generation service. Please check your connection and try again.";
-  }
-  return "Song generation failed. Please try again.";
-}
+import { userFriendlyError } from "@/lib/generation";
 
 export async function POST(
   request: Request,
@@ -124,7 +106,7 @@ export async function POST(
         params: { songId: id },
       });
 
-      const errorMsg = userFriendlyError(apiError);
+      const errorMsg = userFriendlyError(apiError).message;
       const updated = await prisma.song.update({
         where: { id },
         data: {

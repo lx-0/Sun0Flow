@@ -1,24 +1,11 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
-import { convertToWav, SunoApiError } from "@/lib/sunoapi";
+import { convertToWav } from "@/lib/sunoapi";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-
-function userFriendlyError(error: unknown): string {
-  if (error instanceof SunoApiError) {
-    if (error.status === 402) return "Insufficient credits. Please check your balance or top up to continue.";
-    if (error.status === 409) return "A conflicting request is already in progress. Please wait and try again.";
-    if (error.status === 422) return `Validation error: ${error.message}`;
-    if (error.status === 429) return "The music generation service is busy. Please try again in a few minutes.";
-    if (error.status === 451) return "This request was blocked for compliance reasons. Please modify your prompt and try again.";
-    if (error.status === 400) return "Invalid parameters. Please adjust your settings and try again.";
-    if (error.status === 401 || error.status === 403) return "API authentication failed. Please check your API key in settings.";
-    if (error.status >= 500) return "The music generation service is temporarily unavailable. Please try again later.";
-  }
-  return "WAV conversion failed. Please try again.";
-}
+import { userFriendlyError } from "@/lib/generation";
 
 /** POST /api/songs/[id]/convert-wav — convert a track to WAV format */
 export async function POST(
@@ -73,7 +60,7 @@ export async function POST(
       } catch (apiError) {
         logServerError("convert-wav-api", apiError, { userId, route: `/api/songs/${songId}/convert-wav` });
         return NextResponse.json(
-          { error: userFriendlyError(apiError), rateLimit: rateLimitStatus },
+          { error: userFriendlyError(apiError, "WAV conversion failed. Please try again.").message, rateLimit: rateLimitStatus },
           { status: 502 }
         );
       }
