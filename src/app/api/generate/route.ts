@@ -5,25 +5,17 @@ import { generateSong, SunoApiError, getRemainingCredits } from "@/lib/sunoapi";
 import { CircuitOpenError, onCircuitClose } from "@/lib/circuit-breaker";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { prisma } from "@/lib/prisma";
-import { releaseRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
 import { invalidateByPrefix } from "@/lib/cache";
 import { SUNOAPI_KEY } from "@/lib/env";
-import { CREDIT_COSTS } from "@/lib/credits";
 import { badRequest, internalError, ErrorCode } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
 import { recordGenerationStart, recordGenerationEnd } from "@/lib/metrics";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 import { drainGenerationQueue } from "@/lib/queue-processor";
-import {
-  userFriendlyError,
-  enforceRateLimit,
-  checkCreditBalance,
-  recordCreditsAndNotify,
-  createSongRecord,
-} from "@/lib/generation";
+import { executeGeneration } from "@/lib/generation";
 
 onCircuitClose(() => {
   drainGenerationQueue().catch((err) => {
@@ -38,13 +30,6 @@ export async function POST(request: Request) {
     if (authError) return authError;
 
     const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
-
-    let rateLimitStatus;
-    if (!isAdmin && !usingPersonalKey) {
-      const result = await enforceRateLimit(userId);
-      if (result.limited) return result.response;
-      rateLimitStatus = result.status;
-    }
 
     const { prompt, title, tags, makeInstrumental, personaId, parentSongId } = await request.json();
 
@@ -71,148 +56,133 @@ export async function POST(request: Request) {
       instrumental: Boolean(makeInstrumental),
     };
 
-    if (!usingPersonalKey) {
-      const denied = await checkCreditBalance(userId, "generate");
-      if (denied) return denied;
-    }
-
     const hasApiKey = !!(userApiKey || SUNOAPI_KEY);
-    const songParams = {
-      title: generationParams.title || null,
-      prompt: generationParams.prompt,
-      tags: generationParams.style || null,
-      isInstrumental: Boolean(makeInstrumental),
-      parentSongId: typeof parentSongId === "string" && parentSongId ? parentSongId : null,
-    };
+    const skipGuards = isAdmin || usingPersonalKey;
 
-    let savedSongs;
-    if (!hasApiKey) {
-      const song = await createSongRecord(userId, songParams, { status: "ready", mock: mockSongs[0] });
-      savedSongs = [song];
-    } else {
-      try {
-        const genStartMs = Date.now();
-        recordGenerationStart();
-        logger.info({ userId, title: generationParams.title, instrumental: generationParams.instrumental }, "generation: started");
-
-        const result = await Sentry.startSpan(
-          { name: "suno.generateSong", op: "http.client", attributes: { "generation.instrumental": generationParams.instrumental } },
-          () => generateSong(
-            generationParams.prompt,
-            {
-              title: generationParams.title,
-              style: generationParams.style,
-              instrumental: generationParams.instrumental,
-              personaId: personaId || undefined,
-            },
-            userApiKey
-          )
-        );
-        const genMs = Date.now() - genStartMs;
-        recordGenerationEnd(genMs, true);
-        logger.info({ userId, taskId: result.taskId, durationMs: genMs }, "generation: api call succeeded");
-
-        const song = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
-
-        try {
-          const [placeholderVariant] = generateCoverArtVariants({
-            songId: song.id,
-            title: generationParams.title,
-            tags: generationParams.style,
-          });
-          prisma.song.update({
-            where: { id: song.id },
-            data: { imageUrl: placeholderVariant.dataUrl },
-          }).catch(() => {});
-        } catch {
-          // Non-critical
-        }
-
-        savedSongs = [song];
-      } catch (apiError) {
-        if (apiError instanceof CircuitOpenError) {
-          recordGenerationEnd(0, false);
-          logger.warn({ userId }, "generation: circuit open — queuing request");
-
-          if (!isAdmin && !usingPersonalKey) {
-            await releaseRateLimitSlot(userId).catch(() => {});
-          }
-
-          const maxPos = await prisma.generationQueueItem.aggregate({
-            _max: { position: true },
-            where: { userId, status: "pending" },
-          });
-          const position = (maxPos._max.position ?? 0) + 1;
-
-          await prisma.generationQueueItem.create({
-            data: {
-              userId,
-              prompt: generationParams.prompt,
-              title: generationParams.title ?? null,
-              tags: generationParams.style ?? null,
-              makeInstrumental: Boolean(makeInstrumental),
-              personaId: typeof personaId === "string" ? personaId : null,
-              status: "pending",
-              position,
-            },
-          });
-
-          return NextResponse.json(
-            {
-              queued: true,
-              message: "Music generation is temporarily unavailable. Your request has been queued and will be processed automatically when the service recovers.",
-              code: ErrorCode.SERVICE_UNAVAILABLE,
-            },
-            { status: 503 }
-          );
-        }
-
-        recordGenerationEnd(0, false);
-        const correlationId = logServerError("generate-api", apiError, {
-          userId,
-          route: "/api/generate",
-          params: generationParams,
-        });
-
-        if (!isAdmin && !usingPersonalKey) {
-          await releaseRateLimitSlot(userId).catch(() => {});
-        }
-
-        const { message: errorMsg, code: errorCode, details: errorDetails } = userFriendlyError(apiError);
-        const song = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
-        savedSongs = [song];
-
-        let creditBalance: number | undefined;
-        if (apiError instanceof SunoApiError && apiError.status === 402) {
-          creditBalance = await getRemainingCredits().catch(() => undefined);
-        }
-
-        return NextResponse.json(
-          {
-            songs: savedSongs,
-            error: errorMsg,
-            code: errorCode,
-            ...(errorDetails && { details: errorDetails }),
-            ...(creditBalance !== undefined && { creditBalance }),
-            rateLimit: rateLimitStatus,
-            correlationId,
-          },
-          { status: 201 }
-        );
-      }
-    }
-
-    if (!usingPersonalKey) {
-      await recordCreditsAndNotify(userId, "generate", {
-        songId: savedSongs[0]?.id,
+    let outcome;
+    try {
+      outcome = await executeGeneration({
+        userId,
+        action: "generate",
+        songParams: {
+          title: generationParams.title || null,
+          prompt: generationParams.prompt,
+          tags: generationParams.style || null,
+          isInstrumental: Boolean(makeInstrumental),
+          parentSongId: typeof parentSongId === "string" && parentSongId ? parentSongId : null,
+        },
+        hasApiKey,
+        mockFallback: mockSongs[0],
+        skipCredits: usingPersonalKey,
+        skipRateLimit: skipGuards,
         description: `Song generation: ${generationParams.title || "Untitled"}`,
+        rethrow: (err) => err instanceof CircuitOpenError,
+        apiCall: () => {
+          const genStartMs = Date.now();
+          recordGenerationStart();
+          logger.info({ userId, title: generationParams.title, instrumental: generationParams.instrumental }, "generation: started");
+
+          return Sentry.startSpan(
+            { name: "suno.generateSong", op: "http.client", attributes: { "generation.instrumental": generationParams.instrumental } },
+            () => generateSong(
+              generationParams.prompt,
+              {
+                title: generationParams.title,
+                style: generationParams.style,
+                instrumental: generationParams.instrumental,
+                personaId: personaId || undefined,
+              },
+              userApiKey
+            )
+          ).then((result) => {
+            const genMs = Date.now() - genStartMs;
+            recordGenerationEnd(genMs, true);
+            logger.info({ userId, taskId: result.taskId, durationMs: genMs }, "generation: api call succeeded");
+            return result;
+          });
+        },
       });
+    } catch (circuitError) {
+      if (!(circuitError instanceof CircuitOpenError)) throw circuitError;
+
+      recordGenerationEnd(0, false);
+      logger.warn({ userId }, "generation: circuit open — queuing request");
+
+      const maxPos = await prisma.generationQueueItem.aggregate({
+        _max: { position: true },
+        where: { userId, status: "pending" },
+      });
+      const position = (maxPos._max.position ?? 0) + 1;
+
+      await prisma.generationQueueItem.create({
+        data: {
+          userId,
+          prompt: generationParams.prompt,
+          title: generationParams.title ?? null,
+          tags: generationParams.style ?? null,
+          makeInstrumental: Boolean(makeInstrumental),
+          personaId: typeof personaId === "string" ? personaId : null,
+          status: "pending",
+          position,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          queued: true,
+          message: "Music generation is temporarily unavailable. Your request has been queued and will be processed automatically when the service recovers.",
+          code: ErrorCode.SERVICE_UNAVAILABLE,
+        },
+        { status: 503 }
+      );
     }
 
-    invalidateByPrefix(`dashboard-stats:${userId}`);
+    if (outcome.status === "denied") return outcome.response;
+
+    if (outcome.status === "created") {
+      try {
+        const [placeholderVariant] = generateCoverArtVariants({
+          songId: outcome.song.id,
+          title: generationParams.title,
+          tags: generationParams.style,
+        });
+        prisma.song.update({
+          where: { id: outcome.song.id },
+          data: { imageUrl: placeholderVariant.dataUrl },
+        }).catch(() => {});
+      } catch {
+        // Non-critical
+      }
+
+      invalidateByPrefix(`dashboard-stats:${userId}`);
+
+      return NextResponse.json(
+        { songs: [outcome.song], rateLimit: outcome.rateLimitStatus },
+        { status: 201 }
+      );
+    }
+
+    // status === "failed"
+    const correlationId = logServerError("generate-api", outcome.rawError, {
+      userId,
+      route: "/api/generate",
+      params: generationParams,
+    });
+    recordGenerationEnd(0, false);
+
+    let creditBalance: number | undefined;
+    if (outcome.rawError instanceof SunoApiError && outcome.rawError.status === 402) {
+      creditBalance = await getRemainingCredits().catch(() => undefined);
+    }
 
     return NextResponse.json(
-      { songs: savedSongs, rateLimit: rateLimitStatus },
+      {
+        songs: [outcome.song],
+        error: outcome.error,
+        ...(creditBalance !== undefined && { creditBalance }),
+        rateLimit: outcome.rateLimitStatus,
+        correlationId,
+      },
       { status: 201 }
     );
   } catch (error) {

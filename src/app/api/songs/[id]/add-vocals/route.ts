@@ -6,11 +6,7 @@ import { mockSongs } from "@/lib/sunoapi/mock";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { sanitizeText } from "@/lib/sanitize";
-import {
-  userFriendlyError,
-  enforceRateLimit,
-  createSongRecord,
-} from "@/lib/generation";
+import { executeGeneration } from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
 
@@ -43,10 +39,6 @@ export async function POST(
       );
     }
 
-    const rateLimitResult = await enforceRateLimit(userId);
-    if (rateLimitResult.limited) return rateLimitResult.response;
-    const rateLimitStatus = rateLimitResult.status;
-
     const body = await request.json();
 
     const promptResult = sanitizeText(body.prompt, "prompt");
@@ -75,43 +67,42 @@ export async function POST(
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    const songParams = {
-      title: title || null,
-      prompt,
-      tags: style || null,
-      isInstrumental: false,
-      parentSongId: rootId,
-    };
-
-    let savedSong;
-    if (!hasApiKey) {
-      savedSong = await createSongRecord(userId, songParams, { status: "ready", mock: mockSongs[0] });
-    } else {
-      if (!parentSong.audioUrl) {
-        return NextResponse.json({ error: "Parent song has no audio URL to add vocals to.", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-      try {
-        const result = await addVocals(
-          {
-            uploadUrl: parentSong.audioUrl,
-            prompt,
-            title: title || "Untitled",
-            style: style || "pop",
-          },
-          userApiKey
-        );
-
-        savedSong = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
-      } catch (apiError) {
-        logServerError("add-vocals-api", apiError, { userId, route: `/api/songs/${parentId}/add-vocals` });
-        const { message: errorMsg } = userFriendlyError(apiError);
-        savedSong = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
-
-        return NextResponse.json({ song: savedSong, error: errorMsg, rateLimit: rateLimitStatus }, { status: 201 });
-      }
+    if (hasApiKey && !parentSong.audioUrl) {
+      return NextResponse.json({ error: "Parent song has no audio URL to add vocals to.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    return NextResponse.json({ song: savedSong, rateLimit: rateLimitStatus }, { status: 201 });
+    const outcome = await executeGeneration({
+      userId,
+      action: "generate",
+      songParams: {
+        title: title || null,
+        prompt,
+        tags: style || null,
+        isInstrumental: false,
+        parentSongId: rootId,
+      },
+      hasApiKey,
+      mockFallback: mockSongs[0],
+      description: `Add vocals: ${title || "Untitled"}`,
+      apiCall: () => addVocals(
+        {
+          uploadUrl: parentSong.audioUrl!,
+          prompt,
+          title: title || "Untitled",
+          style: style || "pop",
+        },
+        userApiKey
+      ),
+    });
+
+    if (outcome.status === "denied") return outcome.response;
+
+    if (outcome.status === "failed") {
+      logServerError("add-vocals-api", outcome.rawError, { userId, route: `/api/songs/${parentId}/add-vocals` });
+      return NextResponse.json({ song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus }, { status: 201 });
+    }
+
+    return NextResponse.json({ song: outcome.song, rateLimit: outcome.rateLimitStatus }, { status: 201 });
   } catch (error) {
     logServerError("add-vocals-route", error, { route: "/api/songs/add-vocals" });
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });

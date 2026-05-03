@@ -6,11 +6,7 @@ import { mockSongs } from "@/lib/sunoapi/mock";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { sanitizeText } from "@/lib/sanitize";
-import {
-  userFriendlyError,
-  enforceRateLimit,
-  createSongRecord,
-} from "@/lib/generation";
+import { executeGeneration } from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
 
@@ -38,10 +34,6 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    const rateLimitResult = await enforceRateLimit(userId);
-    if (rateLimitResult.limited) return rateLimitResult.response;
-    const rateLimitStatus = rateLimitResult.status;
 
     const body = await request.json();
 
@@ -71,45 +63,44 @@ export async function POST(
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    const songParams = {
-      title: title || null,
-      prompt,
-      tags: style || null,
-      isInstrumental: parentSong.isInstrumental,
-      parentSongId: rootId,
-    };
-
-    let savedSong;
-    if (!hasApiKey) {
-      savedSong = await createSongRecord(userId, songParams, { status: "ready", mock: mockSongs[0] });
-    } else {
-      if (!parentSong.sunoAudioId) {
-        return NextResponse.json({ error: "Cannot extend a song without a Suno audio ID.", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-      try {
-        const result = await extendMusic(
-          {
-            audioId: parentSong.sunoAudioId,
-            defaultParamFlag: !!(prompt || style || title || continueAt),
-            prompt: prompt || undefined,
-            style,
-            title: title || undefined,
-            continueAt,
-          },
-          userApiKey
-        );
-
-        savedSong = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
-      } catch (apiError) {
-        logServerError("extend-api", apiError, { userId, route: `/api/songs/${parentId}/extend` });
-        const { message: errorMsg } = userFriendlyError(apiError);
-        savedSong = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
-
-        return NextResponse.json({ song: savedSong, error: errorMsg, rateLimit: rateLimitStatus }, { status: 201 });
-      }
+    if (hasApiKey && !parentSong.sunoAudioId) {
+      return NextResponse.json({ error: "Cannot extend a song without a Suno audio ID.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    return NextResponse.json({ song: savedSong, rateLimit: rateLimitStatus }, { status: 201 });
+    const outcome = await executeGeneration({
+      userId,
+      action: "extend",
+      songParams: {
+        title: title || null,
+        prompt,
+        tags: style || null,
+        isInstrumental: parentSong.isInstrumental,
+        parentSongId: rootId,
+      },
+      hasApiKey,
+      mockFallback: mockSongs[0],
+      description: `Music extension: ${title || "Untitled"}`,
+      apiCall: () => extendMusic(
+        {
+          audioId: parentSong.sunoAudioId!,
+          defaultParamFlag: !!(prompt || style || title || continueAt),
+          prompt: prompt || undefined,
+          style,
+          title: title || undefined,
+          continueAt,
+        },
+        userApiKey
+      ),
+    });
+
+    if (outcome.status === "denied") return outcome.response;
+
+    if (outcome.status === "failed") {
+      logServerError("extend-api", outcome.rawError, { userId, route: `/api/songs/${parentId}/extend` });
+      return NextResponse.json({ song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus }, { status: 201 });
+    }
+
+    return NextResponse.json({ song: outcome.song, rateLimit: outcome.rateLimitStatus }, { status: 201 });
   } catch (error) {
     logServerError("extend-route", error, { route: "/api/songs/extend" });
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });

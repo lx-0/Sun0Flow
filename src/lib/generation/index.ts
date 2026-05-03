@@ -7,3 +7,8 @@ export {
   type SongRecordInput,
   type MockData,
 } from "./song-record";
+export {
+  executeGeneration,
+  type GenerationSpec,
+  type GenerationOutcome,
+} from "./execute";

@@ -3,17 +3,9 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { generateSong } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { releaseRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { insufficientCredits } from "@/lib/api-error";
-import { getMonthlyCreditUsage, CREDIT_COSTS } from "@/lib/credits";
-import {
-  userFriendlyError,
-  enforceRateLimit,
-  recordCreditsAndNotify,
-  createSongRecord,
-} from "@/lib/generation";
+import { executeGeneration } from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
 
@@ -114,17 +106,6 @@ export async function POST(
       );
     }
 
-    const creditUsage = await getMonthlyCreditUsage(userId);
-    if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
-      return insufficientCredits(
-        `Insufficient credits. You need ${CREDIT_COSTS.generate} credits but only have ${creditUsage.creditsRemaining} remaining.`
-      );
-    }
-
-    const rateLimitResult = await enforceRateLimit(userId);
-    if (rateLimitResult.limited) return rateLimitResult.response;
-    const rateLimitStatus = rateLimitResult.status;
-
     const body = await request.json();
     const prompt = (body.prompt?.trim() || parentSong.prompt || "").trim();
     const rawTags = (body.tags?.trim() || parentSong.tags || "").trim();
@@ -141,48 +122,38 @@ export async function POST(
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    const songParams = {
-      title: title || null,
-      prompt,
-      tags: tags || null,
-      isInstrumental: Boolean(makeInstrumental),
-      parentSongId: rootId,
-    };
-
-    let savedSong;
-    if (!hasApiKey) {
-      savedSong = await createSongRecord(userId, songParams, { status: "ready", mock: mockSongs[0] });
-    } else {
-      try {
-        const result = await generateSong(
-          prompt,
-          { title: title || undefined, style: tags || undefined, instrumental: Boolean(makeInstrumental) },
-          userApiKey
-        );
-
-        savedSong = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
-      } catch (apiError) {
-        logServerError("variation-api", apiError, { userId, route: `/api/songs/${parentId}/variations` });
-
-        await releaseRateLimitSlot(userId).catch(() => {});
-
-        const { message: errorMsg } = userFriendlyError(apiError);
-        savedSong = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
-
-        return NextResponse.json(
-          { song: savedSong, error: errorMsg, rateLimit: rateLimitStatus },
-          { status: 201 }
-        );
-      }
-    }
-
-    await recordCreditsAndNotify(userId, "generate", {
-      songId: savedSong.id,
-      description: `Variation generation: ${savedSong.title || "Untitled"}`,
+    const outcome = await executeGeneration({
+      userId,
+      action: "generate",
+      songParams: {
+        title: title || null,
+        prompt,
+        tags: tags || null,
+        isInstrumental: Boolean(makeInstrumental),
+        parentSongId: rootId,
+      },
+      hasApiKey,
+      mockFallback: mockSongs[0],
+      description: `Variation generation: ${title || "Untitled"}`,
+      apiCall: () => generateSong(
+        prompt,
+        { title: title || undefined, style: tags || undefined, instrumental: Boolean(makeInstrumental) },
+        userApiKey
+      ),
     });
 
+    if (outcome.status === "denied") return outcome.response;
+
+    if (outcome.status === "failed") {
+      logServerError("variation-api", outcome.rawError, { userId, route: `/api/songs/${parentId}/variations` });
+      return NextResponse.json(
+        { song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus },
+        { status: 201 }
+      );
+    }
+
     return NextResponse.json(
-      { song: savedSong, rateLimit: rateLimitStatus },
+      { song: outcome.song, rateLimit: outcome.rateLimitStatus },
       { status: 201 }
     );
   } catch (error) {

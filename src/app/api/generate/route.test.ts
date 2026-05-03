@@ -220,7 +220,7 @@ describe("POST /api/generate", () => {
     expect(res.status).toBe(201);
 
     const data = await res.json();
-    expect(data.error).toContain("Invalid generation parameters");
+    expect(data.error).toContain("Invalid parameters");
 
     expect(prisma.song.create).toHaveBeenCalledWith(
       expect.objectContaining({
