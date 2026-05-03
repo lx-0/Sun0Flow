@@ -5,6 +5,7 @@ import { coldStartFallback } from "./cold-start";
 import type { RecommendationOptions, RecommendationResult } from "./types";
 
 export type { RecommendationOptions, RecommendationResult, RecommendedSong } from "./types";
+export { getDailyMix } from "./daily-mix";
 
 export async function getRecommendations(options: RecommendationOptions): Promise<RecommendationResult> {
   const { userId, limit, excludeIds } = options;

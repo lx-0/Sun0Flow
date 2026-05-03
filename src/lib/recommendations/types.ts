@@ -20,7 +20,7 @@ export interface RecommendedSong {
 export interface RecommendationResult {
   songs: RecommendedSong[];
   total: number;
-  strategy: "embedding_similarity" | "cold_start" | "fallback_no_candidates";
+  strategy: "embedding_similarity" | "cold_start" | "fallback_no_candidates" | "daily_mix";
   generatedAt: string;
 }
 
