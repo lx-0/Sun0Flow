@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { parseTags } from "@/lib/tags";
 import { formatSong, SONG_SELECT_FIELDS } from "./types";
 import type { RecommendationResult, SongRow } from "./types";
 
@@ -6,14 +7,6 @@ const TOP_RATED_COUNT = 7;
 const GENRE_MATCH_COUNT = 8;
 const EXPLORATION_COUNT = 5;
 const DEFAULT_LIMIT = 20;
-
-function parseTags(tagsStr: string | null): string[] {
-  if (!tagsStr) return [];
-  return tagsStr
-    .split(",")
-    .map((t) => t.trim().toLowerCase())
-    .filter(Boolean);
-}
 
 function seededShuffle<T>(arr: T[], seed: string): T[] {
   const copy = [...arr];
