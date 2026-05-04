@@ -10,9 +10,15 @@ import { rateLimited, internalError } from "@/lib/api-error";
 import { invalidateByPrefix } from "@/lib/cache";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import {
+  recordCreditUsage,
+  shouldNotifyLowCredits,
+  createLowCreditNotification,
+  getMonthlyCreditUsage,
+  CREDIT_COSTS,
+} from "@/lib/credits";
+import {
   executeGeneration,
   userFriendlyError,
-  recordCreditsAndNotify,
 } from "@/lib/generation";
 
 export async function POST(request: Request) {
@@ -129,10 +135,20 @@ export async function POST(request: Request) {
       data: { songId: outcome.song.id, status: queueStatus },
     });
 
-    await recordCreditsAndNotify(userId, "generate", {
+    const creditCost = CREDIT_COSTS.generate ?? 1;
+    await recordCreditUsage(userId, "generate", {
       songId: outcome.song.id,
+      creditCost,
       description: `Song generation (queued): ${nextItem.title || "Untitled"}`,
     });
+    try {
+      if (await shouldNotifyLowCredits(userId)) {
+        const usage = await getMonthlyCreditUsage(userId);
+        await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
+      }
+    } catch {
+      // Non-critical — don't block queue processing
+    }
 
     invalidateByPrefix(`dashboard-stats:${userId}`);
 

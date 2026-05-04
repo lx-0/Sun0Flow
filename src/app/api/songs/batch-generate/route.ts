@@ -8,11 +8,10 @@ import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { recordCreditUsage, CREDIT_COSTS } from "@/lib/credits";
-import { badRequest, internalError } from "@/lib/api-error";
+import { recordCreditUsage, getMonthlyCreditUsage, CREDIT_COSTS } from "@/lib/credits";
+import { badRequest, insufficientCredits, internalError } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
 import {
-  checkCreditBalance,
   executeGeneration,
   type GenerationOutcome,
 } from "@/lib/generation";
@@ -65,8 +64,13 @@ export async function POST(request: Request) {
     }
 
     if (!usingPersonalKey) {
-      const denied = await checkCreditBalance(userId, "generate", configs.length);
-      if (denied) return denied;
+      const cost = (CREDIT_COSTS.generate ?? 1) * configs.length;
+      const creditUsage = await getMonthlyCreditUsage(userId);
+      if (creditUsage.creditsRemaining < cost) {
+        return insufficientCredits(
+          `Insufficient credits. You need ${cost} credits (${CREDIT_COSTS.generate} x ${configs.length}) but only have ${creditUsage.creditsRemaining} remaining.`
+        );
+      }
     }
 
     const batchId = randomBytes(8).toString("hex");

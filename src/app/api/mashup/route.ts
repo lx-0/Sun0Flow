@@ -11,9 +11,10 @@ import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
 import { canUseFeature, SubscriptionTier } from "@/lib/feature-gates";
+import { acquireRateLimitSlot } from "@/lib/rate-limit";
+import { rateLimited } from "@/lib/api-error";
 import {
   userFriendlyError,
-  enforceRateLimit,
   createSongRecord,
 } from "@/lib/generation";
 
@@ -45,9 +46,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const rateLimitResult = await enforceRateLimit(userId);
-    if (rateLimitResult.limited) return rateLimitResult.response;
-    const rateLimitStatus = rateLimitResult.status;
+    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId, "generate");
+    if (!acquired) {
+      return rateLimited(
+        `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`,
+        { resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
+        { "Retry-After": String(Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000))) }
+      );
+    }
 
     const body = await request.json();
     const {
