@@ -7,58 +7,9 @@ import { getMonthlyCreditUsage, recordCreditUsage, CREDIT_COSTS } from "@/lib/cr
 import { logger } from "@/lib/logger";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 import { createNotification } from "@/lib/notifications";
+import { buildSimplePromptFromItem } from "@/lib/prompts";
 
-/**
- * POST /api/cron/feed-auto-generate
- *
- * Checks all RSS feeds with autoGenerate=true for new items since last check.
- * Directly generates one song per feed per day for matching new items.
- * Sends a notification when generation starts.
- *
- * Protected by CRON_SECRET bearer token.
- */
-
-const MAX_AUTO_PER_USER = 10; // max songs auto-generated per cron run per user
-
-function buildPromptFromItem(item: {
-  title: string;
-  description: string;
-  content?: string;
-  mood?: string;
-  topics?: string[];
-  suggestedStyle?: string;
-}): { prompt: string; style: string } {
-  const parts: string[] = [];
-
-  if (item.mood && item.mood !== "neutral") {
-    parts.push(`${item.mood} mood`);
-  }
-  if (item.topics && item.topics.length > 0) {
-    parts.push(item.topics.join(", "));
-  }
-  const titleClean = item.title.replace(/\s+/g, " ").trim();
-  if (titleClean.length > 5 && titleClean.length < 120) {
-    parts.push(`inspired by "${titleClean}"`);
-  }
-  // Include content excerpt for richer prompt context
-  const body = item.content || item.description || "";
-  if (body.length > 20) {
-    parts.push(body.slice(0, 1500));
-  }
-
-  const prompt = parts.length > 0 ? parts.join(". ") : titleClean;
-
-  // Use suggested style if available, otherwise fall back to mood+topics
-  if (item.suggestedStyle) {
-    return { prompt, style: item.suggestedStyle };
-  }
-
-  const styleParts: string[] = [];
-  if (item.mood && item.mood !== "neutral") styleParts.push(item.mood);
-  if (item.topics && item.topics.length > 0) styleParts.push(...item.topics.slice(0, 3));
-
-  return { prompt, style: styleParts.join(", ") };
-}
+const MAX_AUTO_PER_USER = 10;
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -150,7 +101,7 @@ export async function POST(request: NextRequest) {
 
         // Pick the first new item to generate from
         const item = newItems[0];
-        const { prompt, style } = buildPromptFromItem(item);
+        const { prompt, style } = buildSimplePromptFromItem(item);
         if (!prompt) continue;
 
         // Re-check credits per generation
