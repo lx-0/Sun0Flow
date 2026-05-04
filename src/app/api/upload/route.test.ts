@@ -293,7 +293,7 @@ describe("POST /api/upload — API error handling", () => {
     const res = await POST(makeRequest(COVER_BODY));
     expect(res.status).toBe(201);
     const data = await res.json();
-    expect(data.error).toContain("Invalid upload");
+    expect(data.error).toContain("Invalid parameters");
   });
 
   it("creates a failed song record on network error", async () => {

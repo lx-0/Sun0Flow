@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { computeETag, CacheControl, invalidateKey, cacheKey } from "@/lib/cache";

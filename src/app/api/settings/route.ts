@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { stripHtml } from "@/lib/sanitize";
-import { badRequest, notFound } from "@/lib/api-error";
+import { notFound } from "@/lib/api-error";
 
 export const GET = authRoute(async (_request, { auth }) => {
   const user = await prisma.user.findUnique({
