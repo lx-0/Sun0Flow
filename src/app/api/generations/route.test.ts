@@ -37,6 +37,8 @@ import { logServerError } from "@/lib/error-logger";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const seg = { params: Promise.resolve({}) };
+
 function makeRequest(params: Record<string, string> = {}): NextRequest {
   const url = new URL("http://localhost/api/generations");
   for (const [key, value] of Object.entries(params)) {
@@ -84,12 +86,12 @@ describe("GET /api/generations", () => {
       isAdmin: false,
       error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest(), seg);
     expect(res.status).toBe(401);
   });
 
   it("returns songs with pagination metadata", async () => {
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest(), seg);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.songs).toHaveLength(1);
@@ -99,7 +101,7 @@ describe("GET /api/generations", () => {
   });
 
   it("filters by status when status param is provided", async () => {
-    await GET(makeRequest({ status: "pending" }));
+    await GET(makeRequest({ status: "pending" }), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -109,7 +111,7 @@ describe("GET /api/generations", () => {
   });
 
   it("does not filter by status when status is 'all'", async () => {
-    await GET(makeRequest({ status: "all" }));
+    await GET(makeRequest({ status: "all" }), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -119,7 +121,7 @@ describe("GET /api/generations", () => {
   });
 
   it("filters by source when source param is provided", async () => {
-    await GET(makeRequest({ source: "upload" }));
+    await GET(makeRequest({ source: "upload" }), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -129,7 +131,7 @@ describe("GET /api/generations", () => {
   });
 
   it("searches by prompt when q param has 2+ characters", async () => {
-    await GET(makeRequest({ q: "pop" }));
+    await GET(makeRequest({ q: "pop" }), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -141,7 +143,7 @@ describe("GET /api/generations", () => {
   });
 
   it("does not apply search filter when q has fewer than 2 characters", async () => {
-    await GET(makeRequest({ q: "p" }));
+    await GET(makeRequest({ q: "p" }), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -151,7 +153,7 @@ describe("GET /api/generations", () => {
   });
 
   it("sorts by oldest when sortBy=oldest", async () => {
-    await GET(makeRequest({ sortBy: "oldest" }));
+    await GET(makeRequest({ sortBy: "oldest" }), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -161,7 +163,7 @@ describe("GET /api/generations", () => {
   });
 
   it("sorts by newest by default", async () => {
-    await GET(makeRequest());
+    await GET(makeRequest(), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -172,7 +174,7 @@ describe("GET /api/generations", () => {
 
   it("applies cursor-based pagination when cursor param is set", async () => {
     const cursor = "2026-03-26T00:00:00.000Z";
-    await GET(makeRequest({ cursor }));
+    await GET(makeRequest({ cursor }), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -194,7 +196,7 @@ describe("GET /api/generations", () => {
     vi.mocked(prisma.song.findMany).mockResolvedValue(songs as never);
     vi.mocked(prisma.song.count).mockResolvedValue(25);
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest(), seg);
     const data = await res.json();
 
     expect(data.songs).toHaveLength(20); // PAGE_SIZE = 20
@@ -202,7 +204,7 @@ describe("GET /api/generations", () => {
   });
 
   it("filters by dateFrom and dateTo when provided", async () => {
-    await GET(makeRequest({ dateFrom: "2026-03-01", dateTo: "2026-03-27" }));
+    await GET(makeRequest({ dateFrom: "2026-03-01", dateTo: "2026-03-27" }), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -218,13 +220,13 @@ describe("GET /api/generations", () => {
   it("returns 500 on unexpected error", async () => {
     vi.mocked(prisma.song.findMany).mockRejectedValue(new Error("DB crash"));
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest(), seg);
     expect(res.status).toBe(500);
     expect(logServerError).toHaveBeenCalled();
   });
 
   it("scopes results to current user only", async () => {
-    await GET(makeRequest());
+    await GET(makeRequest(), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

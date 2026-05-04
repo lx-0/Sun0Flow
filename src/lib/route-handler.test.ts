@@ -18,6 +18,8 @@ function makeRequest(url = "http://localhost/api/test") {
   return new NextRequest(url);
 }
 
+const seg = { params: Promise.resolve({}) };
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -33,7 +35,7 @@ describe("authRoute", () => {
     });
 
     const handler = authRoute(async () => NextResponse.json({ ok: true }));
-    const result = await handler(makeRequest());
+    const result = await handler(makeRequest(), seg);
 
     expect(result.status).toBe(401);
   });
@@ -54,7 +56,7 @@ describe("authRoute", () => {
       });
     });
 
-    const result = await handler(makeRequest());
+    const result = await handler(makeRequest(), seg);
     const body = await result.json();
 
     expect(body.userId).toBe("user-123");
@@ -94,7 +96,7 @@ describe("authRoute", () => {
       throw new Error("Database connection failed");
     });
 
-    const result = await handler(makeRequest());
+    const result = await handler(makeRequest(), seg);
 
     expect(result.status).toBe(500);
     const body = await result.json();
@@ -116,7 +118,7 @@ describe("authRoute", () => {
       { route: "/api/test" }
     );
 
-    await handler(makeRequest());
+    await handler(makeRequest(), seg);
 
     expect(logServerError).toHaveBeenCalledWith(
       "route-handler",
@@ -136,7 +138,7 @@ describe("adminRoute", () => {
     });
 
     const handler = adminRoute(async () => NextResponse.json({ ok: true }));
-    const result = await handler(makeRequest());
+    const result = await handler(makeRequest(), seg);
 
     expect(result.status).toBe(403);
   });
@@ -152,7 +154,7 @@ describe("adminRoute", () => {
       return NextResponse.json({ adminId: admin.adminId });
     });
 
-    const result = await handler(makeRequest());
+    const result = await handler(makeRequest(), seg);
     const body = await result.json();
 
     expect(body.adminId).toBe("admin-1");
@@ -169,7 +171,7 @@ describe("adminRoute", () => {
       throw new Error("Admin action failed");
     });
 
-    const result = await handler(makeRequest());
+    const result = await handler(makeRequest(), seg);
 
     expect(result.status).toBe(500);
     expect(logServerError).toHaveBeenCalledWith(

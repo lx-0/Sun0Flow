@@ -45,6 +45,8 @@ import { GET, POST } from "./route";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+const seg = { params: Promise.resolve({}) };
+
 function makeRequest(url: string, init?: RequestInit) {
   return new NextRequest(url, init as never);
 }
@@ -63,7 +65,7 @@ describe("GET /api/ratings", () => {
     const errorResponse = new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     mockResolveUser.mockResolvedValue({ userId: null, isApiKey: false, isAdmin: false, error: errorResponse });
 
-    const res = await GET(makeRequest("http://localhost/api/ratings"));
+    const res = await GET(makeRequest("http://localhost/api/ratings"), seg);
     expect(res.status).toBe(401);
   });
 
@@ -73,7 +75,7 @@ describe("GET /api/ratings", () => {
       { id: "r2", songId: "song-2", value: 5, createdAt: new Date(), updatedAt: new Date() },
     ]);
 
-    const res = await GET(makeRequest("http://localhost/api/ratings"));
+    const res = await GET(makeRequest("http://localhost/api/ratings"), seg);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.ratings).toHaveLength(2);
@@ -86,7 +88,7 @@ describe("GET /api/ratings", () => {
       { id: "r1", songId: "song-1", value: 3, createdAt: new Date(), updatedAt: new Date() },
     ]);
 
-    const res = await GET(makeRequest("http://localhost/api/ratings?songId=song-1"));
+    const res = await GET(makeRequest("http://localhost/api/ratings?songId=song-1"), seg);
     expect(res.status).toBe(200);
 
     expect(mockFindMany).toHaveBeenCalledWith(
@@ -111,7 +113,7 @@ describe("POST /api/ratings", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ songId: "song-1", value: 4 }),
-    }));
+    }), seg);
     expect(res.status).toBe(401);
   });
 
@@ -120,7 +122,7 @@ describe("POST /api/ratings", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ value: 4 }),
-    }));
+    }), seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain("songId");
@@ -131,7 +133,7 @@ describe("POST /api/ratings", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ songId: "song-1", value: 6 }),
-    }));
+    }), seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain("value");
@@ -142,7 +144,7 @@ describe("POST /api/ratings", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ songId: "song-1", value: 0 }),
-    }));
+    }), seg);
     expect(res.status).toBe(400);
   });
 
@@ -153,7 +155,7 @@ describe("POST /api/ratings", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ songId: "nonexistent", value: 3 }),
-    }));
+    }), seg);
     expect(res.status).toBe(404);
   });
 
@@ -172,7 +174,7 @@ describe("POST /api/ratings", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ songId: "song-1", value: 4 }),
-    }));
+    }), seg);
     expect(res.status).toBe(200);
 
     const data = await res.json();

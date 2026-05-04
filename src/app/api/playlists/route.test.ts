@@ -55,6 +55,8 @@ const basePlaylist = {
   _count: { songs: 0 },
 };
 
+const seg = { params: Promise.resolve({}) };
+
 function makeRequest(body?: Record<string, unknown>): NextRequest {
   if (body) {
     return new NextRequest("http://localhost/api/playlists", {
@@ -81,14 +83,14 @@ describe("GET /api/playlists", () => {
       error: new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }) as never,
     });
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest(), seg);
     expect(res.status).toBe(401);
   });
 
   it("returns playlists for authenticated user", async () => {
     vi.mocked(prisma.playlist.findMany).mockResolvedValue([basePlaylist] as never);
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest(), seg);
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -99,7 +101,7 @@ describe("GET /api/playlists", () => {
   it("returns 500 on error", async () => {
     vi.mocked(prisma.playlist.findMany).mockRejectedValue(new Error("DB error"));
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest(), seg);
     expect(res.status).toBe(500);
   });
 });
@@ -113,14 +115,14 @@ describe("POST /api/playlists", () => {
       error: new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }) as never,
     });
 
-    const res = await POST(makeRequest({ name: "Test" }));
+    const res = await POST(makeRequest({ name: "Test" }), seg);
     expect(res.status).toBe(401);
   });
 
   it("creates a playlist successfully", async () => {
     vi.mocked(prisma.playlist.create).mockResolvedValue(basePlaylist as never);
 
-    const res = await POST(makeRequest({ name: "My Playlist", description: "A great playlist" }));
+    const res = await POST(makeRequest({ name: "My Playlist", description: "A great playlist" }), seg);
     const data = await res.json();
 
     expect(res.status).toBe(201);
@@ -128,31 +130,31 @@ describe("POST /api/playlists", () => {
   });
 
   it("returns 400 when name is missing", async () => {
-    const res = await POST(makeRequest({ description: "No name" }));
+    const res = await POST(makeRequest({ description: "No name" }), seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.code).toBe("VALIDATION_ERROR");
   });
 
   it("returns 400 when name is empty", async () => {
-    const res = await POST(makeRequest({ name: "   " }));
+    const res = await POST(makeRequest({ name: "   " }), seg);
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when name exceeds 100 characters", async () => {
-    const res = await POST(makeRequest({ name: "a".repeat(101) }));
+    const res = await POST(makeRequest({ name: "a".repeat(101) }), seg);
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when description exceeds 1000 characters", async () => {
-    const res = await POST(makeRequest({ name: "Valid Name", description: "d".repeat(1001) }));
+    const res = await POST(makeRequest({ name: "Valid Name", description: "d".repeat(1001) }), seg);
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when max playlists limit reached", async () => {
     vi.mocked(prisma.playlist.count).mockResolvedValue(50);
 
-    const res = await POST(makeRequest({ name: "New Playlist" }));
+    const res = await POST(makeRequest({ name: "New Playlist" }), seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain("Maximum");
@@ -161,7 +163,7 @@ describe("POST /api/playlists", () => {
   it("returns 500 on error", async () => {
     vi.mocked(prisma.playlist.create).mockRejectedValue(new Error("DB error"));
 
-    const res = await POST(makeRequest({ name: "Good Name" }));
+    const res = await POST(makeRequest({ name: "Good Name" }), seg);
     expect(res.status).toBe(500);
   });
 });

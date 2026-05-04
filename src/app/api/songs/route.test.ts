@@ -64,6 +64,8 @@ function makeSong(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const seg = { params: Promise.resolve({}) };
+
 function makeRequest(url: string) {
   return new NextRequest(url);
 }
@@ -83,7 +85,7 @@ describe("GET /api/songs", () => {
       error: new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }) as never,
     });
 
-    const res = await GET(makeRequest("http://localhost/api/songs"));
+    const res = await GET(makeRequest("http://localhost/api/songs"), seg);
     expect(res.status).toBe(401);
   });
 
@@ -92,7 +94,7 @@ describe("GET /api/songs", () => {
     vi.mocked(prisma.song.findMany).mockResolvedValue(songs as never);
     vi.mocked(prisma.song.count).mockResolvedValue(1);
 
-    const res = await GET(makeRequest("http://localhost/api/songs"));
+    const res = await GET(makeRequest("http://localhost/api/songs"), seg);
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -106,7 +108,7 @@ describe("GET /api/songs", () => {
     vi.mocked(prisma.song.findMany).mockResolvedValue([song] as never);
     vi.mocked(prisma.song.count).mockResolvedValue(1);
 
-    const res = await GET(makeRequest("http://localhost/api/songs"));
+    const res = await GET(makeRequest("http://localhost/api/songs"), seg);
     const data = await res.json();
 
     expect(data.songs[0].isFavorite).toBe(true);
@@ -122,7 +124,7 @@ describe("GET /api/songs", () => {
     vi.mocked(prisma.song.findMany).mockResolvedValue(songs as never);
     vi.mocked(prisma.song.count).mockResolvedValue(100);
 
-    const res = await GET(makeRequest("http://localhost/api/songs"));
+    const res = await GET(makeRequest("http://localhost/api/songs"), seg);
     const data = await res.json();
 
     expect(data.nextCursor).toBe("song-19"); // last item of sliced (0-19)
@@ -133,7 +135,7 @@ describe("GET /api/songs", () => {
     vi.mocked(prisma.song.findMany).mockResolvedValue([]);
     vi.mocked(prisma.song.count).mockResolvedValue(0);
 
-    await GET(makeRequest("http://localhost/api/songs?limit=5"));
+    await GET(makeRequest("http://localhost/api/songs?limit=5"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 6 }) // limit+1
@@ -143,7 +145,7 @@ describe("GET /api/songs", () => {
   it("returns 500 on database error", async () => {
     vi.mocked(prisma.song.findMany).mockRejectedValue(new Error("DB error"));
 
-    const res = await GET(makeRequest("http://localhost/api/songs"));
+    const res = await GET(makeRequest("http://localhost/api/songs"), seg);
     expect(res.status).toBe(500);
   });
 });

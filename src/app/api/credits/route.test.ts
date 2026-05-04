@@ -27,6 +27,8 @@ vi.mock("@/lib/error-logger", () => ({
 import { resolveUser } from "@/lib/auth-resolver";
 import { getMonthlyCreditUsage } from "@/lib/credits";
 
+const seg = { params: Promise.resolve({}) };
+
 beforeEach(() => {
   vi.mocked(resolveUser).mockResolvedValue({ userId: "user-1", isApiKey: false, isAdmin: false, error: null });
 });
@@ -40,7 +42,7 @@ describe("GET /api/credits", () => {
       error: new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }) as never,
     });
 
-    const res = await GET(new NextRequest("http://localhost/api/credits"));
+    const res = await GET(new NextRequest("http://localhost/api/credits"), seg);
     expect(res.status).toBe(401);
   });
 
@@ -62,7 +64,7 @@ describe("GET /api/credits", () => {
     };
     vi.mocked(getMonthlyCreditUsage).mockResolvedValue(usage);
 
-    const res = await GET(new NextRequest("http://localhost/api/credits"));
+    const res = await GET(new NextRequest("http://localhost/api/credits"), seg);
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -73,7 +75,7 @@ describe("GET /api/credits", () => {
   it("returns 500 when getMonthlyCreditUsage throws", async () => {
     vi.mocked(getMonthlyCreditUsage).mockRejectedValue(new Error("DB error"));
 
-    const res = await GET(new NextRequest("http://localhost/api/credits"));
+    const res = await GET(new NextRequest("http://localhost/api/credits"), seg);
     expect(res.status).toBe(500);
     const data = await res.json();
     expect(data.code).toBe("INTERNAL_ERROR");
