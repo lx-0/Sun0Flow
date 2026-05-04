@@ -8,7 +8,7 @@
  */
 import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdmin } from "@/lib/auth-resolver";
 import { logger } from "@/lib/logger";
 
 export async function GET() {

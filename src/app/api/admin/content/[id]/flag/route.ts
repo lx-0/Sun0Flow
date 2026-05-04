@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, logAdminAction } from "@/lib/admin-auth";
+import { requireAdmin, logAdminAction } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(

@@ -4,9 +4,6 @@ import { authRoute, adminRoute } from "@/lib/route-handler";
 
 vi.mock("@/lib/auth-resolver", () => ({
   resolveUser: vi.fn(),
-}));
-
-vi.mock("@/lib/admin-auth", () => ({
   requireAdmin: vi.fn(),
 }));
 
@@ -14,8 +11,7 @@ vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-import { resolveUser } from "@/lib/auth-resolver";
-import { requireAdmin } from "@/lib/admin-auth";
+import { resolveUser, requireAdmin } from "@/lib/auth-resolver";
 import { logServerError } from "@/lib/error-logger";
 
 function makeRequest(url = "http://localhost/api/test") {

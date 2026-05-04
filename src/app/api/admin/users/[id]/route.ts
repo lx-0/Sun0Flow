@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdmin } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { TIER_LIMITS } from "@/lib/billing";
 
