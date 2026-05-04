@@ -69,13 +69,13 @@ export function authRoute<
 ) {
   return async (
     request: NextRequest,
-    segmentData?: SegmentData<P>
+    segmentData: SegmentData<P>
   ): Promise<NextResponse> => {
     const result = await resolveUser(request);
     if (result.error) return result.error;
 
     try {
-      const params = segmentData
+      const params = segmentData?.params
         ? await segmentData.params
         : ({} as P);
 
@@ -129,13 +129,13 @@ export function adminRoute<
 ) {
   return async (
     request: NextRequest,
-    segmentData?: SegmentData<P>
+    segmentData: SegmentData<P>
   ): Promise<NextResponse> => {
     const { error, user } = await requireAdmin();
     if (error) return error;
 
     try {
-      const params = segmentData
+      const params = segmentData?.params
         ? await segmentData.params
         : ({} as P);
 
