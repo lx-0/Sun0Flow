@@ -92,3 +92,40 @@ export async function markAllRead(userId: string): Promise<void> {
 
   invalidateUnreadCache(userId);
 }
+
+export async function notifyFollowersOfNewSong(creatorId: string, songId: string): Promise<void> {
+  const [song, creator, followers] = await Promise.all([
+    prisma.song.findUnique({
+      where: { id: songId },
+      select: { title: true, publicSlug: true, isPublic: true, isHidden: true, archivedAt: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: creatorId },
+      select: { name: true, username: true },
+    }),
+    prisma.follow.findMany({
+      where: { followingId: creatorId },
+      select: { followerId: true },
+    }),
+  ]);
+
+  if (!song || !song.isPublic || song.isHidden || song.archivedAt) return;
+  if (followers.length === 0) return;
+
+  const creatorName = creator?.name ?? creator?.username ?? "Someone";
+  const songTitle = song.title ?? "Untitled";
+  const href = song.publicSlug ? `/s/${song.publicSlug}` : null;
+
+  await Promise.allSettled(
+    followers.map(({ followerId }) =>
+      createNotification({
+        userId: followerId,
+        type: "new_song_from_following",
+        title: "New song from someone you follow",
+        message: `${creatorName} published "${songTitle}"`,
+        href: href ?? null,
+        songId,
+      })
+    )
+  );
+}
