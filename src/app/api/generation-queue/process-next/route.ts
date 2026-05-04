@@ -10,13 +10,6 @@ import { rateLimited, internalError } from "@/lib/api-error";
 import { invalidateByPrefix } from "@/lib/cache";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import {
-  recordCreditUsage,
-  shouldNotifyLowCredits,
-  createLowCreditNotification,
-  getMonthlyCreditUsage,
-  CREDIT_COSTS,
-} from "@/lib/credits";
-import {
   executeGeneration,
   userFriendlyError,
 } from "@/lib/generation";
@@ -86,7 +79,7 @@ export async function POST(request: Request) {
           userApiKey
         ),
       skipRateLimit: true,
-      skipCredits: true,
+      skipCreditCheck: true,
     });
 
     if (outcome.status === "denied") {
@@ -134,21 +127,6 @@ export async function POST(request: Request) {
       where: { id: nextItem.id },
       data: { songId: outcome.song.id, status: queueStatus },
     });
-
-    const creditCost = CREDIT_COSTS.generate ?? 1;
-    await recordCreditUsage(userId, "generate", {
-      songId: outcome.song.id,
-      creditCost,
-      description: `Song generation (queued): ${nextItem.title || "Untitled"}`,
-    });
-    try {
-      if (await shouldNotifyLowCredits(userId)) {
-        const usage = await getMonthlyCreditUsage(userId);
-        await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
-      }
-    } catch {
-      // Non-critical — don't block queue processing
-    }
 
     invalidateByPrefix(`dashboard-stats:${userId}`);
 

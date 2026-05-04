@@ -22,7 +22,8 @@ export interface GenerationSpec {
   mockFallback: MockData;
   hasApiKey: boolean;
   description: string;
-  skipCredits?: boolean;
+  skipCreditCheck?: boolean;
+  skipCreditRecording?: boolean;
   skipRateLimit?: boolean;
   rethrow?: (error: unknown) => boolean;
 }
@@ -117,7 +118,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
     rateLimitStatus = result.status;
   }
 
-  if (!spec.skipCredits) {
+  if (!spec.skipCreditCheck) {
     const denied = await checkCreditBalance(spec.userId, spec.action);
     if (denied) return { status: "denied", response: denied };
   }
@@ -127,7 +128,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
       status: "ready",
       mock: spec.mockFallback,
     });
-    if (!spec.skipCredits) {
+    if (!spec.skipCreditRecording) {
       await recordCreditsAndNotify(spec.userId, spec.action, {
         songId: song.id,
         description: spec.description,
@@ -143,7 +144,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
       sunoJobId: result.taskId,
     });
 
-    if (!spec.skipCredits) {
+    if (!spec.skipCreditRecording) {
       await recordCreditsAndNotify(spec.userId, spec.action, {
         songId: song.id,
         description: spec.description,

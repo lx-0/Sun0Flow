@@ -8,7 +8,7 @@ import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { recordCreditUsage, getMonthlyCreditUsage, CREDIT_COSTS } from "@/lib/credits";
+import { getMonthlyCreditUsage, CREDIT_COSTS } from "@/lib/credits";
 import { badRequest, insufficientCredits, internalError } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
 import {
@@ -105,7 +105,8 @@ export async function POST(request: Request) {
         },
         hasApiKey,
         mockFallback: mockSongs[i % mockSongs.length],
-        skipCredits: true,
+        skipCreditCheck: true,
+        skipCreditRecording: usingPersonalKey,
         skipRateLimit: true,
         description: `Batch generation ${i + 1}/${configs.length}: ${genParams.title || "Untitled"}`,
         apiCall: () =>
@@ -148,14 +149,6 @@ export async function POST(request: Request) {
           error: outcome.error,
         });
         continue;
-      }
-
-      if (!usingPersonalKey) {
-        await recordCreditUsage(userId, "generate", {
-          songId: outcome.song.id,
-          creditCost: CREDIT_COSTS.generate,
-          description: `Batch generation ${i + 1}/${configs.length}: ${genParams.title || "Untitled"}`,
-        });
       }
 
       results.push({
