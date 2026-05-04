@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { SongFilters, SongSelect } from "@/lib/songs";
-import { buildTasteProfile } from "./taste-profile";
-import { rankAnonymousFeed, rankPersonalizedFeed } from "./rank";
+import { gatherUserSignals } from "@/lib/user-signals";
+import { rankAnonymousFeed, rankPersonalizedFeed, type TasteProfile } from "./rank";
 
-export type { FeedReason, FeedItem, SongRow } from "./rank";
-export type { TasteProfile } from "./taste-profile";
+export type { FeedReason, FeedItem, SongRow, TasteProfile } from "./rank";
 
 export interface FeedFilters {
   tag?: string;
@@ -14,6 +13,32 @@ export interface FeedFilters {
 export interface FeedResult {
   items: import("./rank").FeedItem[];
   strategy: "personalized" | "trending_fallback";
+}
+
+export interface ActivityFeedItem {
+  id: string;
+  type: string;
+  createdAt: Date;
+  user: { id: string; name: string | null; image: string | null };
+  song: {
+    id: string;
+    publicSlug: string | null;
+    title: string | null;
+    imageUrl: string | null;
+    duration: number | null;
+    tags: string | null;
+  } | null;
+  playlist: {
+    id: string;
+    name: string;
+    slug: string | null;
+    songCount: number;
+  } | null;
+}
+
+export interface ActivityFeedResult {
+  items: ActivityFeedItem[];
+  pagination: { page: number; totalPages: number; total: number; hasMore: boolean };
 }
 
 const PAGE_SIZE = 20;
@@ -28,6 +53,11 @@ function baseWhere(filters: FeedFilters) {
   return where;
 }
 
+async function buildTasteProfile(userId: string): Promise<TasteProfile> {
+  const signals = await gatherUserSignals(userId);
+  return signals.tagWeights;
+}
+
 export function paginate(items: import("./rank").FeedItem[], page: number) {
   const total = items.length;
   const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
@@ -35,6 +65,119 @@ export function paginate(items: import("./rank").FeedItem[], page: number) {
   return {
     feed: items.slice(start, start + PAGE_SIZE),
     pagination: { page, totalPages, total, hasMore: page < totalPages },
+  };
+}
+
+export async function buildActivityFeed(
+  userId: string,
+  page: number,
+): Promise<ActivityFeedResult> {
+  const skip = (page - 1) * PAGE_SIZE;
+
+  const following = await prisma.follow.findMany({
+    where: { followerId: userId },
+    select: { followingId: true },
+  });
+
+  if (following.length === 0) {
+    return {
+      items: [],
+      pagination: { page, totalPages: 0, total: 0, hasMore: false },
+    };
+  }
+
+  const followingIds = following.map((f) => f.followingId);
+
+  const [activities, total] = await Promise.all([
+    prisma.activity.findMany({
+      where: { userId: { in: followingIds } },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        type: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, image: true } },
+        song: {
+          select: {
+            id: true,
+            publicSlug: true,
+            title: true,
+            imageUrl: true,
+            duration: true,
+            tags: true,
+            isPublic: true,
+            isHidden: true,
+            archivedAt: true,
+            generationStatus: true,
+          },
+        },
+        playlist: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isPublic: true,
+            _count: { select: { songs: true } },
+          },
+        },
+      },
+    }),
+    prisma.activity.count({
+      where: { userId: { in: followingIds } },
+    }),
+  ]);
+
+  const items: ActivityFeedItem[] = activities
+    .filter((a) => {
+      if (a.type === "song_created" || a.type === "song_favorited") {
+        return (
+          a.song &&
+          a.song.isPublic &&
+          !a.song.isHidden &&
+          !a.song.archivedAt &&
+          a.song.generationStatus === "ready"
+        );
+      }
+      if (a.type === "playlist_created") {
+        return a.playlist && a.playlist.isPublic;
+      }
+      return false;
+    })
+    .map((a) => ({
+      id: a.id,
+      type: a.type,
+      createdAt: a.createdAt,
+      user: a.user,
+      song: a.song
+        ? {
+            id: a.song.id,
+            publicSlug: a.song.publicSlug,
+            title: a.song.title,
+            imageUrl: a.song.imageUrl,
+            duration: a.song.duration,
+            tags: a.song.tags,
+          }
+        : null,
+      playlist: a.playlist
+        ? {
+            id: a.playlist.id,
+            name: a.playlist.name,
+            slug: a.playlist.slug,
+            songCount: a.playlist._count.songs,
+          }
+        : null,
+    }));
+
+  return {
+    items,
+    pagination: {
+      page,
+      totalPages: Math.ceil(total / PAGE_SIZE),
+      total,
+      hasMore: skip + PAGE_SIZE < total,
+    },
   };
 }
 

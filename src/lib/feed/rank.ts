@@ -1,6 +1,6 @@
 import { parseTags } from "@/lib/tags";
 import { trendingScore, affinityScore } from "./score";
-import type { TasteProfile } from "./taste-profile";
+export type TasteProfile = Map<string, number>;
 
 export type FeedReason =
   | "recommended"
