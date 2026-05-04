@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { computeTagBreakdown } from "./tag-breakdown";
-import { computeComboBreakdown } from "./combo-breakdown";
-import { buildWeeklyTrend } from "./weekly-trend";
+import {
+  computeTagBreakdown,
+  computeComboBreakdown,
+  buildWeeklyTrend,
+} from ".";
 
 describe("computeTagBreakdown", () => {
   it("counts likes and dislikes per tag", () => {
