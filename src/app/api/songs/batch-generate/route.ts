@@ -8,7 +8,7 @@ import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { getMonthlyCreditUsage, CREDIT_COSTS } from "@/lib/credits";
+import { checkCredits, getCreditCost } from "@/lib/credits";
 import { badRequest, insufficientCredits, internalError } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
 import {
@@ -64,11 +64,12 @@ export async function POST(request: Request) {
     }
 
     if (!usingPersonalKey) {
-      const cost = (CREDIT_COSTS.generate ?? 1) * configs.length;
-      const creditUsage = await getMonthlyCreditUsage(userId);
-      if (creditUsage.creditsRemaining < cost) {
+      const perSongCost = getCreditCost("generate");
+      const totalCost = perSongCost * configs.length;
+      const creditCheck = await checkCredits(userId, "generate");
+      if (creditCheck.creditsRemaining < totalCost) {
         return insufficientCredits(
-          `Insufficient credits. You need ${cost} credits (${CREDIT_COSTS.generate} x ${configs.length}) but only have ${creditUsage.creditsRemaining} remaining.`
+          `Insufficient credits. You need ${totalCost} credits (${perSongCost} x ${configs.length}) but only have ${creditCheck.creditsRemaining} remaining.`
         );
       }
     }
@@ -175,7 +176,7 @@ export async function POST(request: Request) {
           total: configs.length,
           succeeded,
           failed,
-          totalCreditCost: succeeded * CREDIT_COSTS.generate,
+          totalCreditCost: succeeded * getCreditCost("generate"),
         },
       },
       { status: 201 }

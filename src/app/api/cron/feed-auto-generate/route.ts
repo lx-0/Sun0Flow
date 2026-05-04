@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchFeed } from "@/lib/rss";
 import { generateSong } from "@/lib/sunoapi";
 import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
-import { getMonthlyCreditUsage, recordCreditUsage, CREDIT_COSTS } from "@/lib/credits";
+import { checkCredits, deductCredits } from "@/lib/credits";
 import { logger } from "@/lib/logger";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 import { createNotification } from "@/lib/notifications";
@@ -57,9 +57,9 @@ export async function POST(request: NextRequest) {
 
     // Check credits (skip check for personal key users)
     if (!usingPersonalKey) {
-      const creditUsage = await getMonthlyCreditUsage(userId);
-      if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
-        logger.info({ userId, creditsRemaining: creditUsage.creditsRemaining }, "feed-auto-generate: insufficient credits, skipping user");
+      const creditCheck = await checkCredits(userId, "generate");
+      if (!creditCheck.ok) {
+        logger.info({ userId, creditsRemaining: creditCheck.creditsRemaining }, "feed-auto-generate: insufficient credits, skipping user");
         continue;
       }
     }
@@ -106,8 +106,8 @@ export async function POST(request: NextRequest) {
 
         // Re-check credits per generation
         if (!usingPersonalKey) {
-          const creditUsage = await getMonthlyCreditUsage(userId);
-          if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
+          const recheck = await checkCredits(userId, "generate");
+          if (!recheck.ok) {
             logger.info({ userId }, "feed-auto-generate: insufficient credits for next generation, stopping user");
             break;
           }
@@ -162,9 +162,8 @@ export async function POST(request: NextRequest) {
 
         // Record credit usage
         if (!usingPersonalKey) {
-          await recordCreditUsage(userId, "generate", {
+          await deductCredits(userId, "generate", {
             songId: song.id,
-            creditCost: CREDIT_COSTS.generate,
             description: `Auto-generated from feed: ${feed.title ?? feed.url}`,
           }).catch(() => {});
         }

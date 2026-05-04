@@ -62,6 +62,9 @@ import {
   getMonthlyCreditUsage,
   shouldNotifyLowCredits,
   createLowCreditNotification,
+  checkCredits,
+  deductCredits,
+  getCreditCost,
 } from "./credits";
 
 // Use fake timers within the grace period so getMonthlyBudget returns 500 for
@@ -292,5 +295,105 @@ describe("createLowCreditNotification", () => {
     const call = mockCreateNotification.mock.calls[0][0];
     expect(call.message).toContain("100");
     expect(call.message).toContain("1500");
+  });
+});
+
+describe("getCreditCost", () => {
+  it("returns the cost for a known action", () => {
+    expect(getCreditCost("generate")).toBe(10);
+    expect(getCreditCost("lyrics")).toBe(2);
+    expect(getCreditCost("style_boost")).toBe(5);
+  });
+
+  it("falls back to generate cost for unknown actions", () => {
+    expect(getCreditCost("unknown_action")).toBe(10);
+  });
+});
+
+describe("checkCredits", () => {
+  it("returns ok=true when user has sufficient credits", async () => {
+    mockCreditUsageAggregate
+      .mockResolvedValueOnce({ _sum: { creditCost: 100 }, _count: 10 })
+      .mockResolvedValueOnce({ _sum: { creditCost: 100 }, _count: 10 });
+    mockQueryRaw.mockResolvedValue([]);
+
+    const result = await checkCredits("user-1", "generate");
+
+    expect(result.ok).toBe(true);
+    expect(result.creditCost).toBe(10);
+    expect(result.creditsRemaining).toBe(400);
+  });
+
+  it("returns ok=false when user has insufficient credits", async () => {
+    mockCreditUsageAggregate
+      .mockResolvedValueOnce({ _sum: { creditCost: 495 }, _count: 49 })
+      .mockResolvedValueOnce({ _sum: { creditCost: 495 }, _count: 49 });
+    mockQueryRaw.mockResolvedValue([]);
+
+    const result = await checkCredits("user-1", "generate");
+
+    expect(result.ok).toBe(false);
+    expect(result.creditCost).toBe(10);
+    expect(result.creditsRemaining).toBe(5);
+  });
+
+  it("uses the action-specific cost", async () => {
+    mockCreditUsageAggregate
+      .mockResolvedValueOnce({ _sum: { creditCost: 498 }, _count: 49 })
+      .mockResolvedValueOnce({ _sum: { creditCost: 498 }, _count: 49 });
+    mockQueryRaw.mockResolvedValue([]);
+
+    const result = await checkCredits("user-1", "lyrics");
+
+    expect(result.ok).toBe(true);
+    expect(result.creditCost).toBe(2);
+    expect(result.creditsRemaining).toBe(2);
+  });
+});
+
+describe("deductCredits", () => {
+  it("records usage with the correct cost for the action", async () => {
+    mockCreditUsageCreate.mockResolvedValue({ id: "cu-1" });
+    mockCreditUsageAggregate
+      .mockResolvedValueOnce({ _sum: { creditCost: 100 }, _count: 10 })
+      .mockResolvedValueOnce({ _sum: { creditCost: 100 }, _count: 10 });
+    mockQueryRaw.mockResolvedValue([]);
+
+    await deductCredits("user-1", "generate", { songId: "song-1", description: "test" });
+
+    expect(mockCreditUsageCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: "user-1",
+        action: "generate",
+        creditCost: 10,
+        songId: "song-1",
+        description: "test",
+      }),
+    });
+  });
+
+  it("sends low-credit notification when usage is high", async () => {
+    mockCreditUsageCreate.mockResolvedValue({ id: "cu-1" });
+    // After recording, usage shows low credits
+    mockCreditUsageAggregate
+      .mockResolvedValueOnce({ _sum: { creditCost: 460 }, _count: 46 })
+      .mockResolvedValueOnce({ _sum: { creditCost: 460 }, _count: 46 });
+    mockQueryRaw.mockResolvedValue([]);
+    mockNotificationFindFirst.mockResolvedValue(null);
+
+    await deductCredits("user-1", "generate");
+
+    expect(mockCreateNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "low_credits", userId: "user-1" })
+    );
+  });
+
+  it("does not fail if notification check throws", async () => {
+    mockCreditUsageCreate.mockResolvedValue({ id: "cu-1" });
+    // Make getMonthlyCreditUsage throw after recording
+    mockCreditUsageAggregate.mockRejectedValue(new Error("db error"));
+
+    await expect(deductCredits("user-1", "generate")).resolves.toBeUndefined();
+    expect(mockCreditUsageCreate).toHaveBeenCalled();
   });
 });

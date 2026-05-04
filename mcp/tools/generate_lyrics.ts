@@ -6,7 +6,7 @@
 import { registerTool } from "../registry";
 import { generateLyrics, SunoApiError } from "@/lib/sunoapi";
 import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
-import { getMonthlyCreditUsage, recordCreditUsage, CREDIT_COSTS } from "@/lib/credits";
+import { checkCredits, deductCredits } from "@/lib/credits";
 import { stripHtml } from "@/lib/sanitize";
 
 registerTool({
@@ -35,10 +35,10 @@ registerTool({
 
     const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
     if (!usingPersonalKey) {
-      const usage = await getMonthlyCreditUsage(userId);
-      if (usage.creditsRemaining < CREDIT_COSTS.lyrics) {
+      const check = await checkCredits(userId, "lyrics");
+      if (!check.ok) {
         throw new Error(
-          `Insufficient credits: need ${CREDIT_COSTS.lyrics}, have ${usage.creditsRemaining}`
+          `Insufficient credits: need ${check.creditCost}, have ${check.creditsRemaining}`
         );
       }
     }
@@ -49,8 +49,7 @@ registerTool({
       const result = await generateLyrics({ prompt: cleanPrompt }, userApiKey);
 
       if (!usingPersonalKey) {
-        await recordCreditUsage(userId, "lyrics", {
-          creditCost: CREDIT_COSTS.lyrics,
+        await deductCredits(userId, "lyrics", {
           description: `MCP lyrics generation: ${cleanPrompt.slice(0, 50)}`,
         });
       }

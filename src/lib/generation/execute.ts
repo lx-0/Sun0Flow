@@ -3,14 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import type { Song } from "@prisma/client";
 import { acquireRateLimitSlot, releaseRateLimitSlot, type RateLimitStatus } from "@/lib/rate-limit";
 import { rateLimited, insufficientCredits } from "@/lib/api-error";
-import {
-  recordCreditUsage,
-  shouldNotifyLowCredits,
-  createLowCreditNotification,
-  getMonthlyCreditUsage,
-  CREDIT_COSTS,
-  type MonthlyCreditUsage,
-} from "@/lib/credits";
+import { checkCredits, deductCredits } from "@/lib/credits";
 import { logger } from "@/lib/logger";
 import { createSongRecord, type SongParams, type MockData } from "./song-record";
 import { userFriendlyError } from "./errors";
@@ -76,39 +69,16 @@ async function enforceRateLimit(
 async function checkCreditBalance(
   userId: string,
   action: string
-): Promise<{ denied: NextResponse } | { usage: MonthlyCreditUsage }> {
-  const cost = CREDIT_COSTS[action] ?? CREDIT_COSTS.generate;
-  const usage = await getMonthlyCreditUsage(userId);
-  if (usage.creditsRemaining < cost) {
+): Promise<{ denied: NextResponse } | { ok: true }> {
+  const result = await checkCredits(userId, action);
+  if (!result.ok) {
     return {
       denied: insufficientCredits(
-        `Insufficient credits. You need ${cost} credits but only have ${usage.creditsRemaining} remaining.`
+        `Insufficient credits. You need ${result.creditCost} credits but only have ${result.creditsRemaining} remaining.`
       ),
     };
   }
-  return { usage };
-}
-
-async function recordCreditsAndNotify(
-  userId: string,
-  action: string,
-  opts: { songId: string; description: string }
-): Promise<void> {
-  const creditCost = CREDIT_COSTS[action] ?? CREDIT_COSTS.generate;
-  await recordCreditUsage(userId, action, {
-    songId: opts.songId,
-    creditCost,
-    description: opts.description,
-  });
-
-  try {
-    const usage = await getMonthlyCreditUsage(userId);
-    if (await shouldNotifyLowCredits(userId, usage)) {
-      await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
-    }
-  } catch {
-    // Non-critical — don't block generation
-  }
+  return { ok: true };
 }
 
 export async function executeGeneration(spec: GenerationSpec): Promise<GenerationOutcome> {
@@ -131,7 +101,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
       mock: spec.mockFallback,
     });
     if (!spec.skipCreditRecording) {
-      await recordCreditsAndNotify(spec.userId, spec.action, {
+      await deductCredits(spec.userId, spec.action, {
         songId: song.id,
         description: spec.description,
       });
@@ -147,7 +117,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
     });
 
     if (!spec.skipCreditRecording) {
-      await recordCreditsAndNotify(spec.userId, spec.action, {
+      await deductCredits(spec.userId, spec.action, {
         songId: song.id,
         description: spec.description,
       });

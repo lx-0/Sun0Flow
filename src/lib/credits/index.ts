@@ -10,3 +10,5 @@ export { recordCreditUsage } from "./usage";
 export { getMonthlyCreditUsage } from "./status";
 export type { MonthlyCreditUsage } from "./status";
 export { shouldNotifyLowCredits, createLowCreditNotification } from "./notifications";
+export { checkCredits, deductCredits, getCreditCost } from "./spend";
+export type { CreditCheckResult } from "./spend";

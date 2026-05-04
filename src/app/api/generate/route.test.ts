@@ -76,6 +76,9 @@ vi.mock("@/lib/credits", () => ({
   createLowCreditNotification: vi.fn().mockResolvedValue(undefined),
   getMonthlyCreditUsage: vi.fn().mockResolvedValue({ creditsRemaining: 100 }),
   CREDIT_COSTS: { generate: 1 },
+  checkCredits: vi.fn().mockResolvedValue({ ok: true, creditCost: 1, creditsRemaining: 100 }),
+  deductCredits: vi.fn().mockResolvedValue(undefined),
+  getCreditCost: vi.fn().mockReturnValue(1),
 }));
 
 vi.mock("@/lib/cache", () => ({
@@ -93,6 +96,8 @@ import {
   recordCreditUsage,
   shouldNotifyLowCredits,
   createLowCreditNotification,
+  checkCredits,
+  deductCredits,
 } from "@/lib/credits";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -137,6 +142,8 @@ beforeEach(() => {
   vi.mocked(recordCreditUsage).mockResolvedValue(undefined as never);
   vi.mocked(shouldNotifyLowCredits).mockResolvedValue(false);
   vi.mocked(createLowCreditNotification).mockResolvedValue(undefined as never);
+  vi.mocked(checkCredits).mockResolvedValue({ ok: true, creditCost: 1, creditsRemaining: 100 });
+  vi.mocked(deductCredits).mockResolvedValue(undefined);
   mockSunoApiKey = "test-key";
   vi.mocked(prisma.song.create).mockResolvedValue({ id: "song-1" } as never);
 });
@@ -307,25 +314,17 @@ describe("POST /api/generate", () => {
 
     await POST(makeRequest(DEFAULT_BODY));
 
-    expect(recordCreditUsage).toHaveBeenCalledWith(
+    expect(deductCredits).toHaveBeenCalledWith(
       "user-1",
       "generate",
       expect.objectContaining({
         songId: "song-1",
-        creditCost: 1, // CREDIT_COSTS.generate in mock
       })
     );
   });
 
   it("returns 402 when user has insufficient credits", async () => {
-    vi.mocked(getMonthlyCreditUsage).mockResolvedValue({
-      ...DEFAULT_CREDIT_USAGE,
-      creditsUsedThisMonth: 500,
-      creditsRemaining: 0,
-      generationsThisMonth: 50,
-      usagePercent: 100,
-      isLow: true,
-    });
+    vi.mocked(checkCredits).mockResolvedValue({ ok: false, creditCost: 1, creditsRemaining: 0 });
 
     const res = await POST(makeRequest(DEFAULT_BODY));
     expect(res.status).toBe(402);
@@ -340,33 +339,23 @@ describe("POST /api/generate", () => {
   });
 
   it("does not record credit usage when credits are insufficient", async () => {
-    vi.mocked(getMonthlyCreditUsage).mockResolvedValue({
-      ...DEFAULT_CREDIT_USAGE,
-      creditsRemaining: 0,
-    });
+    vi.mocked(checkCredits).mockResolvedValue({ ok: false, creditCost: 1, creditsRemaining: 0 });
 
     await POST(makeRequest(DEFAULT_BODY));
 
-    expect(recordCreditUsage).not.toHaveBeenCalled();
+    expect(deductCredits).not.toHaveBeenCalled();
   });
 
-  it("triggers low credit notification when credits are running low after generation", async () => {
+  it("deducts credits after successful generation (notifications handled internally)", async () => {
     vi.mocked(generateSong).mockResolvedValue({ taskId: "task-xyz" });
-    vi.mocked(shouldNotifyLowCredits).mockResolvedValue(true);
-    vi.mocked(getMonthlyCreditUsage).mockResolvedValue({
-      ...DEFAULT_CREDIT_USAGE,
-      creditsUsedThisMonth: 450,
-      creditsRemaining: 50,
-      generationsThisMonth: 45,
-      usagePercent: 90,
-      isLow: true,
-      totalCreditsAllTime: 450,
-      totalGenerationsAllTime: 45,
-    });
 
     await POST(makeRequest(DEFAULT_BODY));
 
-    expect(createLowCreditNotification).toHaveBeenCalledWith("user-1", 50, 500);
+    expect(deductCredits).toHaveBeenCalledWith(
+      "user-1",
+      "generate",
+      expect.objectContaining({ songId: "song-1" })
+    );
   });
 });
 

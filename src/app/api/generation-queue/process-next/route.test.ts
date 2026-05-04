@@ -74,6 +74,9 @@ vi.mock("@/lib/credits", () => ({
   createLowCreditNotification: vi.fn().mockResolvedValue(undefined),
   getMonthlyCreditUsage: vi.fn().mockResolvedValue({ creditsRemaining: 100, budget: 500 }),
   CREDIT_COSTS: { generate: 1 },
+  checkCredits: vi.fn().mockResolvedValue({ ok: true, creditCost: 1, creditsRemaining: 100 }),
+  deductCredits: vi.fn().mockResolvedValue(undefined),
+  getCreditCost: vi.fn().mockReturnValue(1),
 }));
 
 vi.mock("@/lib/cache", () => ({
@@ -86,7 +89,7 @@ import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { recordCreditUsage } from "@/lib/credits";
+import { recordCreditUsage, deductCredits } from "@/lib/credits";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -251,10 +254,10 @@ describe("POST /api/generation-queue/process-next", () => {
 
     await POST(makeRequest());
 
-    expect(recordCreditUsage).toHaveBeenCalledWith(
+    expect(deductCredits).toHaveBeenCalledWith(
       "user-1",
       "generate",
-      expect.objectContaining({ songId: "song-1", creditCost: 1 })
+      expect.objectContaining({ songId: "song-1" })
     );
   });
 

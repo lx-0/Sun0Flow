@@ -7,7 +7,7 @@ import { registerTool } from "../registry";
 import { prisma } from "@/lib/prisma";
 import { extendMusic, SunoApiError } from "@/lib/sunoapi";
 import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
-import { getMonthlyCreditUsage, recordCreditUsage, CREDIT_COSTS } from "@/lib/credits";
+import { checkCredits, deductCredits } from "@/lib/credits";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { stripHtml } from "@/lib/sanitize";
 
@@ -110,10 +110,10 @@ registerTool({
     // Check credits
     const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
     if (!usingPersonalKey) {
-      const usage = await getMonthlyCreditUsage(userId);
-      if (usage.creditsRemaining < CREDIT_COSTS.extend) {
+      const check = await checkCredits(userId, "extend");
+      if (!check.ok) {
         throw new Error(
-          `Insufficient credits: need ${CREDIT_COSTS.extend}, have ${usage.creditsRemaining}`
+          `Insufficient credits: need ${check.creditCost}, have ${check.creditsRemaining}`
         );
       }
     }
@@ -160,9 +160,8 @@ registerTool({
       });
 
       if (!usingPersonalKey) {
-        await recordCreditUsage(userId, "extend", {
+        await deductCredits(userId, "extend", {
           songId: song.id,
-          creditCost: CREDIT_COSTS.extend,
           description: `MCP song extension: ${cleanTitle ?? parentSong.title ?? "Untitled"}`,
         });
       }
