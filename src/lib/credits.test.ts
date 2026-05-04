@@ -232,35 +232,38 @@ describe("getMonthlyCreditUsage", () => {
 });
 
 describe("shouldNotifyLowCredits", () => {
-  it("returns false when credits are not low", async () => {
-    mockCreditUsageAggregate
-      .mockResolvedValueOnce({ _sum: { creditCost: 50 }, _count: 5 }) // only 10% used
-      .mockResolvedValueOnce({ _sum: { creditCost: 50 }, _count: 5 });
-    mockQueryRaw.mockResolvedValue([]);
+  const lowUsage = {
+    budget: 500, subscriptionBudget: 500, topUpCredits: 0,
+    topUpCreditsRemaining: 0, subscriptionCreditsRemaining: 50,
+    creditsUsedThisMonth: 450, creditsRemaining: 50,
+    generationsThisMonth: 45, usagePercent: 90, isLow: true,
+    totalCreditsAllTime: 450, totalGenerationsAllTime: 45, dailyChart: [],
+  };
 
-    const result = await shouldNotifyLowCredits("user-1");
+  const normalUsage = {
+    budget: 500, subscriptionBudget: 500, topUpCredits: 0,
+    topUpCreditsRemaining: 0, subscriptionCreditsRemaining: 450,
+    creditsUsedThisMonth: 50, creditsRemaining: 450,
+    generationsThisMonth: 5, usagePercent: 10, isLow: false,
+    totalCreditsAllTime: 50, totalGenerationsAllTime: 5, dailyChart: [],
+  };
+
+  it("returns false when credits are not low", async () => {
+    const result = await shouldNotifyLowCredits("user-1", normalUsage);
     expect(result).toBe(false);
   });
 
   it("returns false when credits are low but already notified this month", async () => {
-    mockCreditUsageAggregate
-      .mockResolvedValueOnce({ _sum: { creditCost: 450 }, _count: 45 })
-      .mockResolvedValueOnce({ _sum: { creditCost: 450 }, _count: 45 });
-    mockQueryRaw.mockResolvedValue([]);
-    mockNotificationFindFirst.mockResolvedValue({ id: "notif-1" }); // already notified
+    mockNotificationFindFirst.mockResolvedValue({ id: "notif-1" });
 
-    const result = await shouldNotifyLowCredits("user-1");
+    const result = await shouldNotifyLowCredits("user-1", lowUsage);
     expect(result).toBe(false);
   });
 
   it("returns true when low and not yet notified", async () => {
-    mockCreditUsageAggregate
-      .mockResolvedValueOnce({ _sum: { creditCost: 450 }, _count: 45 })
-      .mockResolvedValueOnce({ _sum: { creditCost: 450 }, _count: 45 });
-    mockQueryRaw.mockResolvedValue([]);
-    mockNotificationFindFirst.mockResolvedValue(null); // no prior notification
+    mockNotificationFindFirst.mockResolvedValue(null);
 
-    const result = await shouldNotifyLowCredits("user-1");
+    const result = await shouldNotifyLowCredits("user-1", lowUsage);
     expect(result).toBe(true);
   });
 });

@@ -9,6 +9,7 @@ import {
   createLowCreditNotification,
   getMonthlyCreditUsage,
   CREDIT_COSTS,
+  type MonthlyCreditUsage,
 } from "@/lib/credits";
 import { logger } from "@/lib/logger";
 import { createSongRecord, type SongParams, type MockData } from "./song-record";
@@ -75,15 +76,17 @@ async function enforceRateLimit(
 async function checkCreditBalance(
   userId: string,
   action: string
-): Promise<NextResponse | null> {
+): Promise<{ denied: NextResponse } | { usage: MonthlyCreditUsage }> {
   const cost = CREDIT_COSTS[action] ?? CREDIT_COSTS.generate;
-  const creditUsage = await getMonthlyCreditUsage(userId);
-  if (creditUsage.creditsRemaining < cost) {
-    return insufficientCredits(
-      `Insufficient credits. You need ${cost} credits but only have ${creditUsage.creditsRemaining} remaining.`
-    );
+  const usage = await getMonthlyCreditUsage(userId);
+  if (usage.creditsRemaining < cost) {
+    return {
+      denied: insufficientCredits(
+        `Insufficient credits. You need ${cost} credits but only have ${usage.creditsRemaining} remaining.`
+      ),
+    };
   }
-  return null;
+  return { usage };
 }
 
 async function recordCreditsAndNotify(
@@ -99,9 +102,8 @@ async function recordCreditsAndNotify(
   });
 
   try {
-    const shouldNotify = await shouldNotifyLowCredits(userId);
-    if (shouldNotify) {
-      const usage = await getMonthlyCreditUsage(userId);
+    const usage = await getMonthlyCreditUsage(userId);
+    if (await shouldNotifyLowCredits(userId, usage)) {
       await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
     }
   } catch {
@@ -119,8 +121,8 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
   }
 
   if (!spec.skipCreditCheck) {
-    const denied = await checkCreditBalance(spec.userId, spec.action);
-    if (denied) return { status: "denied", response: denied };
+    const result = await checkCreditBalance(spec.userId, spec.action);
+    if ("denied" in result) return { status: "denied", response: result.denied };
   }
 
   if (!spec.hasApiKey) {

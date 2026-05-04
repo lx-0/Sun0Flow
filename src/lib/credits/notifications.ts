@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { createNotification } from "@/lib/notifications";
 import { DEFAULT_MONTHLY_BUDGET } from "./constants";
-import { getMonthlyCreditUsage } from "./get-monthly-usage";
+import type { MonthlyCreditUsage } from "./status";
 
-export async function shouldNotifyLowCredits(userId: string): Promise<boolean> {
-  const usage = await getMonthlyCreditUsage(userId);
+export async function shouldNotifyLowCredits(
+  userId: string,
+  usage: MonthlyCreditUsage
+): Promise<boolean> {
   if (!usage.isLow) return false;
 
   const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
