@@ -1,123 +1,24 @@
 import type {
-  GenerateSongOptions,
-  GenerateResult,
-  ExtendMusicOptions,
   UploadCoverOptions,
   UploadExtendOptions,
   AddVocalsOptions,
   AddInstrumentalOptions,
   MashupOptions,
   ReplaceSectionOptions,
-  GenerateSoundsOptions,
-  GenerateCoverImageOptions,
-  CoverImageResult,
+  GenerateResult,
 } from "./types";
-import {
-  BASE_URL,
-  getCallbackUrl,
-  DEFAULT_MODEL,
-  fetchWithRetry,
-  buildHeaders,
-  extractTaskId,
-  applyStyleTuning,
-} from "./http";
+import { BASE_URL, getCallbackUrl, DEFAULT_MODEL } from "./constants";
+import { fetchWithRetry, buildHeaders } from "./fetch";
+import { extractTaskId, applyStyleTuning } from "./mappers";
 import {
   validatePrompt,
   validateNonCustomPrompt,
   validateStyle,
   validateTitle,
   validateStyleTuningWeights,
-  validateSoundsPrompt,
-  validateSoundTempo,
   validateInfillRange,
 } from "./validation";
 
-/**
- * Generate songs from a text prompt.
- * Returns a taskId — songs are generated asynchronously (2 songs per request).
- * Poll with getTaskStatus() to get the completed songs.
- */
-export async function generateSong(
-  prompt: string,
-  options: GenerateSongOptions = {},
-  apiKey?: string
-): Promise<GenerateResult> {
-  const instrumental = options.instrumental ?? false;
-  const customMode = !!(options.title || options.style);
-  const model = options.model ?? DEFAULT_MODEL;
-
-  if (customMode) {
-    validatePrompt(prompt, model);
-    if (options.style) validateStyle(options.style, model);
-    if (options.title) validateTitle(options.title, model);
-  } else {
-    validateNonCustomPrompt(prompt);
-  }
-  validateStyleTuningWeights(options);
-
-  const body: Record<string, unknown> = {
-    prompt,
-    instrumental,
-    customMode,
-    model,
-    callBackUrl: getCallbackUrl(),
-  };
-
-  if (options.style) body.style = options.style;
-  if (options.title) body.title = options.title;
-  applyStyleTuning(body, options);
-
-  const res = await fetchWithRetry(`${BASE_URL}/generate`, {
-    method: "POST",
-    headers: buildHeaders(apiKey),
-    body: JSON.stringify(body),
-  });
-
-  const taskId = await extractTaskId(res, "generate API");
-  return { taskId };
-}
-
-/**
- * Extend an existing song. The model must match the source audio's model.
- * Set defaultParamFlag=true and provide prompt/style/title/continueAt for custom extension.
- */
-export async function extendMusic(
-  options: ExtendMusicOptions,
-  apiKey?: string
-): Promise<GenerateResult> {
-  const model = options.model ?? DEFAULT_MODEL;
-
-  if (options.prompt != null) validatePrompt(options.prompt, model);
-  if (options.style != null) validateStyle(options.style, model);
-  if (options.title != null) validateTitle(options.title, model);
-  validateStyleTuningWeights(options);
-
-  const body: Record<string, unknown> = {
-    audioId: options.audioId,
-    defaultParamFlag: options.defaultParamFlag ?? false,
-    model,
-    callBackUrl: getCallbackUrl(),
-  };
-
-  if (options.prompt != null) body.prompt = options.prompt;
-  if (options.style != null) body.style = options.style;
-  if (options.title != null) body.title = options.title;
-  if (options.continueAt != null) body.continueAt = options.continueAt;
-  applyStyleTuning(body, options);
-
-  const res = await fetchWithRetry(`${BASE_URL}/generate/extend`, {
-    method: "POST",
-    headers: buildHeaders(apiKey),
-    body: JSON.stringify(body),
-  });
-
-  const taskId = await extractTaskId(res, "extend API");
-  return { taskId };
-}
-
-/**
- * Upload audio and create a cover version in a new style.
- */
 export async function uploadAndCover(
   options: UploadCoverOptions,
   apiKey?: string
@@ -158,9 +59,6 @@ export async function uploadAndCover(
   return { taskId };
 }
 
-/**
- * Upload audio and extend it with AI-generated continuation.
- */
 export async function uploadAndExtend(
   options: UploadExtendOptions,
   apiKey?: string
@@ -196,9 +94,6 @@ export async function uploadAndExtend(
   return { taskId };
 }
 
-/**
- * Add AI-generated vocals over an instrumental track.
- */
 export async function addVocals(
   options: AddVocalsOptions,
   apiKey?: string
@@ -235,9 +130,6 @@ export async function addVocals(
   return { taskId };
 }
 
-/**
- * Generate instrumental backing for a vocal track.
- */
 export async function addInstrumental(
   options: AddInstrumentalOptions,
   apiKey?: string
@@ -271,9 +163,6 @@ export async function addInstrumental(
   return { taskId };
 }
 
-/**
- * Blend two audio files into a mashup.
- */
 export async function generateMashup(
   options: MashupOptions,
   apiKey?: string
@@ -313,10 +202,6 @@ export async function generateMashup(
   return { taskId };
 }
 
-/**
- * Replace a specific time section of an existing track.
- * Time range must be 6–60 seconds and ≤50% of original track length.
- */
 export async function replaceSection(
   options: ReplaceSectionOptions,
   apiKey?: string
@@ -343,60 +228,5 @@ export async function replaceSection(
   });
 
   const taskId = await extractTaskId(res, "replace-section API");
-  return { taskId };
-}
-
-/**
- * Generate ambient sounds from a text prompt.
- * Only supports the V5 model. Returns a taskId for polling.
- */
-export async function generateSounds(
-  options: GenerateSoundsOptions,
-  apiKey?: string
-): Promise<GenerateResult> {
-  validateSoundsPrompt(options.prompt);
-  if (options.soundTempo != null) validateSoundTempo(options.soundTempo);
-
-  const body: Record<string, unknown> = {
-    prompt: options.prompt,
-    model: options.model ?? "V5",
-    callBackUrl: getCallbackUrl(),
-  };
-
-  if (options.soundLoop != null) body.soundLoop = options.soundLoop;
-  if (options.soundTempo != null) body.soundTempo = options.soundTempo;
-  if (options.soundKey != null) body.soundKey = options.soundKey;
-  if (options.grabLyrics != null) body.grabLyrics = options.grabLyrics;
-
-  const res = await fetchWithRetry(`${BASE_URL}/generate/sounds`, {
-    method: "POST",
-    headers: buildHeaders(apiKey),
-    body: JSON.stringify(body),
-  });
-
-  const taskId = await extractTaskId(res, "generate/sounds API");
-  return { taskId };
-}
-
-/**
- * Generate cover images for a completed music generation task.
- * Typically produces 2 different style images. Images retained for 14 days.
- */
-export async function generateCoverImage(
-  options: GenerateCoverImageOptions,
-  apiKey?: string
-): Promise<CoverImageResult> {
-  const body = {
-    taskId: options.taskId,
-    callBackUrl: getCallbackUrl(),
-  };
-
-  const res = await fetchWithRetry(`${BASE_URL}/suno/cover/generate`, {
-    method: "POST",
-    headers: buildHeaders(apiKey),
-    body: JSON.stringify(body),
-  });
-
-  const taskId = await extractTaskId(res, "suno/cover/generate API");
   return { taskId };
 }

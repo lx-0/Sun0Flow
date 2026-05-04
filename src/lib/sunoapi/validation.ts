@@ -1,5 +1,5 @@
 import type { SunoModel } from "./types";
-import { DEFAULT_MODEL } from "./http";
+import { DEFAULT_MODEL } from "./constants";
 
 export class SunoValidationError extends Error {
   constructor(message: string) {

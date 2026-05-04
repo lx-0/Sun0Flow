@@ -1,5 +1,7 @@
 import type { FileUploadResult, StreamUploadResult } from "./types";
-import { SunoApiError, FILE_UPLOAD_BASE_URL, fetchWithRetry, buildHeaders } from "./http";
+import { SunoApiError } from "./errors";
+import { FILE_UPLOAD_BASE_URL } from "./constants";
+import { fetchWithRetry, buildHeaders } from "./fetch";
 import { SUNOAPI_KEY } from "@/lib/env";
 
 /**

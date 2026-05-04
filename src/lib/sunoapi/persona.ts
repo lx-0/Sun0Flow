@@ -1,5 +1,7 @@
 import type { GeneratePersonaOptions, PersonaResult, BoostStyleResult } from "./types";
-import { SunoApiError, BASE_URL, fetchWithRetry, buildHeaders } from "./http";
+import { SunoApiError } from "./errors";
+import { BASE_URL } from "./constants";
+import { fetchWithRetry, buildHeaders } from "./fetch";
 import { validatePersonaVocalSegment } from "./validation";
 
 /**
