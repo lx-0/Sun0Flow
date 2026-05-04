@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { downloadAndCache, isCached } from "@/lib/audio-cache";
+import { audioCache } from "@/lib/file-cache";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { logger } from "@/lib/logger";
@@ -27,7 +27,7 @@ export async function warmUpAudioCache(): Promise<void> {
   let failed = 0;
 
   for (const song of songs) {
-    if (isCached(song.id)) {
+    if (audioCache.has(song.id)) {
       skipped++;
       continue;
     }
@@ -59,7 +59,7 @@ export async function warmUpAudioCache(): Promise<void> {
         },
       });
 
-      const result = await downloadAndCache(song.id, fresh.audioUrl);
+      const result = await audioCache.downloadAndPut(song.id, fresh.audioUrl);
       if (result) {
         cached++;
       } else {

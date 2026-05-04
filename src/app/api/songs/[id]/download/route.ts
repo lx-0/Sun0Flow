@@ -5,7 +5,7 @@ import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { embedId3Tags, embedWavMetadata } from "@/lib/audio-metadata";
 import { wavToFlac } from "@/lib/flac-encoder";
 import type { SongMetadata } from "@/lib/audio-metadata";
-import { getCachedAudio } from "@/lib/audio-cache";
+import { audioCache } from "@/lib/file-cache";
 
 const DOWNLOAD_RATE_LIMIT = 50; // per hour
 
@@ -100,7 +100,7 @@ export async function GET(
     }
 
     // Serve from local cache when available, otherwise fetch from Suno
-    const cached = getCachedAudio(song.id);
+    const cached = audioCache.get(song.id)?.data ?? null;
     let audioBuffer: ArrayBuffer;
     if (cached) {
       audioBuffer = cached.buffer.slice(cached.byteOffset, cached.byteOffset + cached.byteLength) as ArrayBuffer;

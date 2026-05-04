@@ -3,8 +3,7 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { getCachedAudio, cacheAudio, isCached } from "@/lib/audio-cache";
-import { downloadAndCacheImage, hasCachedImage } from "@/lib/image-cache";
+import { audioCache, imageCache } from "@/lib/file-cache";
 import { logger } from "@/lib/logger";
 
 // Refresh audio URL when within 3 days of expiry (matches play endpoint threshold).
@@ -44,7 +43,7 @@ export async function GET(
     }
 
     // ── Serve from local cache ────────────────────────────────────────────
-    if (isCached(songId)) {
+    if (audioCache.has(songId)) {
       return serveCached(songId, request.headers.get("range"));
     }
 
@@ -68,8 +67,8 @@ export async function GET(
               imageUrl: fresh.imageUrl || undefined,
             },
           });
-          if (fresh.imageUrl && !hasCachedImage(songId)) {
-            downloadAndCacheImage(songId, fresh.imageUrl).catch(() => {});
+          if (fresh.imageUrl && !imageCache.has(songId)) {
+            imageCache.downloadAndPut(songId, fresh.imageUrl).catch(() => {});
           }
           audioUrl = fresh.audioUrl;
           refreshed = true;
@@ -133,7 +132,7 @@ export async function GET(
     // Read full body, cache to disk, then serve (including Range support)
     const arrayBuf = await upstream.arrayBuffer();
     const buf = Buffer.from(arrayBuf);
-    cacheAudio(songId, buf);
+    audioCache.put(songId, buf);
 
     return serveBuf(buf, request.headers.get("range"));
   } catch (err) {
@@ -148,7 +147,7 @@ export async function GET(
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function serveCached(songId: string, rangeHeader: string | null): Response {
-  const buf = getCachedAudio(songId);
+  const buf = audioCache.get(songId)?.data ?? null;
   if (!buf) {
     // Race: cache file disappeared between check and read
     return NextResponse.json(

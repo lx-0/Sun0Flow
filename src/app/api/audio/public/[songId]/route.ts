@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { getCachedAudio, cacheAudio, isCached } from "@/lib/audio-cache";
+import { audioCache } from "@/lib/file-cache";
 import { logger } from "@/lib/logger";
 
 const REFRESH_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000;
@@ -35,7 +35,7 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    if (isCached(songId)) {
+    if (audioCache.has(songId)) {
       return serveCached(songId, request.headers.get("range"));
     }
 
@@ -99,7 +99,7 @@ export async function GET(
 
     const arrayBuf = await upstream.arrayBuffer();
     const buf = Buffer.from(arrayBuf);
-    cacheAudio(songId, buf);
+    audioCache.put(songId, buf);
 
     return serveBuf(buf, request.headers.get("range"));
   } catch (err) {
@@ -109,7 +109,7 @@ export async function GET(
 }
 
 function serveCached(songId: string, rangeHeader: string | null): Response {
-  const buf = getCachedAudio(songId);
+  const buf = audioCache.get(songId)?.data ?? null;
   if (!buf) {
     return NextResponse.json({ error: "Cache read failed" }, { status: 500 });
   }

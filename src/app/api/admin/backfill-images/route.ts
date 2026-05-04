@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
-import { downloadAndCacheImage, hasCachedImage, cachedImageCount } from "@/lib/image-cache";
+import { imageCache } from "@/lib/file-cache";
 import { logger } from "@/lib/logger";
 
 export async function POST() {
@@ -23,12 +23,12 @@ export async function POST() {
   for (const song of songs) {
     if (!song.imageUrl) continue;
 
-    if (hasCachedImage(song.id)) {
+    if (imageCache.has(song.id)) {
       skipped++;
       continue;
     }
 
-    const buf = await downloadAndCacheImage(song.id, song.imageUrl);
+    const buf = await imageCache.downloadAndPut(song.id, song.imageUrl);
     if (buf) {
       cached++;
     } else {
@@ -42,6 +42,6 @@ export async function POST() {
     cached,
     skipped,
     failed,
-    totalCached: cachedImageCount(),
+    totalCached: imageCache.count(),
   });
 }

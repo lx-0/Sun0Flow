@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCachedImage, downloadAndCacheImage } from "@/lib/image-cache";
+import { imageCache } from "@/lib/file-cache";
 import { logger } from "@/lib/logger";
 
 export async function GET(
@@ -10,7 +10,7 @@ export async function GET(
   try {
     const { songId } = await params;
 
-    const cached = getCachedImage(songId);
+    const cached = imageCache.get(songId);
     if (cached) {
       return new Response(new Uint8Array(cached.data), {
         status: 200,
@@ -31,12 +31,12 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const buf = await downloadAndCacheImage(songId, song.imageUrl);
+    const buf = await imageCache.downloadAndPut(songId, song.imageUrl);
     if (!buf) {
       return NextResponse.redirect(song.imageUrl);
     }
 
-    const cachedNow = getCachedImage(songId);
+    const cachedNow = imageCache.get(songId);
     const contentType = cachedNow?.contentType ?? "image/jpeg";
 
     return new Response(new Uint8Array(buf), {
