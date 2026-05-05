@@ -1,14 +1,10 @@
 export { userFriendlyError, type GenerationError } from "./errors";
 export {
-  createSongRecord,
-  type SongParams,
-  type SongRecordInput,
-  type MockData,
-} from "./song-record";
-export {
   executeGeneration,
   type GenerationSpec,
   type GenerationOutcome,
+  type SongParams,
+  type MockData,
 } from "./execute";
 export {
   executeTransform,

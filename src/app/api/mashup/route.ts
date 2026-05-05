@@ -11,12 +11,7 @@ import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
 import { canUseFeature, SubscriptionTier } from "@/lib/feature-gates";
-import { acquireRateLimitSlot } from "@/lib/rate-limit";
-import { rateLimited } from "@/lib/api-error";
-import {
-  userFriendlyError,
-  createSongRecord,
-} from "@/lib/generation";
+import { executeGeneration } from "@/lib/generation";
 
 const EXPIRY_BUFFER_MS = 60 * 60 * 1000;
 
@@ -43,15 +38,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Mashup Studio requires Starter tier or higher", code: "FORBIDDEN" },
         { status: 403 }
-      );
-    }
-
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId, "generate");
-    if (!acquired) {
-      return rateLimited(
-        `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`,
-        { resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { "Retry-After": String(Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000))) }
       );
     }
 
@@ -92,108 +78,113 @@ export async function POST(request: Request) {
       );
     }
 
-    const songParams = {
-      title: title?.trim() || "Mashup",
-      prompt: prompt?.trim() || "Mashup",
-      tags: style?.trim() || null,
-      isInstrumental: Boolean(instrumental),
-      parentSongId: trackA.songId || trackB.songId || null,
+    const uploadTrack = async (track: TrackSource): Promise<string> => {
+      if (track.songId) {
+        const song = await prisma.song.findFirst({
+          where: { id: track.songId, userId },
+          select: { audioUrl: true, audioUrlExpiresAt: true, sunoJobId: true },
+        });
+        if (!song?.audioUrl) {
+          throw new Error("Selected song has no audio URL");
+        }
+
+        let audioUrl = song.audioUrl;
+        const isExpiredOrSoon =
+          !song.audioUrlExpiresAt ||
+          song.audioUrlExpiresAt.getTime() - Date.now() < EXPIRY_BUFFER_MS;
+        if (isExpiredOrSoon && song.sunoJobId) {
+          try {
+            const taskResult = await getTaskStatus(song.sunoJobId, userApiKey);
+            const fresh = taskResult.songs.find((s) => s.audioUrl) ?? taskResult.songs[0];
+            if (fresh?.audioUrl) {
+              audioUrl = fresh.audioUrl;
+              prisma.song.update({
+                where: { id: track.songId },
+                data: {
+                  audioUrl: fresh.audioUrl,
+                  audioUrlExpiresAt: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000),
+                },
+              }).catch(() => {});
+            }
+          } catch {
+            // Refresh failed — try with existing URL
+          }
+        }
+
+        const result = await uploadFileFromUrl(audioUrl, userApiKey);
+        return result.fileUrl;
+      }
+
+      if (track.base64Data) {
+        const sizeBytes = Math.ceil((track.base64Data.length * 3) / 4);
+        if (sizeBytes > MAX_BASE64_SIZE) {
+          throw new Error("File too large for upload (max 10MB). Use a URL instead.");
+        }
+        const result = await uploadFileBase64(track.base64Data, userApiKey);
+        return result.fileUrl;
+      }
+
+      if (track.fileUrl) {
+        const result = await uploadFileFromUrl(track.fileUrl, userApiKey);
+        return result.fileUrl;
+      }
+
+      throw new Error("Track must have a file, URL, or library song");
     };
 
-    try {
-      const uploadTrack = async (track: TrackSource): Promise<string> => {
-        if (track.songId) {
-          const song = await prisma.song.findFirst({
-            where: { id: track.songId, userId },
-            select: { audioUrl: true, audioUrlExpiresAt: true, sunoJobId: true },
-          });
-          if (!song?.audioUrl) {
-            throw new Error("Selected song has no audio URL");
-          }
+    const outcome = await executeGeneration({
+      userId,
+      action: "mashup",
+      songParams: {
+        title: title?.trim() || "Mashup",
+        prompt: prompt?.trim() || "Mashup",
+        tags: style?.trim() || null,
+        isInstrumental: Boolean(instrumental),
+        parentSongId: trackA.songId || trackB.songId || null,
+      },
+      hasApiKey: true,
+      mockFallback: {},
+      skipCreditCheck: true,
+      skipCreditRecording: true,
+      description: `Mashup generation: ${title?.trim() || "Mashup"}`,
+      apiCall: async () => {
+        const [urlA, urlB] = await Promise.all([
+          uploadTrack(trackA),
+          uploadTrack(trackB),
+        ]);
+        return generateMashup(
+          {
+            uploadUrlList: [urlA, urlB],
+            customMode: !!(prompt || style),
+            instrumental: instrumental != null ? Boolean(instrumental) : undefined,
+            prompt: prompt?.trim() || undefined,
+            style: style?.trim() || undefined,
+            title: title?.trim() || undefined,
+          },
+          userApiKey
+        );
+      },
+    });
 
-          let audioUrl = song.audioUrl;
-          const isExpiredOrSoon =
-            !song.audioUrlExpiresAt ||
-            song.audioUrlExpiresAt.getTime() - Date.now() < EXPIRY_BUFFER_MS;
-          if (isExpiredOrSoon && song.sunoJobId) {
-            try {
-              const taskResult = await getTaskStatus(song.sunoJobId, userApiKey);
-              const fresh = taskResult.songs.find((s) => s.audioUrl) ?? taskResult.songs[0];
-              if (fresh?.audioUrl) {
-                audioUrl = fresh.audioUrl;
-                prisma.song.update({
-                  where: { id: track.songId },
-                  data: {
-                    audioUrl: fresh.audioUrl,
-                    audioUrlExpiresAt: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000),
-                  },
-                }).catch(() => {});
-              }
-            } catch {
-              // Refresh failed — try with existing URL
-            }
-          }
+    if (outcome.status === "denied") return outcome.response;
 
-          const result = await uploadFileFromUrl(audioUrl, userApiKey);
-          return result.fileUrl;
-        }
-
-        if (track.base64Data) {
-          const sizeBytes = Math.ceil((track.base64Data.length * 3) / 4);
-          if (sizeBytes > MAX_BASE64_SIZE) {
-            throw new Error("File too large for upload (max 10MB). Use a URL instead.");
-          }
-          const result = await uploadFileBase64(track.base64Data, userApiKey);
-          return result.fileUrl;
-        }
-
-        if (track.fileUrl) {
-          const result = await uploadFileFromUrl(track.fileUrl, userApiKey);
-          return result.fileUrl;
-        }
-
-        throw new Error("Track must have a file, URL, or library song");
-      };
-
-      const [urlA, urlB] = await Promise.all([
-        uploadTrack(trackA),
-        uploadTrack(trackB),
-      ]);
-
-      const result = await generateMashup(
-        {
-          uploadUrlList: [urlA, urlB],
-          customMode: !!(prompt || style),
-          instrumental: instrumental != null ? Boolean(instrumental) : undefined,
-          prompt: prompt?.trim() || undefined,
-          style: style?.trim() || undefined,
-          title: title?.trim() || undefined,
-        },
-        userApiKey
-      );
-
-      const song = await createSongRecord(userId, songParams, { status: "pending", sunoJobId: result.taskId });
-
-      invalidateByPrefix(`dashboard-stats:${userId}`);
-
-      return NextResponse.json(
-        { songs: [song], rateLimit: rateLimitStatus },
-        { status: 201 }
-      );
-    } catch (apiError) {
-      logServerError("mashup-api", apiError, {
+    if (outcome.status === "failed") {
+      logServerError("mashup-api", outcome.rawError, {
         userId,
         route: "/api/mashup",
       });
-
-      const { message: errorMsg } = userFriendlyError(apiError);
-      const song = await createSongRecord(userId, songParams, { status: "failed", errorMessage: errorMsg });
-
       return NextResponse.json(
-        { songs: [song], error: errorMsg, rateLimit: rateLimitStatus },
+        { songs: [outcome.song], error: outcome.error, rateLimit: outcome.rateLimitStatus },
         { status: 201 }
       );
     }
+
+    invalidateByPrefix(`dashboard-stats:${userId}`);
+
+    return NextResponse.json(
+      { songs: [outcome.song], rateLimit: outcome.rateLimitStatus },
+      { status: 201 }
+    );
   } catch (error) {
     logServerError("mashup-route", error, { route: "/api/mashup" });
     return NextResponse.json(
