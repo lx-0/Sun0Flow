@@ -108,6 +108,15 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/style-templates",
+        destination: "/templates?tab=styles",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return {
       // afterFiles: filesystem routes (e.g. /api/v1/openapi.json) match

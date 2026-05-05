@@ -35,7 +35,6 @@ import {
   MusicalNoteIcon,
   RectangleStackIcon,
   Squares2X2Icon,
-  SwatchIcon,
 } from "@heroicons/react/24/outline";
 import { useTheme } from "./ThemeProvider";
 import dynamic from "next/dynamic";
@@ -59,7 +58,6 @@ const NAV_ITEM_DEFS = [
   { key: "inspire" as const, href: "/inspire", icon: LightBulbIcon, dataTour: "nav-inspire" as string | undefined, prefetch: false },
   { key: "generate" as const, href: "/generate", icon: PlusCircleIcon, dataTour: "nav-generate" as string | undefined, prefetch: true },
   { key: "templates" as const, href: "/templates", icon: BookmarkIcon, dataTour: undefined as string | undefined, prefetch: false },
-  { key: "styleTemplates" as const, href: "/style-templates", icon: SwatchIcon, dataTour: undefined as string | undefined, prefetch: false },
   { key: "personas" as const, href: "/personas", icon: UserGroupIcon, dataTour: undefined as string | undefined, prefetch: false },
   { key: "mashup" as const, href: "/mashup", icon: SparklesIcon, dataTour: undefined as string | undefined, prefetch: false },
   { key: "feed" as const, href: "/feed", icon: RssIcon, dataTour: undefined as string | undefined, prefetch: false },
