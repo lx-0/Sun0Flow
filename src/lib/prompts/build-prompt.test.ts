@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPromptFromItem, buildSimplePromptFromItem } from "./build-prompt";
+import { buildPromptFromItem, buildSimplePromptFromItem, rankItems } from "./build-prompt";
 import type { RssItem } from "@/lib/rss";
 
 describe("buildPromptFromItem", () => {
@@ -148,5 +148,48 @@ describe("buildSimplePromptFromItem", () => {
     const result = buildSimplePromptFromItem(item);
 
     expect(result.style).toBe("melancholic, piano, strings");
+  });
+});
+
+describe("rankItems", () => {
+  it("returns items sorted by score descending", () => {
+    const items: RssItem[] = [
+      { title: "Low", description: "" },
+      { title: "High score item!", description: "Long enough description here", mood: "dark", topics: ["x", "y"] },
+      { title: "Medium item", description: "Also a decent description length" },
+    ];
+
+    const ranked = rankItems(items, 3);
+
+    expect(ranked[0].title).toBe("High score item!");
+    expect(ranked[2].title).toBe("Low");
+  });
+
+  it("limits results to the requested count", () => {
+    const items: RssItem[] = [
+      { title: "A long title one", description: "" },
+      { title: "A long title two", description: "" },
+      { title: "A long title three", description: "" },
+    ];
+
+    const ranked = rankItems(items, 2);
+
+    expect(ranked).toHaveLength(2);
+  });
+
+  it("handles empty array", () => {
+    expect(rankItems([], 5)).toEqual([]);
+  });
+
+  it("scores zero for a bare item", () => {
+    const items: RssItem[] = [
+      { title: "", description: "" },
+      { title: "A long title here", description: "A description that is over twenty chars", mood: "chill", topics: ["jazz"] },
+    ];
+
+    const ranked = rankItems(items, 2);
+
+    expect(ranked[0].title).toBe("A long title here");
+    expect(ranked[1].title).toBe("");
   });
 });
