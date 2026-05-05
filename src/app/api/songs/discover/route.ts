@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { logServerError } from "@/lib/error-logger";
 import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
+import { SongFilters } from "@/lib/songs";
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
@@ -51,30 +52,11 @@ export async function GET(request: NextRequest) {
         ? parseInt(tempoMaxParam, 10)
         : null;
 
-    // Base WHERE: public, not hidden, not archived, generation complete
-    const where: Prisma.SongWhereInput = {
-      isPublic: true,
-      isHidden: false,
-      archivedAt: null,
-      generationStatus: "ready",
-    };
-
-    // Filter by genre tag (match against the tags text field, case-insensitive)
-    if (tag) {
-      where.tags = { contains: tag, mode: "insensitive" };
-    }
-
-    // Filter by mood (also matched against the tags text field)
-    if (mood && !tag) {
-      where.tags = { contains: mood, mode: "insensitive" };
-    } else if (mood && tag) {
-      // Both filters: use AND
-      where.AND = [
-        { tags: { contains: tag, mode: "insensitive" } },
-        { tags: { contains: mood, mode: "insensitive" } },
-      ];
-      delete where.tags;
-    }
+    const where: Prisma.SongWhereInput = SongFilters.withTagFilters(
+      SongFilters.publicDiscovery(),
+      tag || undefined,
+      mood || undefined
+    );
 
     // Filter by tempo range
     if (tempoMin !== null || tempoMax !== null) {

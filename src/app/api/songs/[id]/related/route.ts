@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
 import { cached, cacheKey, CacheTTL } from "@/lib/cache";
+import { SongFilters } from "@/lib/songs";
 
 const RELATED_LIMIT = 8;
 
@@ -66,12 +67,9 @@ export async function GET(
         // Load candidate public songs from other creators
         const candidates = await prisma.song.findMany({
           where: {
+            ...SongFilters.publicDiscovery(),
             id: { not: id },
             userId: { not: song.userId },
-            isPublic: true,
-            isHidden: false,
-            archivedAt: null,
-            generationStatus: "ready",
           },
           include: {
             songTags: { include: { tag: true } },
@@ -116,12 +114,9 @@ export async function GET(
         // Fallback: trending public songs from other creators
         const trending = await prisma.song.findMany({
           where: {
+            ...SongFilters.publicDiscovery(),
             id: { not: id },
             userId: { not: song.userId },
-            isPublic: true,
-            isHidden: false,
-            archivedAt: null,
-            generationStatus: "ready",
           },
           include: { user: { select: { name: true, username: true } } },
           orderBy: { playCount: "desc" },

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
 import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
+import { SongFilters } from "@/lib/songs";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
@@ -42,13 +43,7 @@ export async function GET(request: NextRequest) {
       async () => {
         // Fetch all non-null tags fields from public, non-hidden, ready songs
         const rows = await prisma.song.findMany({
-          where: {
-            isPublic: true,
-            isHidden: false,
-            archivedAt: null,
-            generationStatus: "ready",
-            tags: { not: null },
-          },
+          where: { ...SongFilters.publicDiscovery(), tags: { not: null } },
           select: { tags: true },
         });
 

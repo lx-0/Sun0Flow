@@ -5,6 +5,7 @@ import { logServerError } from "@/lib/error-logger";
 import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
 import { rateLimited } from "@/lib/api-error";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
+import { SongFilters } from "@/lib/songs";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 100;
@@ -38,23 +39,15 @@ export async function GET(request: NextRequest) {
     const mood = params.get("mood")?.trim() || "";
     const sort = params.get("sort") || "newest";
 
-    // Base WHERE: public, not hidden, not archived, generation complete
-    const where: Prisma.SongWhereInput = {
-      isPublic: true,
-      isHidden: false,
-      archivedAt: null,
-      generationStatus: "ready",
-    };
+    const base: Prisma.SongWhereInput = { ...SongFilters.publicDiscovery() };
 
-    // For trending, restrict to songs from the last 30 days
     if (sort === "trending") {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      where.createdAt = { gte: thirtyDaysAgo };
+      base.createdAt = { gte: thirtyDaysAgo };
     }
 
-    // Full-text search: match title, tags, lyrics, or creator name
     if (q) {
-      where.OR = [
+      base.OR = [
         { title: { contains: q, mode: "insensitive" } },
         { tags: { contains: q, mode: "insensitive" } },
         { lyrics: { contains: q, mode: "insensitive" } },
@@ -63,17 +56,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Genre filter (ILIKE on tags field)
-    if (genre && mood) {
-      where.AND = [
-        { tags: { contains: genre, mode: "insensitive" } },
-        { tags: { contains: mood, mode: "insensitive" } },
-      ];
-    } else if (genre) {
-      where.tags = { contains: genre, mode: "insensitive" };
-    } else if (mood) {
-      where.tags = { contains: mood, mode: "insensitive" };
-    }
+    const where = SongFilters.withTagFilters(base, genre || undefined, mood || undefined);
 
     // Build ORDER BY
     let orderBy: Prisma.SongOrderByWithRelationInput;

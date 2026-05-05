@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import { logServerError } from "@/lib/error-logger";
 import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
 import { rateLimited, internalError } from "@/lib/api-error";
 import { withTiming } from "@/lib/timing";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
+import { SongFilters } from "@/lib/songs";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;
@@ -77,25 +77,11 @@ async function handleGET(request: NextRequest) {
     const result = await cached(
       key,
       async () => {
-        // Base WHERE for all public songs
-        const baseWhere: Prisma.SongWhereInput = {
-          isPublic: true,
-          isHidden: false,
-          archivedAt: null,
-          generationStatus: "ready",
-        };
-
-        // Apply genre / mood filters
-        if (genre && mood) {
-          baseWhere.AND = [
-            { tags: { contains: genre, mode: "insensitive" } },
-            { tags: { contains: mood, mode: "insensitive" } },
-          ];
-        } else if (genre) {
-          baseWhere.tags = { contains: genre, mode: "insensitive" };
-        } else if (mood) {
-          baseWhere.tags = { contains: mood, mode: "insensitive" };
-        }
+        const baseWhere = SongFilters.withTagFilters(
+          SongFilters.publicDiscovery(),
+          genre || undefined,
+          mood || undefined
+        );
 
         const select = {
           id: true,
@@ -145,7 +131,7 @@ async function handleGET(request: NextRequest) {
         // Trending: fetch candidate pool from last 30 days, compute decay score in JS,
         // then paginate. Fetch a pool large enough to rank accurately after offset.
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const trendingWhere: Prisma.SongWhereInput = {
+        const trendingWhere = {
           ...baseWhere,
           createdAt: { gte: thirtyDaysAgo },
         };

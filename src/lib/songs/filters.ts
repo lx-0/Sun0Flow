@@ -76,4 +76,26 @@ export const SongFilters = {
       ],
     };
   },
+
+  withTagFilters(
+    base: Prisma.SongWhereInput,
+    genre?: string,
+    mood?: string
+  ): Prisma.SongWhereInput {
+    if (!genre && !mood) return base;
+    if (genre && mood) {
+      return {
+        ...base,
+        AND: [
+          ...((base.AND as Prisma.SongWhereInput[]) ?? []),
+          { tags: { contains: genre, mode: "insensitive" } },
+          { tags: { contains: mood, mode: "insensitive" } },
+        ],
+      };
+    }
+    return {
+      ...base,
+      tags: { contains: (genre || mood)!, mode: "insensitive" },
+    };
+  },
 } as const;
