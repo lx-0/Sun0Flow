@@ -1,11 +1,15 @@
+import { recordActivity } from "@/lib/activity";
 import { invalidateByPrefix } from "@/lib/cache";
+import { sendGenerationCompleteEmail } from "@/lib/email";
 import { broadcast } from "@/lib/event-bus";
+import { audioCache, imageCache } from "@/lib/file-cache";
 import { logger } from "@/lib/logger";
+import { notifyFollowersOfNewSong } from "@/lib/notifications";
+import { prisma } from "@/lib/prisma";
+import { sendPushToUser } from "@/lib/push";
+import { recordDailyActivity, checkSongMilestones, checkStreakMilestones } from "@/lib/streaks";
 import { persistSongCompletion, createAlternateSongs, markQueueItemDone, markSongFailed } from "./persist";
-import { cacheCompletionAssets } from "./cache-assets";
-import { notifyCompletion } from "./notify";
-import { trackCompletionActivity } from "./track-activity";
-import type { CompletionSong, SongRecord } from "./types";
+import type { CompletionSong, SongRecord, PersistedSong, AlternateSong } from "./types";
 
 export type { CompletionSong, SongRecord } from "./types";
 
@@ -22,13 +26,10 @@ export async function handleSongSuccess(
 
   const firstSong = completionSongs[0];
 
-  // Critical stage: persistence must succeed or the whole operation fails.
-  // Callers can safely retry on failure — no side effects have fired yet.
   const updated = await persistSongCompletion(song, firstSong);
   const alternates = await createAlternateSongs(song, completionSongs);
   await markQueueItemDone(song.id);
 
-  // Best-effort stage: failures are logged but never propagate to callers.
   const sideEffectErrors: string[] = [];
 
   const runSideEffect = async (name: string, fn: () => void | Promise<void>) => {
@@ -101,5 +102,70 @@ export async function handleSongFailure(
     broadcast(song.userId, { type: "queue_item_complete", data: { songId: song.id } });
   } catch (err) {
     logger.error({ err, songId: song.id, userId: song.userId }, "song-completion: broadcast failed during failure handling");
+  }
+}
+
+function cacheCompletionAssets(
+  song: SongRecord,
+  firstSong: CompletionSong,
+  alternates: AlternateSong[],
+): void {
+  if (firstSong.audioUrl && !audioCache.has(song.id)) {
+    audioCache.downloadAndPut(song.id, firstSong.audioUrl).catch(() => {});
+  }
+  const coverUrl = firstSong.imageUrl || song.imageUrl;
+  if (coverUrl && !imageCache.has(song.id)) {
+    imageCache.downloadAndPut(song.id, coverUrl).catch(() => {});
+  }
+
+  for (const alt of alternates) {
+    if (alt.audioSource.audioUrl) {
+      audioCache.downloadAndPut(alt.id, alt.audioSource.audioUrl).catch(() => {});
+    }
+    if (alt.audioSource.imageUrl) {
+      imageCache.downloadAndPut(alt.id, alt.audioSource.imageUrl).catch(() => {});
+    }
+  }
+}
+
+function trackCompletionActivity(userId: string, songId: string): void {
+  recordActivity({ userId, type: "song_created", songId });
+  notifyFollowersOfNewSong(userId, songId).catch(() => {});
+
+  recordDailyActivity(userId)
+    .then((newStreak) => checkStreakMilestones(userId, newStreak))
+    .catch(() => {});
+  checkSongMilestones(userId).catch(() => {});
+}
+
+async function notifyCompletion(userId: string, song: PersistedSong): Promise<void> {
+  const userPrefs = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      email: true,
+      emailGenerationComplete: true,
+      unsubscribeToken: true,
+      pushGenerationComplete: true,
+    },
+  });
+
+  if (userPrefs?.email && userPrefs.emailGenerationComplete) {
+    let unsubToken = userPrefs.unsubscribeToken;
+    if (!unsubToken) {
+      unsubToken = crypto.randomUUID();
+      await prisma.user.update({ where: { id: userId }, data: { unsubscribeToken: unsubToken } });
+    }
+    sendGenerationCompleteEmail(userPrefs.email, { id: song.id, title: song.title }, unsubToken).catch((err) =>
+      logger.error({ userId, songId: song.id, err }, "song-completion: failed to send generation complete email")
+    );
+  }
+
+  if (userPrefs?.pushGenerationComplete !== false) {
+    sendPushToUser(userId, {
+      title: "Your song is ready!",
+      body: `"${song.title || "Untitled"}" has finished generating`,
+      url: `/library`,
+      tag: `generation-complete-${song.id}`,
+    }).catch(() => {});
   }
 }
