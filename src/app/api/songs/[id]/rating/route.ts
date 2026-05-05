@@ -1,34 +1,17 @@
 import { NextResponse } from "next/server";
-import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import { songRoute } from "@/lib/route-handler";
 import { invalidateByPrefix } from "@/lib/cache";
-import { badRequest, notFound } from "@/lib/api-error";
+import { badRequest } from "@/lib/api-error";
 
-export const GET = authRoute<{ id: string }>(async (_request, { auth, params }) => {
-  const song = await prisma.song.findFirst({
-    where: { id: params.id, userId: auth.userId },
-    select: { rating: true, ratingNote: true },
-  });
-
-  if (!song) {
-    return notFound();
-  }
-
+export const GET = songRoute(async (_request, { song }) => {
   return NextResponse.json({
     rating: song.rating,
     ratingNote: song.ratingNote,
   });
 }, { route: "/api/songs/[id]/rating" });
 
-export const PATCH = authRoute<{ id: string }>(async (request, { auth, params }) => {
-  const song = await prisma.song.findFirst({
-    where: { id: params.id, userId: auth.userId },
-  });
-
-  if (!song) {
-    return notFound();
-  }
-
+export const PATCH = songRoute(async (request, { auth, song }) => {
   const body = await request.json();
   const stars = body.stars;
 

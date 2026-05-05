@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import type { Song } from "@prisma/client";
 import { resolveUser, requireAdmin } from "@/lib/auth-resolver";
+import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
-import { badRequest, internalError } from "@/lib/api-error";
+import { badRequest, notFound, internalError } from "@/lib/api-error";
 
 export type AuthContext = {
   userId: string;
@@ -96,6 +98,74 @@ export function authRoute<
       });
     } catch (error) {
       logServerError("route-handler", error, {
+        userId: result.userId,
+        route: options?.route ?? new URL(request.url).pathname,
+      });
+      return internalError();
+    }
+  };
+}
+
+/**
+ * Wrap a route handler that operates on a song. Resolves auth, finds the song
+ * by params.id with the specified access mode, and returns 404 if not found.
+ *
+ * Access modes:
+ *   "owned"      — song must belong to the authenticated user (default)
+ *   "accessible" — song must be owned by user OR public
+ *
+ * Usage:
+ *   export const POST = songRoute(async (request, { auth, song }) => { ... });
+ *   export const GET = songRoute(async (request, { auth, song }) => { ... }, { access: "accessible" });
+ */
+export function songRoute<B = undefined>(
+  handler: (
+    request: NextRequest,
+    ctx: { auth: AuthContext; song: Song; params: { id: string }; body: B }
+  ) => Promise<NextResponse>,
+  options?: RouteOptions & { body?: z.ZodType<B>; access?: "owned" | "accessible" }
+) {
+  const access = options?.access ?? "owned";
+
+  return async (
+    request: NextRequest,
+    segmentData: SegmentData<{ id: string }>
+  ): Promise<NextResponse> => {
+    const result = await resolveUser(request);
+    if (result.error) return result.error;
+
+    try {
+      const params = segmentData?.params
+        ? await segmentData.params
+        : ({ id: "" } as { id: string });
+
+      const where =
+        access === "accessible"
+          ? { id: params.id, OR: [{ userId: result.userId }, { isPublic: true }] }
+          : { id: params.id, userId: result.userId };
+
+      const song = await prisma.song.findFirst({ where });
+      if (!song) return notFound();
+
+      let body: B = undefined as B;
+      if (options?.body) {
+        const parsed = await parseBody(request, options.body);
+        if (parsed.error) return parsed.error;
+        body = parsed.data;
+      }
+
+      return await handler(request, {
+        auth: {
+          userId: result.userId,
+          isApiKey: result.isApiKey,
+          isAdmin: result.isAdmin,
+        },
+        song,
+        params,
+        body,
+      });
+    } catch (error) {
+      logServerError("song-route-handler", error, {
         userId: result.userId,
         route: options?.route ?? new URL(request.url).pathname,
       });
