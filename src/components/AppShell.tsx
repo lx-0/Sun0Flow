@@ -274,7 +274,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav links */}
-        <nav aria-label="Primary" className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+        <nav aria-label="Primary" className="flex-1 min-h-0 overflow-y-auto py-3 px-2 space-y-1">
           {navItems.map(({ label, href, icon: Icon, dataTour, prefetch }) => {
             const active = pathname === href;
             return (
