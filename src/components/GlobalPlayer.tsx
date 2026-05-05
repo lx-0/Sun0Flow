@@ -413,6 +413,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
         <div className="flex items-center gap-2.5 sm:gap-2 px-2 sm:px-3 py-3">
           {/* Cover art — tap to expand on mobile, link on desktop */}
           <button
+            key={currentSong.id}
             onClick={() => setIsDrawerOpen(true)}
             className="relative flex-shrink-0 w-12 h-12 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-violet-500/50 transition-all md:hidden"
             aria-label="Expand player"
@@ -432,6 +433,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
             )}
           </button>
           <Link
+            key={currentSong.id}
             href={`/library/${currentSong.id}`}
             className="relative flex-shrink-0 w-10 h-10 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden items-center justify-center hover:ring-2 hover:ring-violet-500/50 transition-all hidden md:flex"
             title="View song details"
