@@ -1236,30 +1236,43 @@ export function GenerateForm() {
               {promptError}
             </p>
           )}
-          {styleTemplates.length > 0 && (
-            <div className="flex items-center gap-2 mt-1">
-              <AdjustmentsHorizontalIcon className="h-4 w-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-              <select
-                value=""
-                onChange={(e) => {
-                  const tmpl = styleTemplates.find((t) => t.id === e.target.value);
-                  if (tmpl) {
-                    setStylePrompt(tmpl.tags);
-                    if (promptError && !customMode) setPromptError(null);
-                  }
-                }}
-                disabled={isSubmitting}
-                className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent disabled:opacity-50"
-              >
-                <option value="">Apply a saved style template…</option>
-                {styleTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} — {t.tags.length > 40 ? t.tags.slice(0, 40) + "…" : t.tags}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="mt-2 p-3 bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-800 rounded-xl">
+            <label className="block text-xs font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide mb-1.5">
+              Apply Saved Style
+            </label>
+            {styleTemplates.length > 0 ? (
+              <div className="flex items-center gap-2">
+                <AdjustmentsHorizontalIcon className="h-4 w-4 text-violet-400 dark:text-violet-500 flex-shrink-0" />
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const tmpl = styleTemplates.find((t) => t.id === e.target.value);
+                    if (tmpl) {
+                      setStylePrompt(tmpl.tags);
+                      if (promptError && !customMode) setPromptError(null);
+                    }
+                  }}
+                  disabled={isSubmitting}
+                  className="flex-1 bg-white dark:bg-gray-800 border border-violet-300 dark:border-violet-700 rounded-lg px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="">Choose a style template…</option>
+                  {styleTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} — {t.tags.length > 40 ? t.tags.slice(0, 40) + "…" : t.tags}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <p className="text-sm text-violet-600 dark:text-violet-400">
+                No style templates yet.{" "}
+                <Link href="/templates?tab=styles" className="underline font-medium hover:text-violet-800 dark:hover:text-violet-200">
+                  Create one
+                </Link>{" "}
+                to quickly apply your favorite styles.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Persona picker */}
