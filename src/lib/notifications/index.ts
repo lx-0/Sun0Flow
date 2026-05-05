@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { broadcast } from "@/lib/event-bus";
 import { invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { sendPushToUser } from "@/lib/push";
+import { logger } from "@/lib/logger";
 
 export const NOTIFICATION_TYPES = [
   "generation_complete",
@@ -28,6 +30,18 @@ export type CreateNotificationParams = {
   message: string;
   href?: string | null;
   songId?: string | null;
+};
+
+const PUSH_PREF_FIELD: Partial<
+  Record<NotificationType, "pushGenerationComplete" | "pushNewFollower" | "pushSongComment">
+> = {
+  generation_complete: "pushGenerationComplete",
+  new_follower: "pushNewFollower",
+  song_comment: "pushSongComment",
+};
+
+export type NotifyUserParams = CreateNotificationParams & {
+  push?: { tag?: string } | false;
 };
 
 function invalidateUnreadCache(userId: string) {
@@ -59,6 +73,42 @@ export async function createNotification(params: CreateNotificationParams) {
       songId: params.songId ?? null,
     },
   });
+
+  return notification;
+}
+
+/**
+ * Persist notification + broadcast SSE + send push (when the user's preference allows it).
+ */
+export async function notifyUser(params: NotifyUserParams) {
+  const notification = await createNotification(params);
+
+  if (params.push !== false) {
+    const prefField = PUSH_PREF_FIELD[params.type];
+    let shouldPush = !!prefField;
+
+    if (prefField) {
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: params.userId },
+          select: { [prefField]: true },
+        });
+        shouldPush = (user as Record<string, unknown> | null)?.[prefField] !== false;
+      } catch (err) {
+        logger.error({ err, userId: params.userId }, "notifyUser: failed to check push preference");
+        shouldPush = true;
+      }
+    }
+
+    if (shouldPush) {
+      sendPushToUser(params.userId, {
+        title: params.title,
+        body: params.message,
+        url: params.href ?? "/",
+        tag: typeof params.push === "object" ? params.push.tag : undefined,
+      }).catch(() => {});
+    }
+  }
 
   return notification;
 }

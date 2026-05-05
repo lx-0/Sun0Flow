@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createNotification } from "@/lib/notifications";
-import { sendPushToUser } from "@/lib/push";
+import { notifyUser } from "@/lib/notifications";
 import { stripHtml } from "@/lib/sanitize";
 
 const COMMENT_RATE_LIMIT = 10;
@@ -157,26 +156,15 @@ export async function POST(
       try {
         const commenterName = comment.user.name ?? "Someone";
         const songTitle = song.title ?? "your song";
-        const songOwner = await prisma.user.findUnique({
-          where: { id: song.userId },
-          select: { pushSongComment: true },
-        });
-        await createNotification({
+        await notifyUser({
           userId: song.userId,
           type: "song_comment",
           title: "New comment",
           message: `${commenterName} commented on "${songTitle}"`,
           href: `/songs/${song.id}`,
           songId: song.id,
+          push: { tag: `song-comment-${song.id}` },
         });
-        if (songOwner?.pushSongComment !== false) {
-          sendPushToUser(song.userId, {
-            title: "New comment on your song",
-            body: `${commenterName} commented on "${songTitle}"`,
-            url: `/songs/${song.id}`,
-            tag: `song-comment-${song.id}`,
-          }).catch(() => {});
-        }
       } catch {
         // Non-critical — don't fail the comment creation
       }
