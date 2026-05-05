@@ -27,7 +27,7 @@ export const GET = authRoute(async (_request, { auth }) => {
 }, { route: "/api/playlists" });
 
 const createPlaylistBody = z.object({
-  name: z.string().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
+  name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
   description: z.string().max(1000, "Description must be 1000 characters or less").optional(),
 });
 

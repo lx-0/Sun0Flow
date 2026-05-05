@@ -89,7 +89,7 @@ import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { recordCreditUsage, deductCredits } from "@/lib/credits";
+import { deductCredits } from "@/lib/credits";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
