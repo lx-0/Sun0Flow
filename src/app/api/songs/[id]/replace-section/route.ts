@@ -3,10 +3,9 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { replaceSection } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { userFriendlyError } from "@/lib/generation";
+import { executeGeneration } from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
 const MIN_SECTION_S = 6;
@@ -70,90 +69,58 @@ export async function POST(
       return NextResponse.json({ error: "Style tags are required.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
-    if (!acquired) {
-      const retryAfterSec = Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000));
-      return NextResponse.json(
-        { error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, code: "RATE_LIMIT", resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
-      );
-    }
-
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    let savedSong;
-    if (!hasApiKey) {
-      const mock = mockSongs[0];
-      savedSong = await prisma.song.create({
-        data: {
-          userId,
-          parentSongId: rootId,
-          title: title || mock.title || null,
-          prompt,
-          tags: tags || mock.tags || null,
-          audioUrl: mock.audioUrl || null,
-          imageUrl: mock.imageUrl || null,
-          duration: mock.duration ?? null,
-          lyrics: mock.lyrics || null,
-          sunoModel: mock.model || null,
-          isInstrumental: parentSong.isInstrumental,
-          generationStatus: "ready",
-        },
-      });
-    } else {
-      if (!parentSong.sunoJobId || !parentSong.sunoAudioId) {
-        return NextResponse.json({ error: "Cannot replace section on a song without Suno identifiers.", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-
-      try {
-        const result = await replaceSection(
-          {
-            taskId: parentSong.sunoJobId,
-            audioId: parentSong.sunoAudioId,
-            prompt,
-            tags,
-            title: title || parentSong.title || "Untitled",
-            infillStartS,
-            infillEndS,
-            negativeTags,
-          },
-          userApiKey
-        );
-
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: rootId,
-            sunoJobId: result.taskId,
-            title: title || null,
-            prompt,
-            tags: tags || null,
-            isInstrumental: parentSong.isInstrumental,
-            generationStatus: "pending",
-          },
-        });
-      } catch (apiError) {
-        logServerError("replace-section-api", apiError, { userId, route: `/api/songs/${songId}/replace-section` });
-        const errorMsg = userFriendlyError(apiError, "Section replacement failed. Please try again.").message;
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: rootId,
-            title: title || null,
-            prompt,
-            tags: tags || null,
-            isInstrumental: parentSong.isInstrumental,
-            generationStatus: "failed",
-            errorMessage: errorMsg,
-          },
-        });
-
-        return NextResponse.json({ song: savedSong, error: errorMsg, rateLimit: rateLimitStatus }, { status: 201 });
-      }
+    if (hasApiKey && (!parentSong.sunoJobId || !parentSong.sunoAudioId)) {
+      return NextResponse.json({ error: "Cannot replace section on a song without Suno identifiers.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    return NextResponse.json({ song: savedSong, rateLimit: rateLimitStatus }, { status: 201 });
+    const mock = mockSongs[0];
+    const outcome = await executeGeneration({
+      userId,
+      action: "generate",
+      songParams: {
+        title,
+        prompt,
+        tags,
+        isInstrumental: parentSong.isInstrumental,
+        parentSongId: rootId,
+      },
+      apiCall: () => replaceSection(
+        {
+          taskId: parentSong.sunoJobId!,
+          audioId: parentSong.sunoAudioId!,
+          prompt,
+          tags,
+          title: title || parentSong.title || "Untitled",
+          infillStartS: infillStartS!,
+          infillEndS: infillEndS!,
+          negativeTags,
+        },
+        userApiKey
+      ),
+      mockFallback: {
+        title: mock.title,
+        tags: mock.tags,
+        audioUrl: mock.audioUrl,
+        imageUrl: mock.imageUrl,
+        duration: mock.duration,
+        lyrics: mock.lyrics,
+        model: mock.model,
+      },
+      hasApiKey,
+      description: "replace-section",
+      skipCreditCheck: true,
+      skipCreditRecording: true,
+    });
+
+    if (outcome.status === "denied") return outcome.response;
+    if (outcome.status === "failed") {
+      logServerError("replace-section-api", outcome.rawError, { userId, route: `/api/songs/${songId}/replace-section` });
+      return NextResponse.json({ song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus }, { status: 201 });
+    }
+    return NextResponse.json({ song: outcome.song, rateLimit: outcome.rateLimitStatus }, { status: 201 });
   } catch (error) {
     logServerError("replace-section-route", error, { route: "/api/songs/replace-section" });
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });

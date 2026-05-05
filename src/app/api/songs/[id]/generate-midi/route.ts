@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { generateMidi } from "@/lib/sunoapi";
-import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { userFriendlyError } from "@/lib/generation";
+import { executeTransform } from "@/lib/generation";
 
 /** POST /api/songs/[id]/generate-midi — extract MIDI from a track */
 export async function POST(
@@ -27,46 +26,35 @@ export async function POST(
       return NextResponse.json({ error: "Song must be fully generated before extracting MIDI.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
-    if (!acquired) {
-      const retryAfterSec = Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000));
-      return NextResponse.json(
-        { error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, code: "RATE_LIMIT", resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
-      );
-    }
-
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    let taskId: string | null = null;
-    let status: "pending" | "ready" = "pending";
-
-    if (!hasApiKey) {
-      taskId = `mock-midi-${songId}`;
-      status = "ready";
-    } else {
-      if (!song.sunoJobId || !song.sunoAudioId) {
-        return NextResponse.json({ error: "Song is missing Suno identifiers for MIDI extraction.", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-
-      try {
-        const result = await generateMidi(
-          { taskId: song.sunoJobId, audioId: song.sunoAudioId },
-          userApiKey
-        );
-        taskId = result.taskId;
-      } catch (apiError) {
-        logServerError("generate-midi-api", apiError, { userId, route: `/api/songs/${songId}/generate-midi` });
-        return NextResponse.json(
-          { error: userFriendlyError(apiError, "MIDI generation failed. Please try again.").message, rateLimit: rateLimitStatus },
-          { status: 502 }
-        );
-      }
+    if (hasApiKey && (!song.sunoJobId || !song.sunoAudioId)) {
+      return NextResponse.json({ error: "Song is missing Suno identifiers for MIDI extraction.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
+    const outcome = await executeTransform({
+      userId,
+      action: "generate",
+      apiCall: () => generateMidi(
+        { taskId: song.sunoJobId!, audioId: song.sunoAudioId! },
+        userApiKey
+      ),
+      hasApiKey,
+      mockTaskId: `mock-midi-${songId}`,
+      fallbackErrorMessage: "MIDI generation failed. Please try again.",
+    });
+
+    if (outcome.status === "denied") return outcome.response;
+    if (outcome.status === "failed") {
+      logServerError("generate-midi-api", outcome.rawError, { userId, route: `/api/songs/${songId}/generate-midi` });
+      return NextResponse.json(
+        { error: outcome.error, rateLimit: outcome.rateLimitStatus },
+        { status: 502 }
+      );
+    }
     return NextResponse.json(
-      { taskId, status, songId, format: "midi", rateLimit: rateLimitStatus },
+      { taskId: outcome.taskId, status: outcome.mockMode ? "ready" : "pending", songId, format: "midi", rateLimit: outcome.rateLimitStatus },
       { status: 200 }
     );
   } catch (error) {

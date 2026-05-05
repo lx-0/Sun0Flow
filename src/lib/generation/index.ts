@@ -10,3 +10,8 @@ export {
   type GenerationSpec,
   type GenerationOutcome,
 } from "./execute";
+export {
+  executeTransform,
+  type TransformSpec,
+  type TransformOutcome,
+} from "./transform";

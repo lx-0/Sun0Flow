@@ -3,11 +3,10 @@ import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { addInstrumental } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { sanitizeText } from "@/lib/sanitize";
-import { userFriendlyError } from "@/lib/generation";
+import { executeGeneration } from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
 
@@ -41,15 +40,6 @@ export async function POST(
       );
     }
 
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
-    if (!acquired) {
-      const retryAfterSec = Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000));
-      return NextResponse.json(
-        { error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, code: "RATE_LIMIT", resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
-      );
-    }
-
     const body = await request.json();
 
     let tags = (parentSong.tags || "").trim();
@@ -73,71 +63,45 @@ export async function POST(
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    let savedSong;
-    if (!hasApiKey) {
-      const mock = mockSongs[0];
-      savedSong = await prisma.song.create({
-        data: {
-          userId,
-          parentSongId: rootId,
-          title: title || mock.title || null,
-          prompt: parentSong.prompt || null,
-          tags: tags || mock.tags || null,
-          audioUrl: mock.audioUrl || null,
-          imageUrl: mock.imageUrl || null,
-          duration: mock.duration ?? null,
-          sunoModel: mock.model || null,
-          isInstrumental: true,
-          generationStatus: "ready",
-        },
-      });
-    } else {
-      if (!parentSong.audioUrl) {
-        return NextResponse.json({ error: "Parent song has no audio URL to generate instrumental from.", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-      try {
-        const result = await addInstrumental(
-          {
-            uploadUrl: parentSong.audioUrl,
-            title: title || "Untitled",
-            tags,
-          },
-          userApiKey
-        );
-
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: rootId,
-            sunoJobId: result.taskId,
-            title: title || null,
-            prompt: parentSong.prompt || null,
-            tags,
-            isInstrumental: true,
-            generationStatus: "pending",
-          },
-        });
-      } catch (apiError) {
-        logServerError("add-instrumental-api", apiError, { userId, route: `/api/songs/${parentId}/add-instrumental` });
-        const errorMsg = userFriendlyError(apiError, "Adding instrumental failed. Please try again.").message;
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: rootId,
-            title: title || null,
-            prompt: parentSong.prompt || null,
-            tags,
-            isInstrumental: true,
-            generationStatus: "failed",
-            errorMessage: errorMsg,
-          },
-        });
-
-        return NextResponse.json({ song: savedSong, error: errorMsg, rateLimit: rateLimitStatus }, { status: 201 });
-      }
+    if (hasApiKey && !parentSong.audioUrl) {
+      return NextResponse.json({ error: "Parent song has no audio URL to generate instrumental from.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    return NextResponse.json({ song: savedSong, rateLimit: rateLimitStatus }, { status: 201 });
+    const mock = mockSongs[0];
+    const outcome = await executeGeneration({
+      userId,
+      action: "generate",
+      songParams: {
+        title,
+        prompt: parentSong.prompt || "",
+        tags,
+        isInstrumental: true,
+        parentSongId: rootId,
+      },
+      apiCall: () => addInstrumental(
+        { uploadUrl: parentSong.audioUrl!, title: title || "Untitled", tags },
+        userApiKey
+      ),
+      mockFallback: {
+        title: mock.title,
+        tags: mock.tags,
+        audioUrl: mock.audioUrl,
+        imageUrl: mock.imageUrl,
+        duration: mock.duration,
+        model: mock.model,
+      },
+      hasApiKey,
+      description: "add-instrumental",
+      skipCreditCheck: true,
+      skipCreditRecording: true,
+    });
+
+    if (outcome.status === "denied") return outcome.response;
+    if (outcome.status === "failed") {
+      logServerError("add-instrumental-api", outcome.rawError, { userId, route: `/api/songs/${parentId}/add-instrumental` });
+      return NextResponse.json({ song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus }, { status: 201 });
+    }
+    return NextResponse.json({ song: outcome.song, rateLimit: outcome.rateLimitStatus }, { status: 201 });
   } catch (error) {
     logServerError("add-instrumental-route", error, { route: "/api/songs/add-instrumental" });
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });

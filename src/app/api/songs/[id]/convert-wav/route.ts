@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth-resolver";
 import { prisma } from "@/lib/prisma";
 import { convertToWav } from "@/lib/sunoapi";
-import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { userFriendlyError } from "@/lib/generation";
+import { executeTransform } from "@/lib/generation";
 
 /** POST /api/songs/[id]/convert-wav — convert a track to WAV format */
 export async function POST(
@@ -27,47 +26,35 @@ export async function POST(
       return NextResponse.json({ error: "Song must be fully generated before converting to WAV.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
-    if (!acquired) {
-      const retryAfterSec = Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000));
-      return NextResponse.json(
-        { error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, code: "RATE_LIMIT", resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
-      );
-    }
-
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    let taskId: string | null = null;
-    let status: "pending" | "ready" = "pending";
-
-    if (!hasApiKey) {
-      // Mock mode
-      taskId = `mock-wav-${songId}`;
-      status = "ready";
-    } else {
-      if (!song.sunoJobId || !song.sunoAudioId) {
-        return NextResponse.json({ error: "Song is missing Suno identifiers for WAV conversion.", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-
-      try {
-        const result = await convertToWav(
-          { taskId: song.sunoJobId, audioId: song.sunoAudioId },
-          userApiKey
-        );
-        taskId = result.taskId;
-      } catch (apiError) {
-        logServerError("convert-wav-api", apiError, { userId, route: `/api/songs/${songId}/convert-wav` });
-        return NextResponse.json(
-          { error: userFriendlyError(apiError, "WAV conversion failed. Please try again.").message, rateLimit: rateLimitStatus },
-          { status: 502 }
-        );
-      }
+    if (hasApiKey && (!song.sunoJobId || !song.sunoAudioId)) {
+      return NextResponse.json({ error: "Song is missing Suno identifiers for WAV conversion.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
+    const outcome = await executeTransform({
+      userId,
+      action: "generate",
+      apiCall: () => convertToWav(
+        { taskId: song.sunoJobId!, audioId: song.sunoAudioId! },
+        userApiKey
+      ),
+      hasApiKey,
+      mockTaskId: `mock-wav-${songId}`,
+      fallbackErrorMessage: "WAV conversion failed. Please try again.",
+    });
+
+    if (outcome.status === "denied") return outcome.response;
+    if (outcome.status === "failed") {
+      logServerError("convert-wav-api", outcome.rawError, { userId, route: `/api/songs/${songId}/convert-wav` });
+      return NextResponse.json(
+        { error: outcome.error, rateLimit: outcome.rateLimitStatus },
+        { status: 502 }
+      );
+    }
     return NextResponse.json(
-      { taskId, status, songId, format: "wav", rateLimit: rateLimitStatus },
+      { taskId: outcome.taskId, status: outcome.mockMode ? "ready" : "pending", songId, format: "wav", rateLimit: outcome.rateLimitStatus },
       { status: 200 }
     );
   } catch (error) {

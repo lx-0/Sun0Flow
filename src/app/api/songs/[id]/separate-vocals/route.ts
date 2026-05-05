@@ -4,10 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { separateVocals } from "@/lib/sunoapi";
 import type { SeparationType } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { userFriendlyError } from "@/lib/generation";
+import { executeGeneration } from "@/lib/generation";
 
 /** POST /api/songs/[id]/separate-vocals — separate vocals/instruments from a track */
 export async function POST(
@@ -29,88 +28,52 @@ export async function POST(
       return NextResponse.json({ error: "Song must be fully generated before separating vocals.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
-    if (!acquired) {
-      const retryAfterSec = Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000));
-      return NextResponse.json(
-        { error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, code: "RATE_LIMIT", resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
-      );
-    }
-
     const body = await request.json();
     const separationType: SeparationType = body.type === "split_stem" ? "split_stem" : "separate_vocal";
 
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    let savedSong;
-    if (!hasApiKey) {
-      // Mock mode: create fake stem results
-      const mock = mockSongs[0];
-      savedSong = await prisma.song.create({
-        data: {
-          userId,
-          parentSongId: songId,
-          title: `${song.title || "Untitled"} (${separationType === "split_stem" ? "stems" : "vocals"})`,
-          prompt: `Vocal separation of "${song.title || "Untitled"}"`,
-          tags: song.tags,
-          audioUrl: mock.audioUrl || null,
-          imageUrl: song.imageUrl,
-          duration: song.duration,
-          sunoModel: song.sunoModel,
-          isInstrumental: false,
-          generationStatus: "ready",
-        },
-      });
-    } else {
-      if (!song.sunoJobId || !song.sunoAudioId) {
-        return NextResponse.json({ error: "Song is missing Suno identifiers for vocal separation.", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-
-      try {
-        const result = await separateVocals(
-          {
-            taskId: song.sunoJobId,
-            audioId: song.sunoAudioId,
-            type: separationType,
-          },
-          userApiKey
-        );
-
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: songId,
-            sunoJobId: result.taskId,
-            title: `${song.title || "Untitled"} (${separationType === "split_stem" ? "stems" : "vocals"})`,
-            prompt: `Vocal separation of "${song.title || "Untitled"}"`,
-            tags: song.tags,
-            isInstrumental: false,
-            generationStatus: "pending",
-          },
-        });
-      } catch (apiError) {
-        logServerError("separate-vocals-api", apiError, { userId, route: `/api/songs/${songId}/separate-vocals` });
-        const errorMsg = userFriendlyError(apiError, "Vocal separation failed. Please try again.").message;
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: songId,
-            title: `${song.title || "Untitled"} (vocals)`,
-            prompt: `Vocal separation of "${song.title || "Untitled"}"`,
-            tags: song.tags,
-            isInstrumental: false,
-            generationStatus: "failed",
-            errorMessage: errorMsg,
-          },
-        });
-
-        return NextResponse.json({ song: savedSong, error: errorMsg, rateLimit: rateLimitStatus }, { status: 201 });
-      }
+    if (hasApiKey && (!song.sunoJobId || !song.sunoAudioId)) {
+      return NextResponse.json({ error: "Song is missing Suno identifiers for vocal separation.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    return NextResponse.json({ song: savedSong, rateLimit: rateLimitStatus }, { status: 201 });
+    const suffix = separationType === "split_stem" ? "stems" : "vocals";
+    const title = `${song.title || "Untitled"} (${suffix})`;
+    const mock = mockSongs[0];
+
+    const outcome = await executeGeneration({
+      userId,
+      action: "generate",
+      songParams: {
+        title,
+        prompt: `Vocal separation of "${song.title || "Untitled"}"`,
+        tags: song.tags,
+        isInstrumental: false,
+        parentSongId: songId,
+      },
+      apiCall: () => separateVocals(
+        { taskId: song.sunoJobId!, audioId: song.sunoAudioId!, type: separationType },
+        userApiKey
+      ),
+      mockFallback: {
+        audioUrl: mock.audioUrl,
+        imageUrl: song.imageUrl,
+        duration: song.duration,
+        model: song.sunoModel,
+      },
+      hasApiKey,
+      description: "separate-vocals",
+      skipCreditCheck: true,
+      skipCreditRecording: true,
+    });
+
+    if (outcome.status === "denied") return outcome.response;
+    if (outcome.status === "failed") {
+      logServerError("separate-vocals-api", outcome.rawError, { userId, route: `/api/songs/${songId}/separate-vocals` });
+      return NextResponse.json({ song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus }, { status: 201 });
+    }
+    return NextResponse.json({ song: outcome.song, rateLimit: outcome.rateLimitStatus }, { status: 201 });
   } catch (error) {
     logServerError("separate-vocals-route", error, { route: "/api/songs/separate-vocals" });
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
