@@ -12,7 +12,6 @@ import {
   CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import { DownloadButton } from "./DownloadButton";
-import { AddToPlaylistButton } from "./AddToPlaylistButton";
 import type { SunoSong } from "@/lib/sunoapi";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -160,9 +159,6 @@ export function SongActionsBar({
           </button>
         </>
       )}
-
-      {/* Add to playlist */}
-      <AddToPlaylistButton songId={song.id} songTitle={song.title} variant="button" />
 
       {/* Report button */}
       <button
