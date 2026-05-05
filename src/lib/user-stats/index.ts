@@ -4,19 +4,41 @@ import { buildPeakHoursHeatmap } from "./peak-hours";
 import { calculateActivityStreaks } from "./streaks";
 import { breakdownGenres } from "./genres";
 import { buildCreditChart } from "./credits";
+import type { PeakHour } from "./peak-hours";
+import type { GenreCount } from "./genres";
+import type { DailyCredit } from "./credits";
 
-export { calculateListeningTime } from "./listening-time";
-export type { ListeningTimeResult } from "./listening-time";
-export { buildPeakHoursHeatmap } from "./peak-hours";
-export type { PeakHour } from "./peak-hours";
-export { calculateActivityStreaks } from "./streaks";
-export type { StreakResult } from "./streaks";
-export { breakdownGenres } from "./genres";
-export type { GenreCount } from "./genres";
-export { buildCreditChart } from "./credits";
-export type { DailyCredit } from "./credits";
+export interface UserStats {
+  totalSongsGenerated: number;
+  completedGenerations: number;
+  successRate: number;
+  totalListeningTimeSec: number;
+  songsThisWeek: number;
+  songsLastWeek: number;
+  songsThisMonth: number;
+  songsLastMonth: number;
+  weekTrend: number;
+  monthTrend: number;
+  playCountThisWeek: number;
+  mostPlayedSongs: Array<{
+    id: string;
+    title: string | null;
+    tags: string | null;
+    playCount: number;
+    duration: number | null;
+    imageUrl: string | null;
+    createdAt: string;
+  }>;
+  favoriteGenres: GenreCount[];
+  dailyListeningTime: Array<{ date: string; seconds: number; minutes: number }>;
+  peakHours: PeakHour[];
+  currentStreak: number;
+  longestStreak: number;
+  creditUsageByDay: DailyCredit[];
+  totalCreditsUsed: number;
+}
 
-export async function getUserStats(userId: string) {
+export async function getUserStats(userId: string): Promise<UserStats> {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);

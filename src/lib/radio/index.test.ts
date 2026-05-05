@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildRadioFilter, curateResults } from "./index";
+import { buildRadioFilter, curateResults } from "./helpers";
 
 /* ── buildRadioFilter ─────────────────────────────────────────── */
 
