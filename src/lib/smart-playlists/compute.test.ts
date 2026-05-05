@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rankBySimilarity, type EmbeddingCandidate } from "./rank-by-similarity";
+import { rankBySimilarity, type EmbeddingCandidate } from "./compute";
 
 describe("rankBySimilarity", () => {
   it("returns song IDs sorted by cosine similarity descending", () => {

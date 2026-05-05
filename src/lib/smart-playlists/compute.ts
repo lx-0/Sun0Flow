@@ -1,8 +1,29 @@
 import { prisma } from "@/lib/prisma";
-import { computeCentroid } from "@/lib/embeddings";
-import type { SmartPlaylistType } from "./types";
-import { SMART_PLAYLIST_SIZE } from "./types";
-import { rankBySimilarity } from "./rank-by-similarity";
+import { computeCentroid, cosineSimilarity } from "@/lib/embeddings";
+
+export type SmartPlaylistType = "top_hits" | "new_this_week" | "mood" | "similar_to";
+
+export const SMART_PLAYLIST_SIZE = 25;
+
+export interface EmbeddingCandidate {
+  songId: string;
+  embedding: number[];
+}
+
+export function rankBySimilarity(
+  queryVector: number[],
+  candidates: EmbeddingCandidate[],
+  limit: number,
+): string[] {
+  return candidates
+    .map((c) => ({
+      songId: c.songId,
+      score: cosineSimilarity(queryVector, c.embedding),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((s) => s.songId);
+}
 
 export async function computeSmartPlaylistSongs(
   userId: string,
