@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       },
       hasApiKey,
       mockFallback: mockSongs[0],
+      guards: "pre-authorized",
       description: `Song generation (queued): ${nextItem.title || "Untitled"}`,
       apiCall: () =>
         generateSong(
@@ -78,8 +79,6 @@ export async function POST(request: Request) {
           },
           userApiKey
         ),
-      skipRateLimit: true,
-      skipCreditCheck: true,
     });
 
     if (outcome.status === "denied") {

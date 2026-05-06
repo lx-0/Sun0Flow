@@ -122,6 +122,23 @@ function createSongRecord(
   }
 }
 
+export type GuardPolicy =
+  | "standard"
+  | "free"
+  | "admin"
+  | "personal-key"
+  | "pre-authorized";
+
+function resolveGuards(policy: GuardPolicy) {
+  switch (policy) {
+    case "standard":       return { rateLimit: true,  creditCheck: true,  creditRecording: true };
+    case "free":           return { rateLimit: true,  creditCheck: false, creditRecording: false };
+    case "admin":          return { rateLimit: false, creditCheck: true,  creditRecording: true };
+    case "personal-key":   return { rateLimit: false, creditCheck: false, creditRecording: false };
+    case "pre-authorized": return { rateLimit: false, creditCheck: false, creditRecording: true };
+  }
+}
+
 export interface GenerationSpec {
   userId: string;
   action: string;
@@ -130,9 +147,7 @@ export interface GenerationSpec {
   mockFallback: MockData;
   hasApiKey: boolean;
   description: string;
-  skipCreditCheck?: boolean;
-  skipCreditRecording?: boolean;
-  skipRateLimit?: boolean;
+  guards?: GuardPolicy;
   rethrow?: (error: unknown) => boolean;
 }
 
@@ -196,15 +211,16 @@ async function checkCreditBalance(
 }
 
 export async function executeGeneration(spec: GenerationSpec): Promise<GenerationOutcome> {
+  const guards = resolveGuards(spec.guards ?? "standard");
   let rateLimitStatus: RateLimitStatus | undefined;
 
-  if (!spec.skipRateLimit) {
+  if (guards.rateLimit) {
     const result = await enforceRateLimit(spec.userId, spec.action);
     if (result.limited) return { status: "denied", response: result.response };
     rateLimitStatus = result.status;
   }
 
-  if (!spec.skipCreditCheck) {
+  if (guards.creditCheck) {
     const result = await checkCreditBalance(spec.userId, spec.action);
     if ("denied" in result) return { status: "denied", response: result.denied };
   }
@@ -214,7 +230,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
       status: "ready",
       mock: spec.mockFallback,
     });
-    if (!spec.skipCreditRecording) {
+    if (guards.creditRecording) {
       await deductCredits(spec.userId, spec.action, {
         songId: song.id,
         description: spec.description,
@@ -230,7 +246,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
       sunoJobId: result.taskId,
     });
 
-    if (!spec.skipCreditRecording) {
+    if (guards.creditRecording) {
       await deductCredits(spec.userId, spec.action, {
         songId: song.id,
         description: spec.description,
@@ -239,7 +255,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
 
     return { status: "created", song, rateLimitStatus };
   } catch (apiError) {
-    if (!spec.skipRateLimit) {
+    if (guards.rateLimit) {
       await releaseRateLimitSlot(spec.userId).catch(() => {});
     }
 

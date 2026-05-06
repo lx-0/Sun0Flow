@@ -57,7 +57,6 @@ export async function POST(request: Request) {
     };
 
     const hasApiKey = !!(userApiKey || SUNOAPI_KEY);
-    const skipGuards = isAdmin || usingPersonalKey;
 
     let outcome;
     try {
@@ -73,9 +72,7 @@ export async function POST(request: Request) {
         },
         hasApiKey,
         mockFallback: mockSongs[0],
-        skipCreditCheck: usingPersonalKey,
-        skipCreditRecording: usingPersonalKey,
-        skipRateLimit: skipGuards,
+        guards: usingPersonalKey ? "personal-key" : isAdmin ? "admin" : "standard",
         description: `Song generation: ${generationParams.title || "Untitled"}`,
         rethrow: (err) => err instanceof CircuitOpenError,
         apiCall: () => {

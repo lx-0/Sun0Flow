@@ -110,9 +110,8 @@ export async function POST(
         model: mock.model,
       },
       hasApiKey,
+      guards: "free",
       description: "replace-section",
-      skipCreditCheck: true,
-      skipCreditRecording: true,
     });
 
     if (outcome.status === "denied") return outcome.response;

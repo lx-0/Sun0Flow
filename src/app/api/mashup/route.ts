@@ -144,8 +144,7 @@ export async function POST(request: Request) {
       },
       hasApiKey: true,
       mockFallback: {},
-      skipCreditCheck: true,
-      skipCreditRecording: true,
+      guards: "free",
       description: `Mashup generation: ${title?.trim() || "Mashup"}`,
       apiCall: async () => {
         const [urlA, urlB] = await Promise.all([

@@ -63,9 +63,8 @@ export async function POST(
         model: song.sunoModel,
       },
       hasApiKey,
+      guards: "free",
       description: "separate-vocals",
-      skipCreditCheck: true,
-      skipCreditRecording: true,
     });
 
     if (outcome.status === "denied") return outcome.response;

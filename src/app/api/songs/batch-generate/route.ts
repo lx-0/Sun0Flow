@@ -106,9 +106,7 @@ export async function POST(request: Request) {
         },
         hasApiKey,
         mockFallback: mockSongs[i % mockSongs.length],
-        skipCreditCheck: true,
-        skipCreditRecording: usingPersonalKey,
-        skipRateLimit: true,
+        guards: usingPersonalKey ? "personal-key" : "pre-authorized",
         description: `Batch generation ${i + 1}/${configs.length}: ${genParams.title || "Untitled"}`,
         apiCall: () =>
           Sentry.startSpan(
