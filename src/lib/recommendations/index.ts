@@ -3,6 +3,12 @@ import { gatherUserSignals } from "@/lib/user-signals";
 import { computeCentroid, cosineSimilarity } from "@/lib/embeddings";
 import { parseTags } from "@/lib/tags";
 
+export { getAlsoLiked } from "./also-liked";
+export { getSimilarSongs } from "./similar";
+export type { SimilarSong } from "./similar";
+export { getRelatedSongs } from "./related";
+export type { RelatedSong, RelatedResult } from "./related";
+
 // --- Public types ---
 
 export interface RecommendationOptions {
