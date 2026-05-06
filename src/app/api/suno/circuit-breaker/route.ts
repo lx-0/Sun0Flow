@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCircuitStatus, resetCircuit } from "@/lib/circuit-breaker";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 
 /** GET /api/suno/circuit-breaker — return current circuit state (public to authenticated users). */
 export async function GET(request: Request) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { fetchFeed } from "@/lib/rss";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { rateLimited } from "@/lib/api-error";

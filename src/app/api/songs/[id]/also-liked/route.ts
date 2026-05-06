@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
 import { cached, cacheKey, CacheTTL } from "@/lib/cache";

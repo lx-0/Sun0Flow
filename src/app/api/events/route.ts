@@ -1,4 +1,4 @@
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { subscribe, SSEEvent } from "@/lib/event-bus";
 
 export const dynamic = "force-dynamic";

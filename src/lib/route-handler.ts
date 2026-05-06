@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { resolveUser, requireAdmin } from "@/lib/auth-resolver";
+import { resolveUser, requireAdmin } from "@/lib/auth";
 import { logServerError } from "@/lib/error-logger";
 import { badRequest, internalError } from "@/lib/api-error";
 

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { resolveUser } from "@/lib/auth-resolver";
+import { auth, resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { badRequest, forbidden, unauthorized } from "@/lib/api-error";
 

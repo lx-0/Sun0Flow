@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync, readdirSync, statSync } from "fs";
 import { join } from "path";
-import { requireAdmin, logAdminAction } from "@/lib/auth-resolver";
+import { requireAdmin, logAdminAction } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const AUDIO_CACHE_DIR = process.env.AUDIO_CACHE_DIR || join(process.cwd(), ".audio-cache");

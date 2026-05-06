@@ -1,8 +1,46 @@
-import { auth } from "@/lib/auth";
-import { hashApiKey } from "@/lib/api-keys";
+export { auth, handlers, signIn, signOut, googleEnabled } from "./session";
+
+import { randomBytes, createHash, timingSafeEqual } from "crypto";
+import { auth } from "./session";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { unauthorized } from "@/lib/api-error";
+
+// ── API key crypto ──────────────────────────────────────────────────────────
+
+const API_KEY_PREFIX = "sk-";
+const API_KEY_BYTE_LENGTH = 36;
+
+export function generateApiKey(): {
+  key: string;
+  hash: string;
+  prefix: string;
+} {
+  const rawBytes = randomBytes(API_KEY_BYTE_LENGTH);
+  const key = API_KEY_PREFIX + rawBytes.toString("base64url");
+  const hash = hashApiKey(key);
+  const prefix = key.slice(0, 8) + "...";
+
+  return { key, hash, prefix };
+}
+
+export function hashApiKey(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+export function verifyApiKey(key: string, storedHash: string): boolean {
+  const candidateHash = hashApiKey(key);
+  try {
+    return timingSafeEqual(
+      Buffer.from(candidateHash, "hex"),
+      Buffer.from(storedHash, "hex")
+    );
+  } catch {
+    return false;
+  }
+}
+
+// ── Auth resolution ─────────────────────────────────────────────────────────
 
 export type AuthResult =
   | { userId: string; isApiKey: boolean; isAdmin: boolean; error: null }

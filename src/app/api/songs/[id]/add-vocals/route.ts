@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { addVocals } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";

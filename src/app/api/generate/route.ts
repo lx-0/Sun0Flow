@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { generateSong, SunoApiError, getRemainingCredits } from "@/lib/sunoapi";
 import { CircuitOpenError, onCircuitClose } from "@/lib/circuit-breaker";
 import { mockSongs } from "@/lib/sunoapi/mock";

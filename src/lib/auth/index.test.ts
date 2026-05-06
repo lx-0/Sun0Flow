@@ -10,12 +10,8 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
-vi.mock("@/lib/auth", () => ({
+vi.mock("./session", () => ({
   auth: vi.fn(),
-}));
-
-vi.mock("@/lib/api-keys", () => ({
-  hashApiKey: vi.fn().mockReturnValue("hashed-key"),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -33,9 +29,9 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { auth } from "@/lib/auth";
+import { auth } from "./session";
 import { prisma } from "@/lib/prisma";
-import { resolveUser, requireAdmin, logAdminAction } from "./auth-resolver";
+import { resolveUser, requireAdmin, logAdminAction } from "./index";
 
 beforeEach(() => {
   vi.clearAllMocks();

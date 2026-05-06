@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { authRoute, adminRoute } from "@/lib/route-handler";
 
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
   requireAdmin: vi.fn(),
 }));
@@ -11,7 +11,7 @@ vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-import { resolveUser, requireAdmin } from "@/lib/auth-resolver";
+import { resolveUser, requireAdmin } from "@/lib/auth";
 import { logServerError } from "@/lib/error-logger";
 
 function makeRequest(url = "http://localhost/api/test") {

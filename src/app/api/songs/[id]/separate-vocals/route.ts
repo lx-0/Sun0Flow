@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { separateVocals } from "@/lib/sunoapi";
 import type { SeparationType } from "@/lib/sunoapi";
