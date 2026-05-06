@@ -2,30 +2,38 @@
 
 ## Environments
 
-| Environment | Railway Service | URL                                     | Trigger                |
-|-------------|-----------------|------------------------------------------|------------------------|
-| Production  | SunoFlow        | https://sunoflow.up.railway.app          | Auto — push to `main`  |
+| Environment | Railway Service | URL                                     | Trigger                                |
+|-------------|-----------------|------------------------------------------|----------------------------------------|
+| Production  | SunoFlow        | https://sunoflow.up.railway.app          | Manual `workflow_dispatch` or `v*` tag |
 
-There is no separate staging environment. The CI pipeline deploys directly to production after QA passes.
+There is no staging environment — only production.
 
 ## Normal Deploy Flow
 
 ```
-push to main
-  → lint + typecheck + unit tests + build + local E2E  (qa job)
-  → secrets scan                                        (secrets-scan job)
-  → deploy to production                                (deploy-staging job)
-  → E2E tests against production URL                    (e2e-staging job)
+push or PR to main
+  → lint + typecheck + unit tests + build + local E2E   (qa job)
+  → secrets scan                                         (secrets-scan job)
+  → Lighthouse CI                                        (lighthouse job)
+
+Production deploy (separate workflow, manual gate):
+  Actions → "Deploy to Production" → Run workflow (or push a v*.*.* tag)
+  → required-reviewer approval on `production` environment
+  → railway up --service SunoFlow
 ```
+
+The `deploy-production.yml` workflow is the only path to production. CI on `main` does
+not auto-deploy — that bypassed the manual approval gate.
 
 ## GitHub Secrets & Variables Required
 
-### Environment: `staging` (used for CI production deploy)
+### Environment: `production`
 
-| Name             | Type     | Description                                                    |
-|------------------|----------|----------------------------------------------------------------|
-| `RAILWAY_TOKEN`  | Secret   | Railway token scoped to the SunoFlow production service        |
-| `STAGING_URL`    | Variable | Production URL: `https://sunoflow.up.railway.app`              |
+Configure under **Settings → Environments → production** with required reviewers.
+
+| Name             | Type     | Description                                              |
+|------------------|----------|----------------------------------------------------------|
+| `RAILWAY_TOKEN`  | Secret   | Railway token scoped to the SunoFlow production service  |
 
 ### Repository-level
 
@@ -33,11 +41,23 @@ push to main
 |-----------------------------|----------|-------------------------------------------------------------------|
 | `GITHUB_TOKEN`              | Auto     | Used by Gitleaks secrets scan                                     |
 | `PRODUCTION_DATABASE_URL`   | Secret   | Railway Postgres **public** proxy URL, used by the daily backup workflow. See [backup-runbook.md](./backup-runbook.md). |
+| `PRODUCTION_URL` (variable) | Variable | Optional override for the uptime monitor target (defaults to `https://sunoflow.up.railway.app`). |
+| `UPTIME_ALERT_WEBHOOK`      | Secret   | Optional webhook URL for uptime failure alerts (Slack/Discord/etc.). |
+| `LHCI_GITHUB_APP_TOKEN`     | Secret   | Optional Lighthouse CI GitHub App token for PR comments. |
 
-## Production E2E Notes
+## Triggering a Production Deploy
 
-- E2E tests run against the deployed production URL via `BASE_URL` + `PLAYWRIGHT_REMOTE=true`.
-- The local dev server is **not** started for production E2E.
+1. Open **Actions → Deploy to Production**.
+2. Click **Run workflow**, leave SHA blank for HEAD of `main` or paste a specific SHA.
+3. Approve the `production` environment gate when prompted.
+4. Or: tag a release locally and push the tag:
+   ```bash
+   git tag v1.2.3 && git push --tags
+   ```
+   The same workflow fires on tag push.
+
+After deploy, verify health at https://sunoflow.up.railway.app/api/health (see
+[Checking Deploy Health](#checking-deploy-health) below).
 
 ## Rollback Procedure
 
