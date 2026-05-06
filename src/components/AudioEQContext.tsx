@@ -132,7 +132,7 @@ function applyPlaybackRate(audio: HTMLAudioElement, speed: number, pitch: number
 // ── Provider ───────────────────────────────────────────────────────────────────
 
 export function AudioEQProvider({ children }: { children: ReactNode }) {
-  const { queue, currentIndex, getAudioElement } = useQueue();
+  const { queue, currentIndex, getAudioElement, eqSettingsRef, restoredEQ } = useQueue();
   const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
   const songId = currentSong?.id ?? null;
 
@@ -212,13 +212,29 @@ export function AudioEQProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applySettings(settings);
     saveSettings(songId, settings);
-  }, [settings, songId, applySettings]);
+    eqSettingsRef.current = { gains: settings.gains, speed: settings.speed, pitch: settings.pitch };
+  }, [settings, songId, applySettings, eqSettingsRef]);
 
   // ─── Load per-song settings when song changes ────────────────────────────────
 
   useEffect(() => {
     setSettingsState(loadSettings(songId));
   }, [songId]);
+
+  // ─── Restore EQ from database when available ─────────────────────────────────
+
+  const hasRestoredEQRef = useRef(false);
+  useEffect(() => {
+    if (!restoredEQ || hasRestoredEQRef.current) return;
+    hasRestoredEQRef.current = true;
+    const restored: EQSettings = {
+      gains: restoredEQ.gains,
+      speed: restoredEQ.speed,
+      pitch: restoredEQ.pitch,
+    };
+    setSettingsState(restored);
+    saveSettings(null, restored);
+  }, [restoredEQ]);
 
   // ─── Expose initWebAudio for the panel to trigger on first open ──────────────
   // Speed/pitch work without the AudioContext; EQ needs it. We expose init so

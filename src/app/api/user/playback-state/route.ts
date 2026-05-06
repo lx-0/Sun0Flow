@@ -44,7 +44,10 @@ export async function PUT(request: Request) {
     if (authError) return authError;
 
     const body = await request.json();
-    const { songId, position, queue, volume, shuffleVersions, shuffle, repeat, muted } = body;
+    const {
+      songId, position, queue, volume, shuffleVersions,
+      shuffle, repeat, muted, eqGains, eqSpeed, eqPitch,
+    } = body;
 
     if (!songId || typeof songId !== "string") {
       return NextResponse.json(
@@ -77,6 +80,11 @@ export async function PUT(request: Request) {
       );
     }
 
+    const validEqGains = Array.isArray(eqGains) && eqGains.length === 5 && eqGains.every((g: unknown) => typeof g === "number")
+      ? eqGains : [0, 0, 0, 0, 0];
+    const validEqSpeed = typeof eqSpeed === "number" && eqSpeed >= 0.5 && eqSpeed <= 2 ? eqSpeed : 1;
+    const validEqPitch = typeof eqPitch === "number" && eqPitch >= -6 && eqPitch <= 6 ? eqPitch : 0;
+
     const state = await prisma.playbackState.upsert({
       where: { userId },
       create: {
@@ -89,6 +97,9 @@ export async function PUT(request: Request) {
         shuffle: shuffle === true,
         repeat: typeof repeat === "string" && ["off", "repeat-all", "repeat-one"].includes(repeat) ? repeat : "off",
         muted: muted === true,
+        eqGains: validEqGains,
+        eqSpeed: validEqSpeed,
+        eqPitch: validEqPitch,
       },
       update: {
         songId,
@@ -99,6 +110,9 @@ export async function PUT(request: Request) {
         shuffle: shuffle === true,
         repeat: typeof repeat === "string" && ["off", "repeat-all", "repeat-one"].includes(repeat) ? repeat : "off",
         muted: muted === true,
+        eqGains: validEqGains,
+        eqSpeed: validEqSpeed,
+        eqPitch: validEqPitch,
       },
     });
 

@@ -25,12 +25,15 @@ function savePlaybackState(
   shuffleVersions: boolean,
   shuffle: boolean,
   repeat: string,
-  muted: boolean
+  muted: boolean,
+  eqGains?: number[],
+  eqSpeed?: number,
+  eqPitch?: number
 ) {
   fetch("/api/user/playback-state", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ songId, position, queue, volume, shuffleVersions, shuffle, repeat, muted }),
+    body: JSON.stringify({ songId, position, queue, volume, shuffleVersions, shuffle, repeat, muted, eqGains, eqSpeed, eqPitch }),
   }).catch(() => {});
 }
 
@@ -112,6 +115,10 @@ interface QueueActions {
   radioThumbsDown: (songId: string) => void;
   /** Toggle shuffle-across-versions mode */
   toggleShuffleVersions: () => void;
+  /** Ref for AudioEQContext to write current EQ settings into — included in playback saves */
+  eqSettingsRef: React.MutableRefObject<{ gains: number[]; speed: number; pitch: number }>;
+  /** EQ settings restored from database on session resume (null until loaded) */
+  restoredEQ: { gains: number[]; speed: number; pitch: number } | null;
 }
 
 type QueueContextValue = QueueState & QueueActions;
@@ -190,6 +197,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const [isRadioLoading, setIsRadioLoading] = useState(false);
   const [shuffleVersions, setShuffleVersions] = useState(false);
   const [activeVersion, setActiveVersion] = useState<QueueSong | null>(null);
+  const [restoredEQ, setRestoredEQ] = useState<{ gains: number[]; speed: number; pitch: number } | null>(null);
+  const eqSettingsRef = useRef({ gains: [0, 0, 0, 0, 0], speed: 1, pitch: 0 });
 
   // Ref versions for use in callbacks without stale closures
   const radioStateRef = useRef<RadioParams | null>(null);
@@ -260,7 +269,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     (songId: string, position: number, syncQueue: QueueSong[]) => {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       syncTimerRef.current = setTimeout(() => {
-        savePlaybackState(songId, position, syncQueue, volumeRef.current, shuffleVersionsRef.current, shuffleRef.current, repeatRef.current, mutedRef.current);
+        const eq = eqSettingsRef.current;
+        savePlaybackState(songId, position, syncQueue, volumeRef.current, shuffleVersionsRef.current, shuffleRef.current, repeatRef.current, mutedRef.current, eq.gains, eq.speed, eq.pitch);
       }, SYNC_DEBOUNCE_MS);
     },
     []
@@ -941,7 +951,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       .then((r) => r.json())
       .then((data) => {
         if (!data.state?.song?.audioUrl) return;
-        const { song, position, queue: savedQueue, volume: savedVol, shuffleVersions: savedShuffleVersions, shuffle: savedShuffle, repeat: savedRepeat, muted: savedMuted } = data.state;
+        const { song, position, queue: savedQueue, volume: savedVol, shuffleVersions: savedShuffleVersions, shuffle: savedShuffle, repeat: savedRepeat, muted: savedMuted, eqGains: savedEqGains, eqSpeed: savedEqSpeed, eqPitch: savedEqPitch } = data.state;
         const audio = audioRef.current;
         if (!audio) return;
 
@@ -995,6 +1005,17 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         setVolumeState(vol);
         volumeRef.current = vol;
         audio.volume = vol;
+
+        // Restore EQ settings for AudioEQContext to pick up
+        if (Array.isArray(savedEqGains) && savedEqGains.length === 5) {
+          const eq = {
+            gains: savedEqGains as number[],
+            speed: typeof savedEqSpeed === "number" ? savedEqSpeed : 1,
+            pitch: typeof savedEqPitch === "number" ? savedEqPitch : 0,
+          };
+          eqSettingsRef.current = eq;
+          setRestoredEQ(eq);
+        }
 
         // Seek to saved position after audio loads
         if (position > 0 && song.duration) {
@@ -1064,6 +1085,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     stopRadio,
     radioThumbsDown,
     toggleShuffleVersions,
+    eqSettingsRef,
+    restoredEQ,
   };
 
   return (
