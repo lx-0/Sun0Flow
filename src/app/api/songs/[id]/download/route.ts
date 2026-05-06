@@ -5,7 +5,7 @@ import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { embedId3Tags, embedWavMetadata } from "@/lib/audio-metadata";
 import { wavToFlac } from "@/lib/flac-encoder";
 import type { SongMetadata } from "@/lib/audio-metadata";
-import { audioCache } from "@/lib/file-cache";
+import { audioCache } from "@/lib/cache";
 
 const DOWNLOAD_RATE_LIMIT = 50; // per hour
 

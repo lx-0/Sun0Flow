@@ -1,8 +1,7 @@
 import { recordActivity } from "@/lib/activity";
-import { invalidateByPrefix } from "@/lib/cache";
+import { invalidateByPrefix, audioCache, imageCache } from "@/lib/cache";
 import { sendGenerationCompleteEmail } from "@/lib/email";
 import { broadcast } from "@/lib/event-bus";
-import { audioCache, imageCache } from "@/lib/file-cache";
 import { logger } from "@/lib/logger";
 import { notifyFollowersOfNewSong } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";

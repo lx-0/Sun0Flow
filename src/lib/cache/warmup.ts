@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { audioCache } from "@/lib/file-cache";
+import { audioCache } from "./file";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { logger } from "@/lib/logger";

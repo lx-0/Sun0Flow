@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { imageCache } from "@/lib/file-cache";
+import { imageCache } from "@/lib/cache";
 import { logger } from "@/lib/logger";
 
 export async function POST() {

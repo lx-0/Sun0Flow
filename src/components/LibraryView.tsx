@@ -36,7 +36,7 @@ import { RecentlyPlayed } from "./RecentlyPlayed";
 import { LowCreditsBanner } from "./LowCreditsBanner";
 import { ShareButton } from "./ShareButton";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
-import { formatBytes } from "@/lib/offline-cache";
+import { formatBytes } from "@/lib/cache/offline";
 import { SongListItem, type SongListItemProps } from "./SongListItem";
 import { LibraryToolbar } from "./LibraryToolbar";
 

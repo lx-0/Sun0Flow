@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getTaskStatus } from "@/lib/sunoapi/status";
 import { SunoApiError } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { audioCache, imageCache } from "@/lib/file-cache";
+import { audioCache, imageCache } from "@/lib/cache";
 
 // Conservative expiry after a successful refresh (12 days).
 const CDN_URL_TTL_MS = 12 * 24 * 60 * 60 * 1000;

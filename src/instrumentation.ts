@@ -17,7 +17,7 @@ export async function register() {
   registerAllJobs();
   await startScheduler();
 
-  const { warmUpAudioCache } = await import("@/lib/cache-warmup");
+  const { warmUpAudioCache } = await import("@/lib/cache");
   warmUpAudioCache().catch(() => {});
 
   const proc = globalThis.process;

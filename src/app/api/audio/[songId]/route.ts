@@ -3,7 +3,7 @@ import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { audioCache, imageCache } from "@/lib/file-cache";
+import { audioCache, imageCache } from "@/lib/cache";
 import { logger } from "@/lib/logger";
 
 // Refresh audio URL when within 3 days of expiry (matches play endpoint threshold).

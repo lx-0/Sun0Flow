@@ -7,7 +7,7 @@ import {
   clearAllCachedSongs,
   getCachedSongIds,
   getCacheStats,
-} from "@/lib/offline-cache";
+} from "@/lib/cache/offline";
 import { useToast } from "@/components/Toast";
 
 export interface UseOfflineCacheReturn {

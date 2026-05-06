@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { imageCache } from "@/lib/file-cache";
+import { imageCache } from "@/lib/cache";
 import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logger } from "@/lib/logger";

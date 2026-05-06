@@ -8,7 +8,7 @@ import {
   computeETag,
   CacheTTL,
   CacheControl,
-} from "./cache";
+} from "./memory";
 
 beforeEach(() => {
   // Clear cache between tests

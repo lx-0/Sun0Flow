@@ -5,10 +5,6 @@ import { recordCacheHit, recordCacheMiss } from "@/lib/metrics";
 
 const isDev = process.env.NODE_ENV !== "production";
 
-/**
- * Server-side in-memory LRU cache for hot API data.
- * Survives HMR in development via globalThis stash.
- */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CacheValue = any;
 
