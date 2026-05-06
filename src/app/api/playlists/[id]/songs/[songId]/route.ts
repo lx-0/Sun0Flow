@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recordActivity } from "@/lib/activity";
+import { editorWhere } from "@/lib/playlists";
 
 export async function DELETE(
   request: Request,
@@ -13,18 +14,8 @@ export async function DELETE(
 
     if (authError) return authError;
 
-    // Find playlist — allow owner or editor-role collaborator
     const playlist = await prisma.playlist.findFirst({
-      where: {
-        id,
-        OR: [
-          { userId },
-          {
-            isCollaborative: true,
-            collaborators: { some: { userId, status: "accepted", role: "editor" } },
-          },
-        ],
-      },
+      where: editorWhere(id, userId),
     });
 
     if (!playlist) {

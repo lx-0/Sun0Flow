@@ -6,8 +6,7 @@ import { stripHtml } from "@/lib/sanitize";
 import { CacheControl, CacheTTL, cached, invalidateByPrefix, cacheKey } from "@/lib/cache";
 import { recordActivity } from "@/lib/activity";
 import { badRequest } from "@/lib/api-error";
-
-const MAX_PLAYLISTS = 50;
+import { MAX_PLAYLISTS } from "@/lib/playlists";
 
 export const GET = authRoute(async (_request, { auth }) => {
   const playlists = await cached(

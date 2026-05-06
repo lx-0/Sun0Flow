@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { ownerWhere } from "@/lib/playlists";
 
 export async function PATCH(
   request: Request,
@@ -13,7 +14,7 @@ export async function PATCH(
     if (authError) return authError;
 
     const playlist = await prisma.playlist.findFirst({
-      where: { id, userId },
+      where: ownerWhere(id, userId),
     });
 
     if (!playlist) {

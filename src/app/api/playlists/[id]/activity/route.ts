@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { memberWhere } from "@/lib/playlists";
 
 const PAGE_SIZE = 20;
 
@@ -14,18 +15,8 @@ export async function GET(
     const { userId, error: authError } = await resolveUser(request);
     if (authError) return authError;
 
-    // Allow owner or accepted collaborator to read activity
     const playlist = await prisma.playlist.findFirst({
-      where: {
-        id,
-        OR: [
-          { userId },
-          {
-            isCollaborative: true,
-            collaborators: { some: { userId, status: "accepted" } },
-          },
-        ],
-      },
+      where: memberWhere(id, userId),
     });
 
     if (!playlist) {

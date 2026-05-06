@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { MAX_PLAYLISTS } from "@/lib/playlists";
 
 /**
  * POST /api/playlists/:id/copy
@@ -43,11 +44,10 @@ export async function POST(
       );
     }
 
-    // Enforce per-user playlist limit (50)
     const playlistCount = await prisma.playlist.count({ where: { userId } });
-    if (playlistCount >= 50) {
+    if (playlistCount >= MAX_PLAYLISTS) {
       return NextResponse.json(
-        { error: "Playlist limit reached (50)", code: "LIMIT_REACHED" },
+        { error: `Playlist limit reached (${MAX_PLAYLISTS})`, code: "LIMIT_REACHED" },
         { status: 400 }
       );
     }

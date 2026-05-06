@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recordActivity } from "@/lib/activity";
-
-const MAX_SONGS_PER_PLAYLIST = 500;
+import { editorWhere, MAX_SONGS_PER_PLAYLIST } from "@/lib/playlists";
 
 export async function POST(
   request: Request,
@@ -15,18 +14,8 @@ export async function POST(
 
     if (authError) return authError;
 
-    // Owner or accepted editor-role collaborator can add songs
     const playlist = await prisma.playlist.findFirst({
-      where: {
-        id,
-        OR: [
-          { userId },
-          {
-            isCollaborative: true,
-            collaborators: { some: { userId, status: "accepted", role: "editor" } },
-          },
-        ],
-      },
+      where: editorWhere(id, userId),
       include: { _count: { select: { songs: true } } },
     });
 

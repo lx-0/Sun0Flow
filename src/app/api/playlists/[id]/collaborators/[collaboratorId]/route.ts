@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ownerWhere } from "@/lib/playlists";
 
 // DELETE /api/playlists/[id]/collaborators/[collaboratorId] — remove collaborator (owner only)
 export async function DELETE(
@@ -13,7 +14,7 @@ export async function DELETE(
     if (authError) return authError;
 
     const playlist = await prisma.playlist.findFirst({
-      where: { id, userId },
+      where: ownerWhere(id, userId),
     });
 
     if (!playlist) {

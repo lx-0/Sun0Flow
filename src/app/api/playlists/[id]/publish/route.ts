@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { invalidateKey, invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { ownerWhere } from "@/lib/playlists";
 
 export async function PATCH(
   request: Request,
@@ -15,7 +16,7 @@ export async function PATCH(
     if (authError) return authError;
 
     const playlist = await prisma.playlist.findFirst({
-      where: { id, userId: userId },
+      where: ownerWhere(id, userId),
       include: { _count: { select: { songs: true } } },
     });
 

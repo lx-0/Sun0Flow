@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CacheControl, invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { memberWhere, ownerWhere } from "@/lib/playlists";
 
 export async function GET(
   request: Request,
@@ -13,18 +14,8 @@ export async function GET(
 
     if (authError) return authError;
 
-    // Allow owner or accepted collaborator to read
     const playlist = await prisma.playlist.findFirst({
-      where: {
-        id,
-        OR: [
-          { userId },
-          {
-            isCollaborative: true,
-            collaborators: { some: { userId, status: "accepted" } },
-          },
-        ],
-      },
+      where: memberWhere(id, userId),
       include: {
         songs: {
           orderBy: { position: "asc" },
@@ -70,7 +61,7 @@ export async function PATCH(
     if (authError) return authError;
 
     const playlist = await prisma.playlist.findFirst({
-      where: { id, userId: userId },
+      where: ownerWhere(id, userId),
     });
 
     if (!playlist) {
@@ -133,7 +124,7 @@ export async function DELETE(
     if (authError) return authError;
 
     const playlist = await prisma.playlist.findFirst({
-      where: { id, userId: userId },
+      where: ownerWhere(id, userId),
     });
 
     if (!playlist) {

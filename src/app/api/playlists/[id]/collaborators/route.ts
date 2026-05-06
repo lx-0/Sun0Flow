@@ -2,13 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createNotification } from "@/lib/notifications";
-import crypto from "crypto";
-
-const INVITE_TTL_DAYS = 7;
-
-function generateInviteToken(): string {
-  return crypto.randomBytes(24).toString("hex");
-}
+import { ownerWhere, generateInviteToken, inviteExpiresAt } from "@/lib/playlists";
 
 // GET /api/playlists/[id]/collaborators — list collaborators (owner only)
 export async function GET(
@@ -21,7 +15,7 @@ export async function GET(
     if (authError) return authError;
 
     const playlist = await prisma.playlist.findFirst({
-      where: { id, userId },
+      where: ownerWhere(id, userId),
     });
 
     if (!playlist) {
@@ -58,7 +52,7 @@ export async function POST(
     if (authError) return authError;
 
     const playlist = await prisma.playlist.findFirst({
-      where: { id, userId },
+      where: ownerWhere(id, userId),
     });
 
     if (!playlist) {
@@ -76,8 +70,7 @@ export async function POST(
     const { username, role } = body as { username?: string; role?: string };
     const collaboratorRole = role === "viewer" ? "viewer" : "editor";
 
-    const inviteExpiresAt = new Date();
-    inviteExpiresAt.setDate(inviteExpiresAt.getDate() + INVITE_TTL_DAYS);
+    const expiresAt = inviteExpiresAt();
 
     // Invite by username — look up user and auto-accept
     if (username) {
@@ -123,7 +116,7 @@ export async function POST(
           playlistId: playlist.id,
           userId: targetUser.id,
           inviteToken: generateInviteToken(),
-          inviteExpiresAt,
+          inviteExpiresAt: expiresAt,
           status: "accepted",
           role: collaboratorRole,
         },
@@ -158,7 +151,7 @@ export async function POST(
       data: {
         playlistId: playlist.id,
         inviteToken: generateInviteToken(),
-        inviteExpiresAt,
+        inviteExpiresAt: expiresAt,
         status: "pending",
         role: collaboratorRole,
       },
