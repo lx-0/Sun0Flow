@@ -47,6 +47,11 @@ export async function GET(
       return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
     }
 
+    // Hide archived songs from all playlists except the Archive playlist
+    if (playlist.smartPlaylistType !== "archive") {
+      playlist.songs = playlist.songs.filter((ps) => !ps.song.archivedAt);
+    }
+
     const isOwner = playlist.userId === userId;
     return NextResponse.json({ playlist, isOwner }, {
       headers: { "Cache-Control": CacheControl.privateNoCache },
