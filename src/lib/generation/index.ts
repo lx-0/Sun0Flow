@@ -282,38 +282,27 @@ export interface TransformSpec {
   hasApiKey: boolean;
   mockTaskId: string;
   fallbackErrorMessage?: string;
+  guards?: GuardPolicy;
 }
 
 export type TransformOutcome =
   | { status: "denied"; response: Response }
-  | { status: "completed"; taskId: string; mockMode: boolean; rateLimitStatus: RateLimitStatus }
-  | { status: "failed"; error: string; rawError: unknown; rateLimitStatus: RateLimitStatus };
+  | { status: "completed"; taskId: string; mockMode: boolean; rateLimitStatus?: RateLimitStatus }
+  | { status: "failed"; error: string; rawError: unknown; rateLimitStatus?: RateLimitStatus };
 
 export async function executeTransform(spec: TransformSpec): Promise<TransformOutcome> {
-  const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(spec.userId, spec.action || "generate");
-  if (!acquired) {
-    const retryAfterSec = Math.max(
-      1,
-      Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000)
-    );
-    logger.warn(
-      { userId: spec.userId, action: spec.action, limit: rateLimitStatus.limit, resetAt: rateLimitStatus.resetAt },
-      "rate-limit: transform limit exceeded"
-    );
-    Sentry.addBreadcrumb({
-      category: "rate-limit",
-      message: "Transform rate limit exceeded",
-      level: "warning",
-      data: { userId: spec.userId, action: spec.action },
-    });
-    return {
-      status: "denied",
-      response: rateLimited(
-        `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`,
-        { resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { "Retry-After": String(retryAfterSec) }
-      ),
-    };
+  const guards = resolveGuards(spec.guards ?? "free");
+  let rateLimitStatus: RateLimitStatus | undefined;
+
+  if (guards.rateLimit) {
+    const result = await enforceRateLimit(spec.userId, spec.action);
+    if (result.limited) return { status: "denied", response: result.response };
+    rateLimitStatus = result.status;
+  }
+
+  if (guards.creditCheck) {
+    const result = await checkCreditBalance(spec.userId, spec.action);
+    if ("denied" in result) return { status: "denied", response: result.denied };
   }
 
   if (!spec.hasApiKey) {
@@ -324,7 +313,9 @@ export async function executeTransform(spec: TransformSpec): Promise<TransformOu
     const result = await spec.apiCall();
     return { status: "completed", taskId: result.taskId, mockMode: false, rateLimitStatus };
   } catch (apiError) {
-    await releaseRateLimitSlot(spec.userId).catch(() => {});
+    if (guards.rateLimit) {
+      await releaseRateLimitSlot(spec.userId).catch(() => {});
+    }
     const { message: errorMsg } = userFriendlyError(apiError, spec.fallbackErrorMessage);
     return { status: "failed", error: errorMsg, rawError: apiError, rateLimitStatus };
   }
