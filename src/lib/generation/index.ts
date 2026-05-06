@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import type { Song } from "@prisma/client";
 import { acquireRateLimitSlot, releaseRateLimitSlot, type RateLimitStatus } from "@/lib/rate-limit";
+
+export { pollToCompletion } from "./completion";
+export type { CompletionUpdate, CompletionTarget } from "./completion";
 import { rateLimited, insufficientCredits } from "@/lib/api-error";
 import { checkCredits, deductCredits } from "@/lib/credits";
 import { SunoApiError } from "@/lib/sunoapi";
