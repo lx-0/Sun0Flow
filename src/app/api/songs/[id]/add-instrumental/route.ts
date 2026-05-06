@@ -96,6 +96,9 @@ export async function POST(
     });
 
     if (outcome.status === "denied") return outcome.response;
+    if (outcome.status === "queued") {
+      return NextResponse.json({ queued: true, message: outcome.message }, { status: 503 });
+    }
     if (outcome.status === "failed") {
       logServerError("add-instrumental-api", outcome.rawError, { userId, route: `/api/songs/${parentId}/add-instrumental` });
       return NextResponse.json({ song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus }, { status: 201 });

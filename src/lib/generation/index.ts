@@ -8,6 +8,17 @@ import { SunoApiError } from "@/lib/sunoapi";
 import { ErrorCode } from "@/lib/api-error";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { CircuitOpenError, onCircuitClose } from "@/lib/circuit-breaker";
+import { recordGenerationStart, recordGenerationEnd } from "@/lib/metrics";
+import { invalidateByPrefix } from "@/lib/cache";
+import { generateCoverArtVariants } from "@/lib/cover-art-generator";
+import { drainGenerationQueue } from "@/lib/queue-processor";
+
+onCircuitClose(() => {
+  drainGenerationQueue().catch((err) => {
+    logger.error({ err }, "generation: queue drain failed after circuit close");
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -56,6 +67,7 @@ export interface SongParams {
   isInstrumental: boolean;
   parentSongId?: string | null;
   batchId?: string;
+  personaId?: string | null;
 }
 
 export interface MockData {
@@ -148,12 +160,13 @@ export interface GenerationSpec {
   hasApiKey: boolean;
   description: string;
   guards?: GuardPolicy;
-  rethrow?: (error: unknown) => boolean;
+  coverArt?: boolean;
 }
 
 export type GenerationOutcome =
   | { status: "denied"; response: Response }
   | { status: "created"; song: Song; rateLimitStatus?: RateLimitStatus }
+  | { status: "queued"; message: string }
   | { status: "failed"; song: Song; error: string; rawError: unknown; rateLimitStatus?: RateLimitStatus };
 
 type RateLimitResult =
@@ -236,11 +249,17 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
         description: spec.description,
       });
     }
+    afterCreation(spec, song);
     return { status: "created", song, rateLimitStatus };
   }
 
+  recordGenerationStart();
+  const startMs = Date.now();
+
   try {
     const result = await spec.apiCall();
+    recordGenerationEnd(Date.now() - startMs, true);
+
     const song = await createSongRecord(spec.userId, spec.songParams, {
       status: "pending",
       sunoJobId: result.taskId,
@@ -253,13 +272,19 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
       });
     }
 
+    afterCreation(spec, song);
     return { status: "created", song, rateLimitStatus };
   } catch (apiError) {
+    if (apiError instanceof CircuitOpenError) {
+      recordGenerationEnd(0, false);
+      return enqueueGeneration(spec);
+    }
+
+    recordGenerationEnd(Date.now() - startMs, false);
+
     if (guards.rateLimit) {
       await releaseRateLimitSlot(spec.userId).catch(() => {});
     }
-
-    if (spec.rethrow?.(apiError)) throw apiError;
 
     const { message: errorMsg } = userFriendlyError(apiError);
     const song = await createSongRecord(spec.userId, spec.songParams, {
@@ -269,6 +294,54 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
 
     return { status: "failed", song, error: errorMsg, rawError: apiError, rateLimitStatus };
   }
+}
+
+function afterCreation(spec: GenerationSpec, song: Song): void {
+  invalidateByPrefix(`dashboard-stats:${spec.userId}`);
+
+  if (spec.coverArt) {
+    try {
+      const [variant] = generateCoverArtVariants({
+        songId: song.id,
+        title: spec.songParams.title,
+        tags: spec.songParams.tags,
+      });
+      prisma.song.update({
+        where: { id: song.id },
+        data: { imageUrl: variant.dataUrl },
+      }).catch(() => {});
+    } catch {
+      // Non-critical
+    }
+  }
+}
+
+async function enqueueGeneration(spec: GenerationSpec): Promise<GenerationOutcome> {
+  logger.warn({ userId: spec.userId }, "generation: circuit open — queuing request");
+
+  const maxPos = await prisma.generationQueueItem.aggregate({
+    _max: { position: true },
+    where: { userId: spec.userId, status: "pending" },
+  });
+  const position = (maxPos._max.position ?? 0) + 1;
+
+  await prisma.generationQueueItem.create({
+    data: {
+      userId: spec.userId,
+      prompt: spec.songParams.prompt,
+      title: spec.songParams.title ?? null,
+      tags: spec.songParams.tags ?? null,
+      makeInstrumental: spec.songParams.isInstrumental,
+      personaId: spec.songParams.personaId ?? null,
+      status: "pending",
+      position,
+    },
+  });
+
+  return {
+    status: "queued",
+    message: "Music generation is temporarily unavailable. Your request has been queued and will be processed automatically when the service recovers.",
+  };
 }
 
 // ---------------------------------------------------------------------------

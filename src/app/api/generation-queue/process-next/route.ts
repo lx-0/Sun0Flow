@@ -7,7 +7,6 @@ import { mockSongs } from "@/lib/sunoapi/mock";
 import { logServerError } from "@/lib/error-logger";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { rateLimited, internalError } from "@/lib/api-error";
-import { invalidateByPrefix } from "@/lib/cache";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import {
   executeGeneration,
@@ -89,6 +88,14 @@ export async function POST(request: Request) {
       return outcome.response;
     }
 
+    if (outcome.status === "queued") {
+      await prisma.generationQueueItem.update({
+        where: { id: nextItem.id },
+        data: { status: "pending", errorMessage: "Re-queued: circuit still open" },
+      });
+      return NextResponse.json({ queued: true, message: outcome.message }, { status: 503 });
+    }
+
     if (outcome.status === "failed") {
       const correlationId = logServerError("queue-process", outcome.rawError, {
         userId,
@@ -126,8 +133,6 @@ export async function POST(request: Request) {
       where: { id: nextItem.id },
       data: { songId: outcome.song.id, status: queueStatus },
     });
-
-    invalidateByPrefix(`dashboard-stats:${userId}`);
 
     return NextResponse.json(
       { item: { ...nextItem, status: queueStatus, songId: outcome.song.id }, song: outcome.song },

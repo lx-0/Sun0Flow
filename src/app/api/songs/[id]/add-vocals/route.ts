@@ -96,6 +96,9 @@ export async function POST(
     });
 
     if (outcome.status === "denied") return outcome.response;
+    if (outcome.status === "queued") {
+      return NextResponse.json({ queued: true, message: outcome.message }, { status: 503 });
+    }
 
     if (outcome.status === "failed") {
       logServerError("add-vocals-api", outcome.rawError, { userId, route: `/api/songs/${parentId}/add-vocals` });

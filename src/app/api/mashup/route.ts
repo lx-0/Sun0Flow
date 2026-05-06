@@ -9,7 +9,6 @@ import { getTaskStatus } from "@/lib/sunoapi/status";
 import { prisma } from "@/lib/prisma";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { invalidateByPrefix } from "@/lib/cache";
 import { canUseFeature, SubscriptionTier } from "@/lib/feature-gates";
 import { executeGeneration } from "@/lib/generation";
 
@@ -166,6 +165,9 @@ export async function POST(request: Request) {
     });
 
     if (outcome.status === "denied") return outcome.response;
+    if (outcome.status === "queued") {
+      return NextResponse.json({ queued: true, message: outcome.message }, { status: 503 });
+    }
 
     if (outcome.status === "failed") {
       logServerError("mashup-api", outcome.rawError, {
@@ -177,8 +179,6 @@ export async function POST(request: Request) {
         { status: 201 }
       );
     }
-
-    invalidateByPrefix(`dashboard-stats:${userId}`);
 
     return NextResponse.json(
       { songs: [outcome.song], rateLimit: outcome.rateLimitStatus },

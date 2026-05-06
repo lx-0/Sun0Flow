@@ -134,6 +134,11 @@ export async function POST(request: Request) {
         continue;
       }
 
+      if (outcome.status === "queued") {
+        results.push({ index: i, songId: "", sunoJobId: null, status: "failed", error: "queued" });
+        continue;
+      }
+
       if (outcome.status === "failed") {
         logServerError("batch-generate", outcome.rawError, {
           userId,
