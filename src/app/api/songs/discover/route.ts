@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import { logServerError } from "@/lib/error-logger";
-import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
+import { CacheControl } from "@/lib/cache";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
-import { SongFilters } from "@/lib/songs";
+import { discoverSongs } from "@/lib/discovery";
 
-const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 30;
 
 export async function GET(request: NextRequest) {
   try {
-    // Rate limit by IP
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       request.headers.get("x-real-ip") ||
@@ -26,115 +23,23 @@ export async function GET(request: NextRequest) {
     }
 
     const params = request.nextUrl.searchParams;
-
-    // Pagination (offset-based, 20 per page)
     const pageParam = parseInt(params.get("page") || "", 10);
     const page = !isNaN(pageParam) && pageParam >= 1 ? pageParam : 1;
-    const limit = 20;
-    const skip = (page - 1) * limit;
-
-    // Sorting
-    const sortBy = params.get("sortBy") || "newest";
-
-    // Genre tag filter
-    const tag = params.get("tag")?.trim() || "";
-    // Mood filter
-    const mood = params.get("mood")?.trim() || "";
-    // Tempo range filters
+    const sortBy = (params.get("sortBy") || "newest") as "newest" | "highest_rated" | "most_played";
+    const tag = params.get("tag")?.trim() || undefined;
+    const mood = params.get("mood")?.trim() || undefined;
     const tempoMinParam = params.get("tempoMin");
     const tempoMaxParam = params.get("tempoMax");
-    const tempoMin =
-      tempoMinParam && !isNaN(parseInt(tempoMinParam, 10))
-        ? parseInt(tempoMinParam, 10)
-        : null;
-    const tempoMax =
-      tempoMaxParam && !isNaN(parseInt(tempoMaxParam, 10))
-        ? parseInt(tempoMaxParam, 10)
-        : null;
+    const tempoMin = tempoMinParam && !isNaN(parseInt(tempoMinParam, 10))
+      ? parseInt(tempoMinParam, 10) : null;
+    const tempoMax = tempoMaxParam && !isNaN(parseInt(tempoMaxParam, 10))
+      ? parseInt(tempoMaxParam, 10) : null;
 
-    const where: Prisma.SongWhereInput = SongFilters.withTagFilters(
-      SongFilters.publicDiscovery(),
-      tag || undefined,
-      mood || undefined
-    );
+    const result = await discoverSongs({ sortBy, tag, mood, tempoMin, tempoMax, page });
 
-    // Filter by tempo range
-    if (tempoMin !== null || tempoMax !== null) {
-      where.tempo = {};
-      if (tempoMin !== null) where.tempo.gte = tempoMin;
-      if (tempoMax !== null) where.tempo.lte = tempoMax;
-    }
-
-    // Build ORDER BY
-    let orderBy: Prisma.SongOrderByWithRelationInput;
-    switch (sortBy) {
-      case "highest_rated":
-        orderBy = { rating: { sort: "desc", nulls: "last" } };
-        break;
-      case "most_played":
-        orderBy = { playCount: "desc" };
-        break;
-      case "newest":
-      default:
-        orderBy = { createdAt: "desc" };
-        break;
-    }
-
-    const key = cacheKey(
-      "discover",
-      sortBy,
-      tag || "all",
-      mood || "any",
-      tempoMin !== null ? String(tempoMin) : "0",
-      tempoMax !== null ? String(tempoMax) : "999",
-      String(page)
-    );
-    const { songs, total } = await cached(
-      key,
-      async () => {
-        const [results, count] = await Promise.all([
-          prisma.song.findMany({
-            where,
-            orderBy,
-            skip,
-            take: limit,
-            select: {
-              id: true,
-              title: true,
-              tags: true,
-              imageUrl: true,
-              audioUrl: true,
-              duration: true,
-              rating: true,
-              playCount: true,
-              publicSlug: true,
-              createdAt: true,
-              user: { select: { id: true, name: true, username: true } },
-            },
-          }),
-          prisma.song.count({ where }),
-        ]);
-        return { songs: results, total: count };
-      },
-      CacheTTL.DISCOVER
-    );
-
-    const totalPages = Math.ceil(total / limit);
-
-    return NextResponse.json(
-      {
-        songs,
-        pagination: {
-          page,
-          totalPages,
-          total,
-          hasMore: page < totalPages,
-        },
-      },
-      {
-        headers: { "Cache-Control": CacheControl.publicShort },
-      }
-    );
+    return NextResponse.json(result, {
+      headers: { "Cache-Control": CacheControl.publicShort },
+    });
   } catch (error) {
     logServerError("songs-discover", error, { route: "/api/songs/discover" });
     return NextResponse.json(
