@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { curateResults } from "./helpers";
+import { curateResults } from ".";
 
 /* ── curateResults ────────────────────────────────────────────── */
 
