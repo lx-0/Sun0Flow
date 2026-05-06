@@ -1,6 +1,58 @@
-import { sendEmail } from "./transport";
+import Mailjet from "node-mailjet";
+import { logger } from "@/lib/logger";
 
 const APP_NAME = "SunoFlow";
+
+// ---------------------------------------------------------------------------
+// Transport (absorbed from transport.ts — single internal consumer)
+// ---------------------------------------------------------------------------
+
+interface EmailPayload {
+  to: string;
+  subject: string;
+  html: string;
+}
+
+function getFromEmail(): string {
+  return process.env.EMAIL_FROM || "noreply@sunoflow.com";
+}
+
+async function sendEmail(payload: EmailPayload): Promise<void> {
+  const apiKey = process.env.MAILJET_API_KEY;
+  const secretKey = process.env.MAILJET_SECRET_KEY;
+
+  if (!apiKey || !secretKey) {
+    logger.info(
+      { toDomain: payload.to.split("@")[1], subject: payload.subject },
+      "email: dev-mode (no Mailjet keys) — skipping send"
+    );
+    return;
+  }
+
+  const client = Mailjet.apiConnect(apiKey, secretKey);
+
+  try {
+    await client.post("send", { version: "v3.1" }).request({
+      Messages: [
+        {
+          From: {
+            Email: getFromEmail(),
+            Name: APP_NAME,
+          },
+          To: [{ Email: payload.to }],
+          Subject: payload.subject,
+          HTMLPart: payload.html,
+        },
+      ],
+    });
+  } catch (error) {
+    logger.error({ err: error }, "email: mailjet send failed");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function getBaseUrl(): string {
   return process.env.AUTH_URL || "http://localhost:3000";
