@@ -8,7 +8,8 @@ healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
-# Persistent volume for audio cache.
-# Configured in Railway dashboard: Settings → Volumes → Mount Path: /data/audio-cache
-# Set AUDIO_CACHE_DIR=/data/audio-cache in Railway environment variables.
-# This ensures cached audio files survive redeployments.
+# Persistent volumes for audio + image cache.
+# Configured in Railway dashboard: Settings → Volumes.
+#   Volume 1 → Mount Path: /data/audio-cache  (set AUDIO_CACHE_DIR=/data/audio-cache)
+#   Volume 2 → Mount Path: /data/image-cache   (set IMAGE_CACHE_DIR=/data/image-cache)
+# This ensures cached files survive redeployments.

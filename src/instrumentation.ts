@@ -18,7 +18,10 @@ export async function register() {
   await startScheduler();
 
   const { warmUpAudioCache } = await import("@/lib/cache");
-  warmUpAudioCache().catch(() => {});
+  const { logger } = await import("@/lib/logger");
+  warmUpAudioCache().catch((err) => {
+    logger.error({ err }, "cache-warmup: startup warmup failed");
+  });
 
   const proc = globalThis.process;
   proc.once("SIGTERM", async () => {

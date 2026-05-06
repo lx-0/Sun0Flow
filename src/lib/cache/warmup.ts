@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { audioCache } from "./file";
+import { audioCache, imageCache } from "./file";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { logger } from "@/lib/logger";
@@ -18,19 +18,24 @@ export async function warmUpAudioCache(): Promise<void> {
     },
     orderBy: { playCount: "desc" },
     ...(BATCH_SIZE ? { take: BATCH_SIZE } : {}),
-    select: { id: true, sunoJobId: true, sunoAudioId: true, userId: true, imageUrlIsCustom: true },
+    select: { id: true, sunoJobId: true, sunoAudioId: true, userId: true, imageUrl: true, imageUrlIsCustom: true },
   });
 
   const userKeys = new Map<string, string | undefined>();
-  let cached = 0;
-  let skipped = 0;
+  let audioCached = 0;
+  let audioSkipped = 0;
+  let imageCached = 0;
+  let imageSkipped = 0;
   let failed = 0;
 
   for (const song of songs) {
-    if (audioCache.has(song.id)) {
-      skipped++;
-      continue;
-    }
+    const audioHit = audioCache.has(song.id);
+    const imageHit = imageCache.has(song.id);
+
+    if (audioHit) audioSkipped++;
+    if (imageHit) imageSkipped++;
+
+    if (audioHit && imageHit) continue;
 
     try {
       if (!userKeys.has(song.userId)) {
@@ -59,11 +64,16 @@ export async function warmUpAudioCache(): Promise<void> {
         },
       });
 
-      const result = await audioCache.downloadAndPut(song.id, fresh.audioUrl);
-      if (result) {
-        cached++;
-      } else {
-        failed++;
+      if (!audioHit) {
+        const result = await audioCache.downloadAndPut(song.id, fresh.audioUrl);
+        if (result) audioCached++;
+        else failed++;
+      }
+
+      const coverUrl = fresh.imageUrl || song.imageUrl;
+      if (!imageHit && coverUrl) {
+        const result = await imageCache.downloadAndPut(song.id, coverUrl);
+        if (result) imageCached++;
       }
     } catch (err) {
       failed++;
@@ -74,7 +84,7 @@ export async function warmUpAudioCache(): Promise<void> {
   }
 
   logger.info(
-    { total: songs.length, cached, skipped, failed },
+    { total: songs.length, audioCached, audioSkipped, imageCached, imageSkipped, failed },
     "cache-warmup: complete"
   );
 }

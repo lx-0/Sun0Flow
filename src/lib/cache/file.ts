@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
+import { logger } from "@/lib/logger";
 
 export interface CachedFile {
   data: Buffer;
@@ -78,8 +79,8 @@ function createFileCache(config: FileCacheConfig): FileCache {
         ensureDir();
         const ext = resolveExtension(contentType);
         writeFileSync(join(cacheDir, `${safeName(id)}${ext}`), data);
-      } catch {
-        // Non-fatal — worst case we fetch again next time
+      } catch (err) {
+        logger.warn({ id, cacheDir, err }, "file-cache: put failed");
       }
     },
 
@@ -90,13 +91,17 @@ function createFileCache(config: FileCacheConfig): FileCache {
     async downloadAndPut(id, url) {
       try {
         const res = await fetch(url);
-        if (!res.ok) return null;
+        if (!res.ok) {
+          logger.warn({ id, url, status: res.status }, "file-cache: download failed");
+          return null;
+        }
         const contentType = res.headers.get("content-type") ?? undefined;
         const arrayBuf = await res.arrayBuffer();
         const buf = Buffer.from(arrayBuf);
         cache.put(id, buf, contentType);
         return buf;
-      } catch {
+      } catch (err) {
+        logger.warn({ id, url, err }, "file-cache: downloadAndPut failed");
         return null;
       }
     },
