@@ -1,14 +1,11 @@
 import { recordActivity } from "@/lib/activity";
 import { invalidateByPrefix, audioCache, imageCache } from "@/lib/cache";
-import { sendGenerationCompleteEmail } from "@/lib/email";
 import { broadcast } from "@/lib/event-bus";
 import { logger } from "@/lib/logger";
-import { notifyFollowersOfNewSong } from "@/lib/notifications";
-import { prisma } from "@/lib/prisma";
-import { sendPushToUser } from "@/lib/push";
+import { notifyFollowersOfNewSong, notifyUser } from "@/lib/notifications";
 import { recordDailyActivity, checkSongMilestones, checkStreakMilestones } from "@/lib/streaks";
 import { persistSongCompletion, createAlternateSongs, markQueueItemDone, markSongFailed } from "./persist";
-import type { CompletionSong, SongRecord, PersistedSong, AlternateSong } from "./types";
+import type { CompletionSong, SongRecord, AlternateSong } from "./types";
 
 export type { CompletionSong, SongRecord } from "./types";
 
@@ -81,7 +78,17 @@ export async function handleSongSuccess(
     runSideEffect("track-activity", () => {
       trackCompletionActivity(song.userId, song.id);
     }),
-    runSideEffect("notify-user", () => notifyCompletion(song.userId, updated)),
+    runSideEffect("notify-user", async () => {
+      await notifyUser({
+        userId: song.userId,
+        type: "generation_complete",
+        title: "Your song is ready!",
+        message: `"${updated.title || "Untitled"}" has finished generating`,
+        href: "/library",
+        songId: song.id,
+        push: { tag: `generation-complete-${song.id}` },
+      });
+    }),
   ]);
 
   return { persisted: true, sideEffectErrors };
@@ -137,34 +144,3 @@ function trackCompletionActivity(userId: string, songId: string): void {
   checkSongMilestones(userId).catch(() => {});
 }
 
-async function notifyCompletion(userId: string, song: PersistedSong): Promise<void> {
-  const userPrefs = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      email: true,
-      emailGenerationComplete: true,
-      unsubscribeToken: true,
-      pushGenerationComplete: true,
-    },
-  });
-
-  if (userPrefs?.email && userPrefs.emailGenerationComplete) {
-    let unsubToken = userPrefs.unsubscribeToken;
-    if (!unsubToken) {
-      unsubToken = crypto.randomUUID();
-      await prisma.user.update({ where: { id: userId }, data: { unsubscribeToken: unsubToken } });
-    }
-    sendGenerationCompleteEmail(userPrefs.email, { id: song.id, title: song.title }, unsubToken).catch((err) =>
-      logger.error({ userId, songId: song.id, err }, "song-completion: failed to send generation complete email")
-    );
-  }
-
-  if (userPrefs?.pushGenerationComplete !== false) {
-    sendPushToUser(userId, {
-      title: "Your song is ready!",
-      body: `"${song.title || "Untitled"}" has finished generating`,
-      url: `/library`,
-      tag: `generation-complete-${song.id}`,
-    }).catch(() => {});
-  }
-}

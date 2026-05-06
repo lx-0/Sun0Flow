@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { broadcast } from "@/lib/event-bus";
 import { invalidateByPrefix, cacheKey } from "@/lib/cache";
 import { sendPushToUser } from "@/lib/push";
+import { sendGenerationCompleteEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
 
 export const NOTIFICATION_TYPES = [
@@ -40,8 +41,13 @@ const PUSH_PREF_FIELD: Partial<
   song_comment: "pushSongComment",
 };
 
+const EMAIL_PREF_FIELD: Partial<Record<NotificationType, "emailGenerationComplete">> = {
+  generation_complete: "emailGenerationComplete",
+};
+
 export type NotifyUserParams = CreateNotificationParams & {
   push?: { tag?: string } | false;
+  email?: false;
 };
 
 function invalidateUnreadCache(userId: string) {
@@ -78,28 +84,37 @@ export async function createNotification(params: CreateNotificationParams) {
 }
 
 /**
- * Persist notification + broadcast SSE + send push (when the user's preference allows it).
+ * Persist notification + broadcast SSE + send push + send email
+ * (each channel gated by the user's preference).
  */
 export async function notifyUser(params: NotifyUserParams) {
   const notification = await createNotification(params);
 
-  if (params.push !== false) {
-    const prefField = PUSH_PREF_FIELD[params.type];
-    let shouldPush = !!prefField;
+  const pushPref = PUSH_PREF_FIELD[params.type];
+  const emailPref = EMAIL_PREF_FIELD[params.type];
+  const needsPrefs = (params.push !== false && pushPref) || (params.email !== false && emailPref);
 
-    if (prefField) {
-      try {
-        const user = await prisma.user.findUnique({
-          where: { id: params.userId },
-          select: { [prefField]: true },
-        });
-        shouldPush = (user as Record<string, unknown> | null)?.[prefField] !== false;
-      } catch (err) {
-        logger.error({ err, userId: params.userId }, "notifyUser: failed to check push preference");
-        shouldPush = true;
+  let userPrefs: Record<string, unknown> | null = null;
+  if (needsPrefs) {
+    try {
+      const selectFields: Record<string, boolean> = {};
+      if (pushPref) selectFields[pushPref] = true;
+      if (emailPref) {
+        selectFields[emailPref] = true;
+        selectFields.email = true;
+        selectFields.unsubscribeToken = true;
       }
+      userPrefs = await prisma.user.findUnique({
+        where: { id: params.userId },
+        select: selectFields,
+      }) as Record<string, unknown> | null;
+    } catch (err) {
+      logger.error({ err, userId: params.userId }, "notifyUser: failed to fetch user preferences");
     }
+  }
 
+  if (params.push !== false && pushPref) {
+    const shouldPush = userPrefs?.[pushPref] !== false;
     if (shouldPush) {
       sendPushToUser(params.userId, {
         title: params.title,
@@ -110,7 +125,38 @@ export async function notifyUser(params: NotifyUserParams) {
     }
   }
 
+  if (params.email !== false && emailPref && userPrefs?.email) {
+    const shouldEmail = userPrefs[emailPref] !== false;
+    if (shouldEmail) {
+      const email = userPrefs.email as string;
+      let unsubToken = userPrefs.unsubscribeToken as string | null;
+      if (!unsubToken) {
+        unsubToken = crypto.randomUUID();
+        await prisma.user.update({ where: { id: params.userId }, data: { unsubscribeToken: unsubToken } }).catch(() => {});
+      }
+      sendNotificationEmail(params, email, unsubToken).catch((err) =>
+        logger.error({ userId: params.userId, type: params.type, err }, "notifyUser: email send failed")
+      );
+    }
+  }
+
   return notification;
+}
+
+async function sendNotificationEmail(
+  params: CreateNotificationParams,
+  email: string,
+  unsubscribeToken: string,
+): Promise<void> {
+  switch (params.type) {
+    case "generation_complete":
+      await sendGenerationCompleteEmail(
+        email,
+        { id: params.songId!, title: params.title },
+        unsubscribeToken,
+      );
+      break;
+  }
 }
 
 export async function markRead(
