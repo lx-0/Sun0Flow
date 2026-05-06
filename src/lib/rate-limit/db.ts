@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { prisma } from "./prisma";
+import { prisma } from "../prisma";
 import { RATE_LIMIT_MAX_GENERATIONS } from "@/lib/env";
 import { TIER_LIMITS } from "@/lib/billing";
 

@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import createMiddleware from "next-intl/middleware";
 import { routing } from "@/i18n/routing";
+import { applyRequestRateLimits } from "@/lib/rate-limit/sliding-window";
 
 // next-intl locale middleware — handles locale detection and URL rewriting
 const intlMiddleware = createMiddleware(routing);
@@ -41,131 +42,6 @@ const ALLOWED_ORIGINS: string[] =
 // ---------------------------------------------------------------------------
 /** Maximum allowed request body size (1 MB). */
 const MAX_BODY_BYTES = 1 * 1024 * 1024;
-
-// ---------------------------------------------------------------------------
-// IP-based rate limiting (public/unauthenticated routes)
-//
-// Bucket        | Max Requests | Window   | Applies To
-// ------------- | ------------ | -------- | ---------------------------------
-// "public"      | 30           | 1 minute | /s/* (public share pages)
-// "playlist"    | 100          | 1 minute | /p/* (public playlist pages)
-// "embed"       | 200          | 1 minute | /embed/* (embed player pages)
-// "profile"     | 60           | 1 minute | /u/* (public user profiles)
-// "songs"       | 60           | 1 minute | /songs/* (public song-by-id pages)
-// "auth"        |  5           | 1 minute | /api/register, forgot/reset password
-// ---------------------------------------------------------------------------
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const ipHits = new Map<string, Map<string, number[]>>();
-
-interface IpRateLimitResult {
-  allowed: boolean;
-  remaining: number;
-  limit: number;
-}
-
-function checkIpRateLimit(ip: string, bucket: string, max: number): IpRateLimitResult {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-
-  let buckets = ipHits.get(ip);
-  if (!buckets) {
-    buckets = new Map();
-    ipHits.set(ip, buckets);
-  }
-
-  const hits = (buckets.get(bucket) ?? []).filter((t: number) => t > windowStart);
-  hits.push(now);
-  buckets.set(bucket, hits);
-
-  // Periodically clean old entries to prevent memory growth
-  if (ipHits.size > 10000) {
-    ipHits.forEach((b, key) => {
-      b.forEach((timestamps, bk) => {
-        const recent = timestamps.filter((t: number) => t > windowStart);
-        if (recent.length === 0) b.delete(bk);
-        else b.set(bk, recent);
-      });
-      if (b.size === 0) ipHits.delete(key);
-    });
-  }
-
-  const allowed = hits.length <= max;
-  return { allowed, remaining: Math.max(0, max - hits.length), limit: max };
-}
-
-function checkPublicRateLimit(ip: string): IpRateLimitResult {
-  return checkIpRateLimit(ip, "public", 30);
-}
-
-// ---------------------------------------------------------------------------
-// Per-user rate limiting (authenticated API routes, in-memory sliding window)
-//
-// ## Redis upgrade path (multi-instance)
-// Replace the `userHits` Map with Redis sorted sets:
-//   ZADD  <key> <now> <requestId>
-//   ZREMRANGEBYSCORE <key> 0 <windowStart>
-//   ZCARD <key>   → current count
-//   EXPIRE <key> 120   → TTL to auto-cleanup
-// Use a key like  `rl:<userId>:<bucket>`.  Atomic pipelines (MULTI/EXEC or
-// Lua scripts) prevent TOCTOU races under concurrent load.
-//
-// Bucket     | Max Requests | Window   | Applies To
-// ---------- | ------------ | -------- | -----------------------------------------
-// "api"      | 100          | 1 minute | All authenticated /api/* routes
-// "generate" |  10          | 1 minute | POST /api/generate (expensive operation)
-// "auth_user"|   5          | 1 minute | Auth mutation endpoints (per user)
-// ---------------------------------------------------------------------------
-const USER_RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const userHits = new Map<string, Map<string, number[]>>();
-
-interface UserRateLimitResult {
-  allowed: boolean;
-  /** Seconds to wait before the next request is allowed (only set when !allowed). */
-  retryAfterSec: number;
-  remaining: number;
-  limit: number;
-}
-
-function checkUserRateLimit(
-  userId: string,
-  bucket: string,
-  max: number
-): UserRateLimitResult {
-  const now = Date.now();
-  const windowStart = now - USER_RATE_LIMIT_WINDOW_MS;
-
-  let buckets = userHits.get(userId);
-  if (!buckets) {
-    buckets = new Map();
-    userHits.set(userId, buckets);
-  }
-
-  const hits = (buckets.get(bucket) ?? []).filter((t: number) => t > windowStart);
-
-  if (hits.length >= max) {
-    // Retry after oldest hit rolls out of the window
-    const oldestHit = hits[0];
-    const retryAfterMs = oldestHit + USER_RATE_LIMIT_WINDOW_MS - now;
-    return { allowed: false, retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)), remaining: 0, limit: max };
-  }
-
-  hits.push(now);
-  buckets.set(bucket, hits);
-
-  // Periodically clean old entries to prevent memory growth
-  if (userHits.size > 50000) {
-    userHits.forEach((b, key) => {
-      b.forEach((timestamps, bk) => {
-        const recent = timestamps.filter((t: number) => t > windowStart);
-        if (recent.length === 0) b.delete(bk);
-        else b.set(bk, recent);
-      });
-      if (b.size === 0) userHits.delete(key);
-    });
-  }
-
-  return { allowed: true, retryAfterSec: 0, remaining: max - hits.length, limit: max };
-}
 
 // ---------------------------------------------------------------------------
 // Security headers added to every response
@@ -215,9 +91,6 @@ export async function middleware(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
   // ── Body size guard (API routes only) ────────────────────────────────────
-  // Check the Content-Length header. Clients that omit it are not blocked here
-  // but Next.js itself enforces a 4 MB default; a runtime body-reading helper
-  // should also enforce this limit where the body is consumed.
   if (pathname.startsWith("/api/")) {
     const contentLength = request.headers.get("content-length");
     if (contentLength !== null && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
@@ -228,100 +101,20 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // ── API versioning ──────────────────────────────────────────────────────
-  // External consumers use /api/v1/* which is transparently rewritten to
-  // /api/* by next.config.mjs (afterFiles rewrite).  No redirect needed —
-  // internal app code calls /api/* directly.
+  // ── Rate limits (IP-based + per-user) ────────────────────────────────────
+  const userId = token?.id as string | undefined;
+  const isAdmin = Boolean(token?.isAdmin);
+  const isE2eUser = typeof token?.email === "string" && token.email.endsWith("@test.local");
 
-  // ── IP rate limits (public/unauthenticated pages) ────────────────────────
-
-  // Rate limit public share pages
-  if (pathname.startsWith("/s/")) {
-    const { allowed, remaining, limit } = checkPublicRateLimit(ip);
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": "0" } }
-      );
-    }
-    void remaining; // available for future header injection on success responses
-  }
-
-  // Rate limit public playlist pages: 100 req/min per IP
-  if (pathname.startsWith("/p/")) {
-    const { allowed, remaining, limit } = checkIpRateLimit(ip, "playlist", 100);
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": "0" } }
-      );
-    }
-    void remaining;
-  }
-
-  // Rate limit public profile pages: 60 req/min per IP
-  if (pathname.startsWith("/u/")) {
-    const { allowed, remaining, limit } = checkIpRateLimit(ip, "profile", 60);
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": "0" } }
-      );
-    }
-    void remaining;
-  }
-
-  // Rate limit public song-by-id pages: 60 req/min per IP
-  if (pathname.startsWith("/songs/")) {
-    const { allowed, remaining, limit } = checkIpRateLimit(ip, "songs", 60);
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": "0" } }
-      );
-    }
-    void remaining;
-  }
-
-  // Rate limit embed player pages: 200 req/min per IP
-  if (pathname.startsWith("/embed/")) {
-    const { allowed, remaining, limit } = checkIpRateLimit(ip, "embed", 200);
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": "0" } }
-      );
-    }
-    void remaining;
-  }
-
-  // Rate limit auth endpoints: 10 requests per minute per IP (brute-force protection)
-  // Covers login (/api/auth/signin, /api/auth/callback/credentials), registration,
-  // and password-reset flows. Disabled in CI to allow E2E test user registration.
-  if (
-    process.env.CI !== "true" &&
-    (pathname === "/api/register" ||
-      pathname === "/api/auth/forgot-password" ||
-      pathname === "/api/auth/reset-password" ||
-      pathname === "/api/auth/signin" ||
-      pathname === "/api/auth/callback/credentials")
-  ) {
-    const { allowed, limit } = checkIpRateLimit(ip, "auth", 10);
-    if (!allowed) {
-      console.warn(`[rate-limit] auth IP limit exceeded ip=${ip} path=${pathname}`);
-      return NextResponse.json(
-        { error: "Too many requests. Please try again later.", code: "RATE_LIMITED" },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": "60",
-            "X-RateLimit-Limit": String(limit),
-            "X-RateLimit-Remaining": "0",
-          },
-        }
-      );
-    }
-  }
+  const rateLimitResponse = applyRequestRateLimits({
+    pathname,
+    method,
+    ip,
+    userId,
+    isAdmin,
+    isE2eUser,
+  });
+  if (rateLimitResponse) return rateLimitResponse;
 
   // ── API key auth bypass ──────────────────────────────────────────────────
   const hasApiKeyHeader =
@@ -351,77 +144,6 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // ── Per-user rate limits (authenticated API routes) ──────────────────────
-  // Admin users are exempt from all per-user rate limits.
-  const userId = token?.id as string | undefined;
-  const isAdmin = Boolean(token?.isAdmin);
-
-  // E2E test users (@test.local) are exempt from per-user rate limits on staging,
-  // where PLAYWRIGHT_TEST is not set but rate limits would block the E2E suite.
-  const isE2eUser = typeof token?.email === "string" && token.email.endsWith("@test.local");
-  if (userId && !isAdmin && !isE2eUser && pathname.startsWith("/api/") && process.env.PLAYWRIGHT_TEST !== "true") {
-    // Song generation: 10 req/min (expensive upstream operation)
-    if (pathname === "/api/generate" && method === "POST") {
-      const { allowed, retryAfterSec, remaining, limit } = checkUserRateLimit(userId, "generate", 10);
-      if (!allowed) {
-        console.warn(`[rate-limit] generate user limit exceeded userId=${userId}`);
-        return NextResponse.json(
-          { error: "Too many generation requests. Please wait before trying again.", code: "RATE_LIMITED" },
-          {
-            status: 429,
-            headers: {
-              "Retry-After": String(retryAfterSec),
-              "X-RateLimit-Limit": String(limit),
-              "X-RateLimit-Remaining": "0",
-            },
-          }
-        );
-      }
-      void remaining;
-    }
-
-    // Auth mutation endpoints: 5 req/min per user
-    if (
-      pathname === "/api/auth/change-password" ||
-      pathname === "/api/auth/forgot-password" ||
-      pathname === "/api/auth/reset-password"
-    ) {
-      const { allowed, retryAfterSec, limit } = checkUserRateLimit(userId, "auth_user", 5);
-      if (!allowed) {
-        console.warn(`[rate-limit] auth_user limit exceeded userId=${userId} path=${pathname}`);
-        return NextResponse.json(
-          { error: "Too many requests. Please wait before trying again.", code: "RATE_LIMITED" },
-          {
-            status: 429,
-            headers: {
-              "Retry-After": String(retryAfterSec),
-              "X-RateLimit-Limit": String(limit),
-              "X-RateLimit-Remaining": "0",
-            },
-          }
-        );
-      }
-    }
-
-    // General API: 100 req/min per user (catch-all, applied last)
-    const { allowed, retryAfterSec, remaining, limit } = checkUserRateLimit(userId, "api", 100);
-    if (!allowed) {
-      console.warn(`[rate-limit] api user limit exceeded userId=${userId} path=${pathname}`);
-      return NextResponse.json(
-        { error: "Too many requests. Please slow down.", code: "RATE_LIMITED" },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(retryAfterSec),
-            "X-RateLimit-Limit": String(limit),
-            "X-RateLimit-Remaining": "0",
-          },
-        }
-      );
-    }
-    void remaining;
-  }
-
   // ── CORS — OPTIONS preflight ─────────────────────────────────────────────
   const origin = request.headers.get("origin") ?? "";
   const isAllowedOrigin = ALLOWED_ORIGINS.length > 0 && ALLOWED_ORIGINS.includes(origin);
@@ -443,11 +165,8 @@ export async function middleware(request: NextRequest) {
     request.headers.get(CORRELATION_ID_HEADER) ?? generateCorrelationId();
 
   // ── Locale routing (non-API, non-static routes) ──────────────────────────
-  // Run next-intl middleware for page routes to handle locale detection and
-  // URL rewriting. API routes and other special paths skip this.
   let response: NextResponse;
   if (!pathname.startsWith("/api/") && !pathname.startsWith("/s/") && !pathname.startsWith("/p/") && !pathname.startsWith("/u/") && !pathname.startsWith("/songs/") && !pathname.startsWith("/embed/")) {
-    // Run next-intl middleware which handles locale prefix routing
     const intlResponse = intlMiddleware(request);
     response = intlResponse as NextResponse;
   } else {
@@ -471,7 +190,6 @@ export async function middleware(request: NextRequest) {
   response.headers.delete("X-Powered-By");
 
   // ── API version header ───────────────────────────────────────────────────
-  // Inform clients which version they're actually talking to.
   if (pathname.startsWith("/api/v1/")) {
     response.headers.set("X-API-Version", "1");
   }

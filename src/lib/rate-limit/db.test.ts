@@ -19,7 +19,7 @@ vi.mock("@/lib/billing", () => ({
   },
 }));
 
-import { checkRateLimit, recordRateLimitHit, acquireRateLimitSlot } from "./rate-limit";
+import { checkRateLimit, recordRateLimitHit, acquireRateLimitSlot } from "./db";
 
 // ─── Mock Prisma ────────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ const mockFindMany = vi.fn();
 const mockCreate = vi.fn();
 const mockSubscriptionFindUnique = vi.fn();
 
-vi.mock("./prisma", () => ({
+vi.mock("../prisma", () => ({
   prisma: {
     rateLimitEntry: {
       findMany: (...args: unknown[]) => mockFindMany(...args),
