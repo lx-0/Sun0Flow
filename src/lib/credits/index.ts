@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { TIER_LIMITS } from "@/lib/billing";
-import { createNotification } from "@/lib/notifications";
+import { notifyLowCreditsIfNeeded } from "@/lib/notifications";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -229,43 +229,6 @@ export async function getMonthlyCreditUsage(userId: string): Promise<MonthlyCred
 }
 
 // ---------------------------------------------------------------------------
-// Low-credit notifications
-// ---------------------------------------------------------------------------
-
-export async function shouldNotifyLowCredits(
-  userId: string,
-  usage: MonthlyCreditUsage
-): Promise<boolean> {
-  if (!usage.isLow) return false;
-
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-
-  const existing = await prisma.notification.findFirst({
-    where: {
-      userId,
-      type: "low_credits",
-      createdAt: { gte: startOfMonth },
-    },
-  });
-
-  return !existing;
-}
-
-export async function createLowCreditNotification(
-  userId: string,
-  creditsRemaining: number,
-  budget: number = DEFAULT_MONTHLY_BUDGET
-) {
-  return createNotification({
-    userId,
-    type: "low_credits",
-    title: "Low Credits Warning",
-    message: `You have approximately ${creditsRemaining} credits remaining this month (out of ${budget}). Consider reducing usage to avoid running out.`,
-    href: "/analytics",
-  });
-}
-
-// ---------------------------------------------------------------------------
 // Credit spend (check + deduct)
 // ---------------------------------------------------------------------------
 
@@ -300,9 +263,7 @@ export async function deductCredits(
 
   try {
     const usage = await getMonthlyCreditUsage(userId);
-    if (await shouldNotifyLowCredits(userId, usage)) {
-      await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
-    }
+    await notifyLowCreditsIfNeeded(userId, usage);
   } catch {
     // Non-critical — don't block the caller
   }

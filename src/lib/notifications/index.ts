@@ -159,6 +159,42 @@ async function sendNotificationEmail(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Low-credit notification (absorbed from credits module — notification
+// deduplication and message formatting belong here, not in accounting).
+// ---------------------------------------------------------------------------
+
+const LOW_CREDIT_THRESHOLD_TYPE: NotificationType = "low_credits";
+
+export async function notifyLowCreditsIfNeeded(
+  userId: string,
+  usage: { isLow: boolean; creditsRemaining: number; budget: number },
+): Promise<void> {
+  if (!usage.isLow) return;
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const existing = await prisma.notification.findFirst({
+    where: {
+      userId,
+      type: LOW_CREDIT_THRESHOLD_TYPE,
+      createdAt: { gte: startOfMonth },
+    },
+  });
+
+  if (existing) return;
+
+  await createNotification({
+    userId,
+    type: LOW_CREDIT_THRESHOLD_TYPE,
+    title: "Low Credits Warning",
+    message: `You have approximately ${usage.creditsRemaining} credits remaining this month (out of ${usage.budget}). Consider reducing usage to avoid running out.`,
+    href: "/analytics",
+  });
+}
+
 export async function markRead(
   userId: string,
   notificationId: string

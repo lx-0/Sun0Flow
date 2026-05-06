@@ -69,8 +69,6 @@ vi.mock("@/lib/error-logger", () => ({
 
 vi.mock("@/lib/credits", () => ({
   recordCreditUsage: vi.fn().mockResolvedValue(undefined),
-  shouldNotifyLowCredits: vi.fn().mockResolvedValue(false),
-  createLowCreditNotification: vi.fn().mockResolvedValue(undefined),
   getMonthlyCreditUsage: vi.fn().mockResolvedValue({ creditsRemaining: 100 }),
   CREDIT_COSTS: { generate: 1 },
   checkCredits: vi.fn().mockResolvedValue({ ok: true, creditCost: 1, creditsRemaining: 100 }),
@@ -91,8 +89,6 @@ import { logServerError } from "@/lib/error-logger";
 import {
   getMonthlyCreditUsage,
   recordCreditUsage,
-  shouldNotifyLowCredits,
-  createLowCreditNotification,
   checkCredits,
   deductCredits,
 } from "@/lib/credits";
@@ -137,8 +133,6 @@ beforeEach(() => {
   vi.mocked(resolveUserApiKeyWithMode).mockResolvedValue({ apiKey: undefined, usingPersonalKey: false });
   vi.mocked(getMonthlyCreditUsage).mockResolvedValue(DEFAULT_CREDIT_USAGE);
   vi.mocked(recordCreditUsage).mockResolvedValue(undefined as never);
-  vi.mocked(shouldNotifyLowCredits).mockResolvedValue(false);
-  vi.mocked(createLowCreditNotification).mockResolvedValue(undefined as never);
   vi.mocked(checkCredits).mockResolvedValue({ ok: true, creditCost: 1, creditsRemaining: 100 });
   vi.mocked(deductCredits).mockResolvedValue(undefined);
   mockSunoApiKey = "test-key";

@@ -70,8 +70,6 @@ vi.mock("@/lib/error-logger", () => ({
 
 vi.mock("@/lib/credits", () => ({
   recordCreditUsage: vi.fn().mockResolvedValue(undefined),
-  shouldNotifyLowCredits: vi.fn().mockResolvedValue(false),
-  createLowCreditNotification: vi.fn().mockResolvedValue(undefined),
   getMonthlyCreditUsage: vi.fn().mockResolvedValue({ creditsRemaining: 100, budget: 500 }),
   CREDIT_COSTS: { generate: 1 },
   checkCredits: vi.fn().mockResolvedValue({ ok: true, creditCost: 1, creditsRemaining: 100 }),
