@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { selectRecommendations } from "./select-recommendations";
-import type { TrendingCandidate } from "./types";
+import { selectRecommendations } from "./email-digest";
+
+interface TrendingCandidate {
+  id: string;
+  title: string | null;
+  tags: string | null;
+  userId: string;
+}
 
 function candidate(overrides: Partial<TrendingCandidate> = {}): TrendingCandidate {
   return {
