@@ -105,6 +105,34 @@ export const SongFilters = {
       tags: { contains: (genre || mood)!, mode: "insensitive" },
     };
   },
+
+  discoverable(): Prisma.SongWhereInput {
+    return {
+      generationStatus: "ready",
+      audioUrl: { not: null },
+      archivedAt: null,
+    };
+  },
+
+  withTempoRange(
+    base: Prisma.SongWhereInput,
+    tempoMin?: number,
+    tempoMax?: number
+  ): Prisma.SongWhereInput {
+    if (!tempoMin && !tempoMax) return base;
+    const tempo: Prisma.IntNullableFilter = {};
+    if (tempoMin) tempo.gte = tempoMin;
+    if (tempoMax) tempo.lte = tempoMax;
+    return { ...base, tempo };
+  },
+
+  withExcludeIds(
+    base: Prisma.SongWhereInput,
+    ids: string[]
+  ): Prisma.SongWhereInput {
+    if (ids.length === 0) return base;
+    return { ...base, id: { notIn: ids } };
+  },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -367,16 +395,11 @@ export async function querySongLibrary(
   where = SongFilters.withSongTags(where, tagIds);
   where = SongFilters.withTagContains(where, genres);
   where = SongFilters.withTagContains(where, moods);
-
-  if (
-    (tempoMin !== undefined && tempoMin > 0) ||
-    (tempoMax !== undefined && tempoMax > 0)
-  ) {
-    const tempoFilter: Prisma.IntNullableFilter = {};
-    if (tempoMin !== undefined && tempoMin > 0) tempoFilter.gte = tempoMin;
-    if (tempoMax !== undefined && tempoMax > 0) tempoFilter.lte = tempoMax;
-    where.tempo = tempoFilter;
-  }
+  where = SongFilters.withTempoRange(
+    where,
+    tempoMin !== undefined && tempoMin > 0 ? tempoMin : undefined,
+    tempoMax !== undefined && tempoMax > 0 ? tempoMax : undefined,
+  );
 
   if (smartFilter === "this_week") {
     const now = new Date();
