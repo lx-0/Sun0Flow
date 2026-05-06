@@ -1,41 +1,27 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { ownerWhere } from "@/lib/playlists";
+import { removeCollaborator } from "@/lib/playlists";
 
-// DELETE /api/playlists/[id]/collaborators/[collaboratorId] — remove collaborator (owner only)
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string; collaboratorId: string }> }
+  { params }: { params: Promise<{ id: string; collaboratorId: string }> },
 ) {
   const { id, collaboratorId } = await params;
   try {
     const { userId, error: authError } = await resolveUser(request);
     if (authError) return authError;
 
-    const playlist = await prisma.playlist.findFirst({
-      where: ownerWhere(id, userId),
-    });
-
-    if (!playlist) {
-      return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
-    }
-
-    const collaborator = await prisma.playlistCollaborator.findFirst({
-      where: { id: collaboratorId, playlistId: playlist.id },
-    });
-
-    if (!collaborator) {
-      return NextResponse.json({ error: "Collaborator not found", code: "NOT_FOUND" }, { status: 404 });
-    }
-
-    await prisma.playlistCollaborator.delete({ where: { id: collaborator.id } });
-
-    return NextResponse.json({ success: true });
+    const result = await removeCollaborator(id, userId, collaboratorId);
+    if (!result.ok)
+      return NextResponse.json(
+        { error: result.error, code: result.code },
+        { status: result.status },
+      );
+    return NextResponse.json(result.data);
   } catch {
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

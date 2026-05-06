@@ -1,88 +1,27 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { recordActivity } from "@/lib/activity";
-import { editorWhere } from "@/lib/playlists";
+import { removeSong } from "@/lib/playlists";
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string; songId: string }> }
+  { params }: { params: Promise<{ id: string; songId: string }> },
 ) {
   const { id, songId } = await params;
   try {
     const { userId, error: authError } = await resolveUser(request);
-
     if (authError) return authError;
 
-    const playlist = await prisma.playlist.findFirst({
-      where: editorWhere(id, userId),
-    });
-
-    if (!playlist) {
-      return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
-    }
-
-    const playlistSong = await prisma.playlistSong.findUnique({
-      where: {
-        playlistId_songId: {
-          playlistId: playlist.id,
-          songId: songId,
-        },
-      },
-      include: { song: { select: { title: true } } },
-    });
-
-    if (!playlistSong) {
+    const result = await removeSong(id, userId, songId);
+    if (!result.ok)
       return NextResponse.json(
-        { error: "Song not in playlist", code: "NOT_FOUND" },
-        { status: 404 }
+        { error: result.error, code: result.code },
+        { status: result.status },
       );
-    }
-
-    const isOwner = playlist.userId === userId;
-    // Collaborators can only remove songs they added
-    if (!isOwner && playlistSong.addedByUserId !== userId) {
-      return NextResponse.json(
-        { error: "You can only remove songs you added", code: "FORBIDDEN" },
-        { status: 403 }
-      );
-    }
-
-    await prisma.playlistSong.delete({
-      where: { id: playlistSong.id },
-    });
-
-    // Re-order remaining songs to keep positions contiguous
-    const remaining = await prisma.playlistSong.findMany({
-      where: { playlistId: playlist.id },
-      orderBy: { position: "asc" },
-    });
-
-    await Promise.all(
-      remaining.map((ps, i) =>
-        prisma.playlistSong.update({
-          where: { id: ps.id },
-          data: { position: i },
-        })
-      )
-    );
-
-    // Record activity for collaborative playlists
-    if (playlist.isCollaborative) {
-      recordActivity({
-        userId,
-        type: "song_removed_from_playlist",
-        songId: songId,
-        playlistId: playlist.id,
-        metadata: { songTitle: playlistSong.song?.title ?? undefined },
-      });
-    }
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json(result.data);
   } catch {
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

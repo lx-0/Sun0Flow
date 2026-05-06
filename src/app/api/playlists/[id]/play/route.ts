@@ -1,35 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { recordPlay } from "@/lib/playlists";
 
 export async function POST(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
-
-    const playlist = await prisma.playlist.findUnique({
-      where: { id },
-      select: { id: true, isPublic: true },
-    });
-
-    if (!playlist || !playlist.isPublic) {
+    const result = await recordPlay(id);
+    if (!result.ok)
       return NextResponse.json(
-        { error: "Playlist not found", code: "NOT_FOUND" },
-        { status: 404 }
+        { error: result.error, code: result.code },
+        { status: result.status },
       );
-    }
-
-    await prisma.playlist.update({
-      where: { id },
-      data: { playCount: { increment: 1 } },
-    });
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json(result.data);
   } catch {
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
