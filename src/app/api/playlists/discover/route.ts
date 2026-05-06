@@ -6,18 +6,10 @@ import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
 import { rateLimited, internalError } from "@/lib/api-error";
 import { withTiming } from "@/lib/timing";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
+import { trendingScore } from "@/lib/scoring";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
-
-/**
- * Compute time-decay trending score for playlists.
- * score = (playCount + shareCount * 2) / (1 + age_days * 0.1)
- */
-function trendingScore(playCount: number, shareCount: number, publishedAt: Date): number {
-  const ageDays = (Date.now() - publishedAt.getTime()) / (1000 * 60 * 60 * 24);
-  return (playCount + shareCount * 2) / (1 + ageDays * 0.1);
-}
 
 /**
  * GET /api/playlists/discover

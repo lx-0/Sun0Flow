@@ -1,3 +1,4 @@
+import { trendingScore } from "@/lib/scoring";
 import { parseTags } from "@/lib/tags";
 
 export type TasteProfile = Map<string, number>;
@@ -53,18 +54,6 @@ const RANK_WEIGHTS = {
   trendingScale: 0.01,
   recommendedAffinityThreshold: 2,
 } as const;
-
-const TRENDING_DECAY = 0.1;
-const DOWNLOAD_MULTIPLIER = 2;
-
-export function trendingScore(
-  playCount: number,
-  downloadCount: number,
-  createdAt: Date,
-): number {
-  const ageDays = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-  return (playCount + downloadCount * DOWNLOAD_MULTIPLIER) / (1 + ageDays * TRENDING_DECAY);
-}
 
 export function affinityScore(
   songTags: string[],

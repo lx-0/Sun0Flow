@@ -5,19 +5,11 @@ import { CacheControl, CacheTTL, cached, cacheKey } from "@/lib/cache";
 import { rateLimited, internalError } from "@/lib/api-error";
 import { withTiming } from "@/lib/timing";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
+import { trendingScore } from "@/lib/scoring";
 import { SongFilters } from "@/lib/songs";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;
-
-/**
- * Compute time-decay trending score.
- * score = (playCount + downloadCount * 2) / (1 + age_days * 0.1)
- */
-function trendingScore(playCount: number, downloadCount: number, createdAt: Date): number {
-  const ageDays = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-  return (playCount + downloadCount * 2) / (1 + ageDays * 0.1);
-}
 
 /**
  * GET /api/songs/trending
