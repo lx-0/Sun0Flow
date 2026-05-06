@@ -1,9 +1,19 @@
 import Stripe from "stripe";
 import getStripe from "@/lib/stripe";
-import { SubscriptionTier, SubscriptionStatus } from "@prisma/client";
+import { SubscriptionTier } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { createNotification } from "@/lib/notifications";
+import {
+  stripeStatusToPrisma,
+  resolveSubscriptionDetails,
+  resolveInvoiceContext,
+  recordPaymentEvent,
+  userIdFromSubscriptionId,
+} from "./resolve";
+
+export { tierFromPriceId } from "./resolve";
+export type { SubscriptionDetails } from "./resolve";
 
 // ── Tiers ────────────────────────────────────────────────────────────
 
@@ -18,47 +28,6 @@ export const TIER_LIMITS: Record<SubscriptionTier, TierLimits> = {
   pro: { creditsPerMonth: 5000, generationsPerHour: 50 },
   studio: { creditsPerMonth: 15000, generationsPerHour: 100 },
 };
-
-export function tierFromPriceId(priceId: string): SubscriptionTier {
-  const { STRIPE_PRICE_STARTER, STRIPE_PRICE_PRO, STRIPE_PRICE_STUDIO } =
-    process.env;
-  if (priceId === STRIPE_PRICE_STARTER) return "starter";
-  if (priceId === STRIPE_PRICE_PRO) return "pro";
-  if (priceId === STRIPE_PRICE_STUDIO) return "studio";
-  return "free";
-}
-
-// ── Resolve user ─────────────────────────────────────────────────────
-
-function stripeStatusToPrisma(status: Stripe.Subscription.Status): SubscriptionStatus {
-  const map: Record<Stripe.Subscription.Status, SubscriptionStatus> = {
-    active: "active",
-    trialing: "trialing",
-    past_due: "past_due",
-    canceled: "canceled",
-    unpaid: "unpaid",
-    incomplete: "incomplete",
-    incomplete_expired: "incomplete_expired",
-    paused: "paused",
-  };
-  return map[status] ?? "active";
-}
-
-async function userIdFromCustomerId(customerId: string): Promise<string | null> {
-  const sub = await prisma.subscription.findFirst({
-    where: { stripeCustomerId: customerId },
-    select: { userId: true },
-  });
-  return sub?.userId ?? null;
-}
-
-async function userIdFromSubscriptionId(subscriptionId: string): Promise<string | null> {
-  const sub = await prisma.subscription.findFirst({
-    where: { stripeSubscriptionId: subscriptionId },
-    select: { userId: true },
-  });
-  return sub?.userId ?? null;
-}
 
 // ── Provision ────────────────────────────────────────────────────────
 
@@ -135,17 +104,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   const stripe = getStripe();
   const stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
-  const item = stripeSub.items.data[0];
-  const priceId = item?.price?.id ?? "";
-  const tier = tierFromPriceId(priceId);
-  const limits = TIER_LIMITS[tier];
-
-  const periodStart = item?.current_period_start
-    ? new Date(item.current_period_start * 1000)
-    : new Date();
-  const periodEnd = item?.current_period_end
-    ? new Date(item.current_period_end * 1000)
-    : (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d; })();
+  const { tier, priceId, periodStart, periodEnd } = resolveSubscriptionDetails(stripeSub);
 
   await prisma.subscription.upsert({
     where: { userId },
@@ -173,7 +132,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   });
 
   logger.info(
-    { userId, tier, creditsPerMonth: limits.creditsPerMonth },
+    { userId, tier, creditsPerMonth: TIER_LIMITS[tier].creditsPerMonth },
     "billing-webhook: subscription provisioned via checkout"
   );
 }
@@ -240,16 +199,7 @@ async function handleTopupCheckoutCompleted(
 // ── Handle subscription ──────────────────────────────────────────────
 
 async function handleSubscriptionUpdated(stripeSub: Stripe.Subscription) {
-  const item = stripeSub.items.data[0];
-  const priceId = item?.price?.id ?? "";
-  const tier = tierFromPriceId(priceId);
-
-  const periodStart = item?.current_period_start
-    ? new Date(item.current_period_start * 1000)
-    : new Date();
-  const periodEnd = item?.current_period_end
-    ? new Date(item.current_period_end * 1000)
-    : (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d; })();
+  const { tier, priceId, periodStart, periodEnd } = resolveSubscriptionDetails(stripeSub);
 
   await prisma.subscription.updateMany({
     where: { stripeSubscriptionId: stripeSub.id },
@@ -299,30 +249,16 @@ async function handleSubscriptionDeleted(stripeSub: Stripe.Subscription) {
 // ── Handle invoice ───────────────────────────────────────────────────
 
 async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
-  const invoice = event.data.object as Stripe.Invoice;
-  const customerId =
-    typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+  const { invoice, customerId, userId, subscriptionId } = await resolveInvoiceContext(event);
 
-  const userId = customerId ? await userIdFromCustomerId(customerId) : null;
-
-  const subscriptionId =
-    invoice.parent?.type === "subscription_details"
-      ? (typeof invoice.parent.subscription_details?.subscription === "string"
-          ? invoice.parent.subscription_details.subscription
-          : invoice.parent.subscription_details?.subscription?.id)
-      : undefined;
-
-  await prisma.paymentEvent.create({
-    data: {
-      stripeEventId: event.id,
-      type: event.type,
-      userId: userId ?? null,
-      amount: invoice.amount_paid,
-      currency: invoice.currency,
-      status: "succeeded",
-      stripeCustomerId: customerId ?? null,
-      metadata: { invoiceId: invoice.id, subscriptionId: subscriptionId ?? null },
-    },
+  await recordPaymentEvent(event, {
+    userId,
+    amount: invoice.amount_paid,
+    currency: invoice.currency,
+    status: "succeeded",
+    customerId,
+    subscriptionId,
+    invoiceId: invoice.id,
   });
 
   if (userId && subscriptionId) {
@@ -351,30 +287,16 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
 }
 
 async function handleInvoicePaymentFailed(event: Stripe.Event) {
-  const invoice = event.data.object as Stripe.Invoice;
-  const customerId =
-    typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+  const { invoice, customerId, userId, subscriptionId } = await resolveInvoiceContext(event);
 
-  const userId = customerId ? await userIdFromCustomerId(customerId) : null;
-
-  const subscriptionId =
-    invoice.parent?.type === "subscription_details"
-      ? (typeof invoice.parent.subscription_details?.subscription === "string"
-          ? invoice.parent.subscription_details.subscription
-          : invoice.parent.subscription_details?.subscription?.id)
-      : undefined;
-
-  await prisma.paymentEvent.create({
-    data: {
-      stripeEventId: event.id,
-      type: event.type,
-      userId: userId ?? null,
-      amount: invoice.amount_due,
-      currency: invoice.currency,
-      status: "failed",
-      stripeCustomerId: customerId ?? null,
-      metadata: { invoiceId: invoice.id, subscriptionId: subscriptionId ?? null },
-    },
+  await recordPaymentEvent(event, {
+    userId,
+    amount: invoice.amount_due,
+    currency: invoice.currency,
+    status: "failed",
+    customerId,
+    subscriptionId,
+    invoiceId: invoice.id,
   });
 
   if (userId) {
