@@ -6,7 +6,7 @@ import type { SeparationType } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { executeGeneration } from "@/lib/generation";
+import { executeGeneration, respondToGeneration } from "@/lib/generation";
 
 /** POST /api/songs/[id]/separate-vocals — separate vocals/instruments from a track */
 export async function POST(
@@ -67,15 +67,7 @@ export async function POST(
       description: "separate-vocals",
     });
 
-    if (outcome.status === "denied") return outcome.response;
-    if (outcome.status === "queued") {
-      return NextResponse.json({ queued: true, message: outcome.message }, { status: 503 });
-    }
-    if (outcome.status === "failed") {
-      logServerError("separate-vocals-api", outcome.rawError, { userId, route: `/api/songs/${songId}/separate-vocals` });
-      return NextResponse.json({ song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus }, { status: 201 });
-    }
-    return NextResponse.json({ song: outcome.song, rateLimit: outcome.rateLimitStatus }, { status: 201 });
+    return respondToGeneration(outcome, { label: "separate-vocals-api", userId, route: `/api/songs/${songId}/separate-vocals` });
   } catch (error) {
     logServerError("separate-vocals-route", error, { route: "/api/songs/separate-vocals" });
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });

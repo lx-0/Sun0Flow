@@ -5,7 +5,7 @@ import { generateSong } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { executeGeneration } from "@/lib/generation";
+import { executeGeneration, respondToGeneration } from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
 
@@ -142,23 +142,7 @@ export async function POST(
       ),
     });
 
-    if (outcome.status === "denied") return outcome.response;
-    if (outcome.status === "queued") {
-      return NextResponse.json({ queued: true, message: outcome.message }, { status: 503 });
-    }
-
-    if (outcome.status === "failed") {
-      logServerError("variation-api", outcome.rawError, { userId, route: `/api/songs/${parentId}/variations` });
-      return NextResponse.json(
-        { song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus },
-        { status: 201 }
-      );
-    }
-
-    return NextResponse.json(
-      { song: outcome.song, rateLimit: outcome.rateLimitStatus },
-      { status: 201 }
-    );
+    return respondToGeneration(outcome, { label: "variation-api", userId, route: `/api/songs/${parentId}/variations` });
   } catch (error) {
     logServerError("variation-route", error, { route: "/api/songs/variations" });
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });

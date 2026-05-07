@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateMidi } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { executeTransform } from "@/lib/generation";
+import { executeTransform, respondToTransform } from "@/lib/generation";
 
 /** POST /api/songs/[id]/generate-midi — extract MIDI from a track */
 export async function POST(
@@ -45,17 +45,10 @@ export async function POST(
       fallbackErrorMessage: "MIDI generation failed. Please try again.",
     });
 
-    if (outcome.status === "denied") return outcome.response;
-    if (outcome.status === "failed") {
-      logServerError("generate-midi-api", outcome.rawError, { userId, route: `/api/songs/${songId}/generate-midi` });
-      return NextResponse.json(
-        { error: outcome.error, rateLimit: outcome.rateLimitStatus },
-        { status: 502 }
-      );
-    }
-    return NextResponse.json(
-      { taskId: outcome.taskId, status: outcome.mockMode ? "ready" : "pending", songId, format: "midi", rateLimit: outcome.rateLimitStatus },
-      { status: 200 }
+    return respondToTransform(
+      outcome,
+      { label: "generate-midi-api", userId, route: `/api/songs/${songId}/generate-midi` },
+      { songId, format: "midi" },
     );
   } catch (error) {
     logServerError("generate-midi-route", error, { route: "/api/songs/generate-midi" });

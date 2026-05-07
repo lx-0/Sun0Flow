@@ -5,6 +5,7 @@ import { acquireRateLimitSlot, releaseRateLimitSlot, type RateLimitStatus } from
 
 export { pollToCompletion } from "./completion";
 export type { CompletionUpdate, CompletionTarget } from "./completion";
+export { respondToGeneration, respondToTransform } from "./respond";
 import { rateLimited, insufficientCredits } from "@/lib/api-error";
 import { checkCredits, deductCredits } from "@/lib/credits";
 import { generateSong, SunoApiError } from "@/lib/sunoapi";
