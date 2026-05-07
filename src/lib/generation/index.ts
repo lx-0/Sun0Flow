@@ -7,18 +7,19 @@ export { pollToCompletion } from "./completion";
 export type { CompletionUpdate, CompletionTarget } from "./completion";
 import { rateLimited, insufficientCredits } from "@/lib/api-error";
 import { checkCredits, deductCredits } from "@/lib/credits";
-import { SunoApiError } from "@/lib/sunoapi";
+import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { ErrorCode } from "@/lib/api-error";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { SUNOAPI_KEY } from "@/lib/env";
 import { CircuitOpenError, onCircuitClose } from "@/lib/circuit-breaker";
 import { recordGenerationStart, recordGenerationEnd } from "@/lib/metrics";
 import { invalidateByPrefix } from "@/lib/cache";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
-import { drainQueue, enqueueFromSpec } from "@/lib/generation-queue";
+import { enqueueFromSpec, markDone, markFailed } from "@/lib/generation-queue";
 
 onCircuitClose(() => {
-  drainQueue().catch((err) => {
+  drainQueuedItems().catch((err) => {
     logger.error({ err }, "generation: queue drain failed after circuit close");
   });
 });
@@ -299,7 +300,10 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
   }
 }
 
-function afterCreation(spec: GenerationSpec, song: Song): void {
+function afterCreation(
+  spec: Pick<GenerationSpec, "userId" | "songParams" | "coverArt">,
+  song: Song
+): void {
   invalidateByPrefix(`dashboard-stats:${spec.userId}`);
 
   if (spec.coverArt) {
@@ -328,6 +332,91 @@ async function enqueueGeneration(spec: GenerationSpec): Promise<GenerationOutcom
     status: "queued",
     message: "Music generation is temporarily unavailable. Your request has been queued and will be processed automatically when the service recovers.",
   };
+}
+
+// ---------------------------------------------------------------------------
+// Queue drain — processes queued items using the same creation path as live
+// generation, ensuring credits, metrics, cache, and cover art are applied.
+// ---------------------------------------------------------------------------
+
+const DRAIN_BATCH_SIZE = 5;
+
+export async function drainQueuedItems(): Promise<void> {
+  if (!SUNOAPI_KEY) {
+    logger.warn("generation: SUNOAPI_KEY not set — cannot drain queue");
+    return;
+  }
+
+  const items = await prisma.generationQueueItem.findMany({
+    where: { status: "pending" },
+    orderBy: { position: "asc" },
+    take: DRAIN_BATCH_SIZE,
+  });
+
+  if (items.length === 0) return;
+
+  logger.info({ count: items.length }, "generation: draining queued items");
+
+  for (const item of items) {
+    await prisma.generationQueueItem.update({
+      where: { id: item.id },
+      data: { status: "processing" },
+    });
+
+    recordGenerationStart();
+    const startMs = Date.now();
+
+    try {
+      const result = await generateSong(
+        item.prompt,
+        {
+          title: item.title ?? undefined,
+          style: item.tags ?? undefined,
+          instrumental: item.makeInstrumental,
+          personaId: item.personaId ?? undefined,
+        },
+        SUNOAPI_KEY
+      );
+
+      recordGenerationEnd(Date.now() - startMs, true);
+
+      const songParams: SongParams = {
+        title: item.title ?? null,
+        prompt: item.prompt,
+        tags: item.tags ?? null,
+        isInstrumental: item.makeInstrumental,
+      };
+
+      const song = await createSongRecord(item.userId, songParams, {
+        status: "pending",
+        sunoJobId: result.taskId,
+      });
+
+      await deductCredits(item.userId, "generate", {
+        songId: song.id,
+        description: `Song generation (queued): ${item.title || "Untitled"}`,
+      });
+
+      afterCreation({ userId: item.userId, songParams, coverArt: false }, song);
+
+      await markDone(item.id, song.id);
+
+      logger.info(
+        { queueItemId: item.id, songId: song.id, taskId: result.taskId },
+        "generation: queued item processed"
+      );
+    } catch (err) {
+      recordGenerationEnd(Date.now() - startMs, false);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      logger.error({ queueItemId: item.id, err }, "generation: queued item failed");
+      await markFailed(item.id, message).catch((updateErr) => {
+        logger.error(
+          { queueItemId: item.id, updateErr },
+          "generation: failed to mark queued item as failed"
+        );
+      });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

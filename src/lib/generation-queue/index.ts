@@ -1,11 +1,8 @@
 import type { GenerationQueueItem } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { generateSong } from "@/lib/sunoapi";
-import { SUNOAPI_KEY } from "@/lib/env";
 import { logger } from "@/lib/logger";
 
 export const MAX_QUEUE_SIZE = 10;
-const DRAIN_BATCH_SIZE = 5;
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -218,77 +215,3 @@ export async function markFailedBySongId(
   });
 }
 
-// ── Drain ───────────────────────────────────────────────────────────────
-
-export async function drainQueue(): Promise<void> {
-  if (!SUNOAPI_KEY) {
-    logger.warn("generation-queue: SUNOAPI_KEY not set — cannot drain queue");
-    return;
-  }
-
-  const items = await prisma.generationQueueItem.findMany({
-    where: { status: "pending" },
-    orderBy: { position: "asc" },
-    take: DRAIN_BATCH_SIZE,
-  });
-
-  if (items.length === 0) return;
-
-  logger.info({ count: items.length }, "generation-queue: draining queued items");
-
-  for (const item of items) {
-    await prisma.generationQueueItem.update({
-      where: { id: item.id },
-      data: { status: "processing" },
-    });
-
-    try {
-      const result = await generateSong(
-        item.prompt,
-        {
-          title: item.title ?? undefined,
-          style: item.tags ?? undefined,
-          instrumental: item.makeInstrumental,
-          personaId: item.personaId ?? undefined,
-        },
-        SUNOAPI_KEY
-      );
-
-      const song = await prisma.song.create({
-        data: {
-          userId: item.userId,
-          sunoJobId: result.taskId,
-          title: item.title ?? null,
-          prompt: item.prompt,
-          tags: item.tags ?? null,
-          isInstrumental: item.makeInstrumental,
-          generationStatus: "pending",
-        },
-      });
-
-      await prisma.generationQueueItem.update({
-        where: { id: item.id },
-        data: { status: "done", songId: song.id },
-      });
-
-      logger.info(
-        { queueItemId: item.id, songId: song.id, taskId: result.taskId },
-        "generation-queue: item processed"
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      logger.error({ queueItemId: item.id, err }, "generation-queue: item failed");
-      try {
-        await prisma.generationQueueItem.update({
-          where: { id: item.id },
-          data: { status: "failed", errorMessage: message },
-        });
-      } catch (updateErr) {
-        logger.error(
-          { queueItemId: item.id, updateErr },
-          "generation-queue: failed to mark item as failed — stuck in processing"
-        );
-      }
-    }
-  }
-}
