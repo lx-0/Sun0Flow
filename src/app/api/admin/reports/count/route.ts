@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { adminRoute } from "@/lib/route-handler";
+import { pendingReportCount } from "@/lib/moderation";
 
-export async function GET() {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
-  const pending = await prisma.report.count({ where: { status: "pending" } });
+export const GET = adminRoute(async (_request, _ctx) => {
+  const pending = await pendingReportCount();
   return NextResponse.json({ pending });
-}
+}, { route: "/api/admin/reports/count" });
