@@ -17,25 +17,16 @@ vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    subscription: { findUnique: vi.fn() },
-  },
+const mockCreatePortalSession = vi.fn();
+vi.mock("@/lib/billing", () => ({
+  createPortalSession: (...args: unknown[]) => mockCreatePortalSession(...args),
 }));
 
 vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-const mockPortalSessionCreate = vi.fn();
-vi.mock("@/lib/stripe", () => ({
-  default: vi.fn(() => ({
-    billingPortal: { sessions: { create: mockPortalSessionCreate } },
-  })),
-}));
-
 import { resolveUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -46,16 +37,17 @@ function makeRequest(): Request {
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(resolveUser).mockResolvedValue({
     userId: "user-1",
     isApiKey: false,
     isAdmin: false,
     error: null,
   });
-  vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
-    stripeCustomerId: "cus_test_123",
-  } as never);
-  mockPortalSessionCreate.mockResolvedValue({ url: "https://billing.stripe.com/portal_abc" });
+  mockCreatePortalSession.mockResolvedValue({
+    ok: true,
+    url: "https://billing.stripe.com/portal_abc",
+  });
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -77,7 +69,12 @@ describe("POST /api/billing/portal", () => {
 
   describe("subscription checks", () => {
     it("returns 400 when no subscription record exists", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue(null as never);
+      mockCreatePortalSession.mockResolvedValue({
+        ok: false,
+        code: "NO_SUBSCRIPTION",
+        message: "No active paid subscription found",
+        status: 400,
+      });
 
       const res = await POST(makeRequest() as never);
       expect(res.status).toBe(400);
@@ -86,9 +83,12 @@ describe("POST /api/billing/portal", () => {
     });
 
     it("returns 400 when customer is on free plan (free_ prefix)", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
-        stripeCustomerId: "free_user-1",
-      } as never);
+      mockCreatePortalSession.mockResolvedValue({
+        ok: false,
+        code: "NO_SUBSCRIPTION",
+        message: "No active paid subscription found",
+        status: 400,
+      });
 
       const res = await POST(makeRequest() as never);
       expect(res.status).toBe(400);
@@ -105,18 +105,15 @@ describe("POST /api/billing/portal", () => {
       expect(data.url).toBe("https://billing.stripe.com/portal_abc");
     });
 
-    it("creates the portal session with the correct customer id", async () => {
+    it("passes userId to createPortalSession", async () => {
       await POST(makeRequest() as never);
-
-      expect(mockPortalSessionCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ customer: "cus_test_123" })
-      );
+      expect(mockCreatePortalSession).toHaveBeenCalledWith("user-1");
     });
   });
 
   describe("error handling", () => {
-    it("returns 500 when Stripe throws", async () => {
-      mockPortalSessionCreate.mockRejectedValue(new Error("Stripe error"));
+    it("returns 500 when module throws", async () => {
+      mockCreatePortalSession.mockRejectedValue(new Error("Stripe error"));
 
       const res = await POST(makeRequest() as never);
       expect(res.status).toBe(500);

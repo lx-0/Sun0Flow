@@ -1,10 +1,10 @@
 import Stripe from "stripe";
 import getStripe from "@/lib/stripe";
-import { SubscriptionTier } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { createNotification } from "@/lib/notifications";
 import {
+  TIER_LIMITS,
   stripeStatusToPrisma,
   resolveSubscriptionDetails,
   resolveInvoiceContext,
@@ -12,72 +12,22 @@ import {
   userIdFromSubscriptionId,
 } from "./resolve";
 
+export { TIER_LIMITS, ensureFreeSubscription, getOrCreateStripeCustomer } from "./resolve";
+export type { TierLimits, SubscriptionDetails } from "./resolve";
 export { tierFromPriceId } from "./resolve";
-export type { SubscriptionDetails } from "./resolve";
 
-// ── Tiers ────────────────────────────────────────────────────────────
+export {
+  createCheckoutSession,
+  cancelSubscription,
+  createTopupSession,
+  getTopupHistory,
+  createPortalSession,
+  getInvoices,
+  getSubscriptionStatus,
+} from "./checkout";
+export type { CheckoutResult, CancelResult, InvoiceItem } from "./checkout";
 
-export interface TierLimits {
-  creditsPerMonth: number;
-  generationsPerHour: number;
-}
-
-export const TIER_LIMITS: Record<SubscriptionTier, TierLimits> = {
-  free: { creditsPerMonth: 200, generationsPerHour: 5 },
-  starter: { creditsPerMonth: 1500, generationsPerHour: 25 },
-  pro: { creditsPerMonth: 5000, generationsPerHour: 50 },
-  studio: { creditsPerMonth: 15000, generationsPerHour: 100 },
-};
-
-// ── Provision ────────────────────────────────────────────────────────
-
-export async function ensureFreeSubscription(userId: string): Promise<void> {
-  const existing = await prisma.subscription.findUnique({ where: { userId } });
-  if (existing) return;
-
-  const now = new Date();
-  const periodEnd = new Date(now);
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-  await prisma.subscription.create({
-    data: {
-      userId,
-      stripeCustomerId: `free_${userId}`,
-      stripeSubscriptionId: `free_sub_${userId}`,
-      stripePriceId: "free",
-      tier: "free",
-      status: "active",
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-    },
-  });
-
-  logger.info({ userId }, "billing: FREE subscription created on signup");
-}
-
-export async function getOrCreateStripeCustomer(
-  userId: string,
-  email: string,
-  name?: string | null
-): Promise<string> {
-  const stripe = getStripe();
-
-  const sub = await prisma.subscription.findUnique({ where: { userId } });
-  if (sub && !sub.stripeCustomerId.startsWith("free_")) {
-    return sub.stripeCustomerId;
-  }
-
-  const customer = await stripe.customers.create({
-    email,
-    name: name ?? undefined,
-    metadata: { userId },
-  });
-
-  logger.info({ userId, customerId: customer.id }, "billing: Stripe customer created");
-  return customer.id;
-}
-
-// ── Handle checkout ──────────────────────────────────────────────────
+// ── Handle checkout (webhook) ───────────────────────────────────────
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const userId = session.metadata?.userId;
@@ -196,7 +146,7 @@ async function handleTopupCheckoutCompleted(
   );
 }
 
-// ── Handle subscription ──────────────────────────────────────────────
+// ── Handle subscription (webhook) ───────────────────────────────────
 
 async function handleSubscriptionUpdated(stripeSub: Stripe.Subscription) {
   const { tier, priceId, periodStart, periodEnd } = resolveSubscriptionDetails(stripeSub);
@@ -246,7 +196,7 @@ async function handleSubscriptionDeleted(stripeSub: Stripe.Subscription) {
   logger.info({ userId, subscriptionId: stripeSub.id }, "billing-webhook: subscription deleted — downgraded to FREE");
 }
 
-// ── Handle invoice ───────────────────────────────────────────────────
+// ── Handle invoice (webhook) ────────────────────────────────────────
 
 async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   const { invoice, customerId, userId, subscriptionId } = await resolveInvoiceContext(event);

@@ -17,28 +17,16 @@ vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    subscription: {
-      findUnique: vi.fn(),
-      update: vi.fn(),
-    },
-  },
+const mockCancelSubscription = vi.fn();
+vi.mock("@/lib/billing", () => ({
+  cancelSubscription: (...args: unknown[]) => mockCancelSubscription(...args),
 }));
 
 vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-const mockSubscriptionsUpdate = vi.fn();
-vi.mock("@/lib/stripe", () => ({
-  default: vi.fn(() => ({
-    subscriptions: { update: mockSubscriptionsUpdate },
-  })),
-}));
-
 import { resolveUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -50,25 +38,17 @@ function makeRequest(body: Record<string, unknown> = {}): Request {
   });
 }
 
-const ACTIVE_SUBSCRIPTION = {
-  stripeCustomerId: "cus_test_123",
-  stripeSubscriptionId: "sub_test_456",
-  status: "active",
-  cancelAtPeriodEnd: false,
-};
-
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(resolveUser).mockResolvedValue({
     userId: "user-1",
     isApiKey: false,
     isAdmin: false,
     error: null,
   });
-  vi.mocked(prisma.subscription.findUnique).mockResolvedValue(ACTIVE_SUBSCRIPTION as never);
-  vi.mocked(prisma.subscription.update).mockResolvedValue({} as never);
-  mockSubscriptionsUpdate.mockResolvedValue({});
+  mockCancelSubscription.mockResolvedValue({ ok: true });
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -90,7 +70,12 @@ describe("POST /api/billing/cancel", () => {
 
   describe("subscription state checks", () => {
     it("returns 400 when no subscription record exists", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue(null as never);
+      mockCancelSubscription.mockResolvedValue({
+        ok: false,
+        code: "NO_SUBSCRIPTION",
+        message: "No active paid subscription to cancel",
+        status: 400,
+      });
 
       const res = await POST(makeRequest() as never);
       expect(res.status).toBe(400);
@@ -99,12 +84,12 @@ describe("POST /api/billing/cancel", () => {
     });
 
     it("returns 400 when subscription is a free plan (free_ prefix)", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
-        stripeCustomerId: "free_user-1",
-        stripeSubscriptionId: "free_sub_user-1",
-        status: "active",
-        cancelAtPeriodEnd: false,
-      } as never);
+      mockCancelSubscription.mockResolvedValue({
+        ok: false,
+        code: "NO_SUBSCRIPTION",
+        message: "No active paid subscription to cancel",
+        status: 400,
+      });
 
       const res = await POST(makeRequest() as never);
       expect(res.status).toBe(400);
@@ -113,10 +98,12 @@ describe("POST /api/billing/cancel", () => {
     });
 
     it("returns 400 when subscription is already scheduled for cancellation", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
-        ...ACTIVE_SUBSCRIPTION,
-        cancelAtPeriodEnd: true,
-      } as never);
+      mockCancelSubscription.mockResolvedValue({
+        ok: false,
+        code: "ALREADY_CANCELLED",
+        message: "Subscription is already scheduled for cancellation",
+        status: 400,
+      });
 
       const res = await POST(makeRequest() as never);
       expect(res.status).toBe(400);
@@ -134,39 +121,21 @@ describe("POST /api/billing/cancel", () => {
       expect(data.cancelAtPeriodEnd).toBe(true);
     });
 
-    it("calls Stripe to set cancel_at_period_end", async () => {
-      await POST(makeRequest() as never);
-
-      expect(mockSubscriptionsUpdate).toHaveBeenCalledWith(
-        "sub_test_456",
-        expect.objectContaining({ cancel_at_period_end: true })
-      );
-    });
-
-    it("updates the subscription record in the database", async () => {
-      await POST(makeRequest() as never);
-
-      expect(prisma.subscription.update).toHaveBeenCalledWith({
-        where: { userId: "user-1" },
-        data: { cancelAtPeriodEnd: true },
-      });
-    });
-
-    it("passes cancellation reason to Stripe when provided", async () => {
+    it("passes userId and reason to cancelSubscription", async () => {
       await POST(makeRequest({ reason: "too expensive" }) as never);
+      expect(mockCancelSubscription).toHaveBeenCalledWith("user-1", "too expensive");
+    });
 
-      expect(mockSubscriptionsUpdate).toHaveBeenCalledWith(
-        "sub_test_456",
-        expect.objectContaining({
-          metadata: { cancellation_reason: "too expensive" },
-        })
-      );
+    it("truncates reason to 500 characters", async () => {
+      const longReason = "x".repeat(600);
+      await POST(makeRequest({ reason: longReason }) as never);
+      expect(mockCancelSubscription).toHaveBeenCalledWith("user-1", "x".repeat(500));
     });
   });
 
   describe("error handling", () => {
-    it("returns 500 when Stripe throws", async () => {
-      mockSubscriptionsUpdate.mockRejectedValue(new Error("Stripe error"));
+    it("returns 500 when module throws", async () => {
+      mockCancelSubscription.mockRejectedValue(new Error("Stripe error"));
 
       const res = await POST(makeRequest() as never);
       expect(res.status).toBe(500);

@@ -17,19 +17,9 @@ vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    subscription: { findUnique: vi.fn() },
-  },
-}));
-
+const mockGetSubscriptionStatus = vi.fn();
 vi.mock("@/lib/billing", () => ({
-  TIER_LIMITS: {
-    free: { creditsPerMonth: 200, generationsPerHour: 5 },
-    starter: { creditsPerMonth: 1500, generationsPerHour: 25 },
-    pro: { creditsPerMonth: 5000, generationsPerHour: 50 },
-    studio: { creditsPerMonth: 15000, generationsPerHour: 100 },
-  },
+  getSubscriptionStatus: (...args: unknown[]) => mockGetSubscriptionStatus(...args),
 }));
 
 vi.mock("@/lib/error-logger", () => ({
@@ -37,7 +27,6 @@ vi.mock("@/lib/error-logger", () => ({
 }));
 
 import { resolveUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -51,20 +40,23 @@ const periodEnd = new Date("2026-02-01T00:00:00Z");
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(resolveUser).mockResolvedValue({
     userId: "user-1",
     isApiKey: false,
     isAdmin: false,
     error: null,
   });
-  vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
+  mockGetSubscriptionStatus.mockResolvedValue({
     tier: "pro",
     status: "active",
+    creditsPerMonth: 5000,
+    generationsPerHour: 50,
     currentPeriodStart: now,
     currentPeriodEnd: periodEnd,
     cancelAtPeriodEnd: false,
     trialEnd: null,
-  } as never);
+  });
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -86,7 +78,16 @@ describe("GET /api/billing/subscription", () => {
 
   describe("no subscription record", () => {
     it("returns free tier defaults when no subscription exists", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue(null as never);
+      mockGetSubscriptionStatus.mockResolvedValue({
+        tier: "free",
+        status: "active",
+        creditsPerMonth: 200,
+        generationsPerHour: 5,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        trialEnd: null,
+      });
 
       const res = await GET(makeRequest() as never);
       expect(res.status).toBe(200);
@@ -125,14 +126,16 @@ describe("GET /api/billing/subscription", () => {
     });
 
     it("reflects cancelAtPeriodEnd when subscription is scheduled for cancellation", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
+      mockGetSubscriptionStatus.mockResolvedValue({
         tier: "starter",
         status: "active",
+        creditsPerMonth: 1500,
+        generationsPerHour: 25,
         currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
         cancelAtPeriodEnd: true,
         trialEnd: null,
-      } as never);
+      });
 
       const res = await GET(makeRequest() as never);
       const data = await res.json();
@@ -141,8 +144,8 @@ describe("GET /api/billing/subscription", () => {
   });
 
   describe("error handling", () => {
-    it("returns 500 when prisma throws", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockRejectedValue(new Error("DB error"));
+    it("returns 500 when module throws", async () => {
+      mockGetSubscriptionStatus.mockRejectedValue(new Error("DB error"));
 
       const res = await GET(makeRequest() as never);
       expect(res.status).toBe(500);
