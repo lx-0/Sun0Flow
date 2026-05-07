@@ -6,6 +6,9 @@ import { logServerError } from "@/lib/error-logger";
 export { prepareSongDownload } from "./download";
 export type { DownloadFormat, DownloadSong, DownloadRequest, DownloadResult } from "./download";
 
+export { getTopGenres, getTopMoods } from "./taxonomy";
+export type { TagCount } from "./taxonomy";
+
 // ---------------------------------------------------------------------------
 // Filters — reusable Prisma WHERE-clause builders
 // ---------------------------------------------------------------------------
