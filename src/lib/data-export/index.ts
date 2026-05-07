@@ -1,4 +1,4 @@
 export type { ExportResult } from "./result";
-export type { ExportOutput } from "./data-export";
+export type { ExportOutput, GdprExportOutput } from "./data-export";
 
-export { exportUserData } from "./data-export";
+export { exportUserData, exportGdprZip } from "./data-export";

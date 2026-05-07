@@ -1,3 +1,4 @@
+import JSZip from "jszip";
 import { prisma } from "@/lib/prisma";
 import { type ExportResult, success, Err } from "./result";
 
@@ -9,6 +10,13 @@ export interface ExportOutput {
   content: string;
   contentType: string;
   filename: string;
+}
+
+export interface GdprExportOutput {
+  zipBuffer: Buffer;
+  filename: string;
+  songCount: number;
+  playlistCount: number;
 }
 
 type ExportFormat = "json" | "csv";
@@ -230,4 +238,218 @@ export async function exportUserData(
       `sunoflow-export-${songs.length}songs-${date}.json`,
     ),
   );
+}
+
+// ---------------------------------------------------------------------------
+// GDPR full-archive ZIP export
+// ---------------------------------------------------------------------------
+
+function formatGdprSongs(songs: SongWithTags[]) {
+  return songs.map((s) => ({
+    id: s.id,
+    title: s.title,
+    prompt: s.prompt,
+    style: s.tags,
+    lyrics: s.lyrics,
+    lyricsEdited: s.lyricsEdited,
+    duration: s.duration,
+    rating: s.rating,
+    ratingNote: s.ratingNote,
+    isFavorite: s.isFavorite,
+    isInstrumental: s.isInstrumental,
+    isPublic: s.isPublic,
+    generationStatus: s.generationStatus,
+    sunoModel: s.sunoModel,
+    source: s.source,
+    tags: s.songTags.map((st) => st.tag.name),
+    audioUrl: s.audioUrl,
+    imageUrl: s.imageUrl,
+    playCount: s.playCount,
+    downloadCount: s.downloadCount,
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+  }));
+}
+
+function formatGdprPlaylists(playlists: GdprPlaylistWithSongs[]) {
+  return playlists.map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    isPublic: p.isPublic,
+    songs: p.songs.map((ps) => ({
+      title: ps.song.title,
+      audioUrl: ps.song.audioUrl,
+      position: ps.position,
+    })),
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+  }));
+}
+
+type GdprPlaylistWithSongs = Awaited<ReturnType<typeof fetchGdprPlaylists>>[number];
+
+async function fetchGdprPlaylists(userId: string) {
+  return prisma.playlist.findMany({
+    where: { userId },
+    include: {
+      songs: {
+        include: { song: { select: { id: true, title: true, audioUrl: true } } },
+        orderBy: { position: "asc" },
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+export async function exportGdprZip(
+  userId: string,
+): Promise<ExportResult<GdprExportOutput>> {
+  const [user, songs, playlists, generationAttempts, reactions, subscription, creditUsages] =
+    await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          username: true,
+          bio: true,
+          avatarUrl: true,
+          bannerUrl: true,
+          defaultStyle: true,
+          preferredGenres: true,
+          onboardingCompleted: true,
+          emailWelcome: true,
+          emailGenerationComplete: true,
+          emailDigestFrequency: true,
+          quietHoursEnabled: true,
+          quietHoursStart: true,
+          quietHoursEnd: true,
+          pushGenerationComplete: true,
+          pushNewFollower: true,
+          pushSongComment: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      fetchSongs(userId),
+      fetchGdprPlaylists(userId),
+      prisma.generationAttempt.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.songReaction.findMany({
+        where: { userId },
+        include: { song: { select: { id: true, title: true } } },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.subscription.findUnique({ where: { userId } }),
+      prisma.creditUsage.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+  const zip = new JSZip();
+  const exportedAt = new Date().toISOString();
+
+  zip.file("profile.json", JSON.stringify({ exportedAt, profile: user }, null, 2));
+
+  const formattedSongs = formatGdprSongs(songs);
+  zip.file(
+    "songs.json",
+    JSON.stringify({ exportedAt, count: formattedSongs.length, songs: formattedSongs }, null, 2),
+  );
+
+  const formattedPlaylists = formatGdprPlaylists(playlists);
+  zip.file(
+    "playlists.json",
+    JSON.stringify(
+      { exportedAt, count: formattedPlaylists.length, playlists: formattedPlaylists },
+      null,
+      2,
+    ),
+  );
+
+  const formattedGenerations = generationAttempts.map((g) => ({
+    id: g.id,
+    prompt: g.prompt,
+    params: g.params,
+    status: g.status,
+    songId: g.songId,
+    errorMessage: g.errorMessage,
+    createdAt: g.createdAt.toISOString(),
+  }));
+  zip.file(
+    "generation-history.json",
+    JSON.stringify(
+      { exportedAt, count: formattedGenerations.length, generations: formattedGenerations },
+      null,
+      2,
+    ),
+  );
+
+  const formattedReactions = reactions.map((r) => ({
+    id: r.id,
+    songId: r.songId,
+    songTitle: r.song.title,
+    emoji: r.emoji,
+    timestamp: r.timestamp,
+    createdAt: r.createdAt.toISOString(),
+  }));
+  zip.file(
+    "reactions.json",
+    JSON.stringify(
+      { exportedAt, count: formattedReactions.length, reactions: formattedReactions },
+      null,
+      2,
+    ),
+  );
+
+  const subscriptionData = subscription
+    ? {
+        tier: subscription.tier,
+        status: subscription.status,
+        currentPeriodStart: subscription.currentPeriodStart.toISOString(),
+        currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
+        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+        canceledAt: subscription.canceledAt?.toISOString() ?? null,
+        trialStart: subscription.trialStart?.toISOString() ?? null,
+        trialEnd: subscription.trialEnd?.toISOString() ?? null,
+        createdAt: subscription.createdAt.toISOString(),
+        updatedAt: subscription.updatedAt.toISOString(),
+        creditUsage: creditUsages.map((c) => ({
+          action: c.action,
+          creditCost: c.creditCost,
+          description: c.description,
+          songId: c.songId,
+          createdAt: c.createdAt.toISOString(),
+        })),
+      }
+    : null;
+  zip.file(
+    "subscription.json",
+    JSON.stringify({ exportedAt, subscription: subscriptionData }, null, 2),
+  );
+
+  const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+  const date = today();
+
+  console.info(
+    JSON.stringify({
+      event: "gdpr_export",
+      userId,
+      exportedAt,
+      songCount: songs.length,
+      playlistCount: playlists.length,
+    }),
+  );
+
+  return success({
+    zipBuffer,
+    filename: `sunoflow-gdpr-export-${date}.zip`,
+    songCount: songs.length,
+    playlistCount: playlists.length,
+  });
 }
