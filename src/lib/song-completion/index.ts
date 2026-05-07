@@ -1,6 +1,7 @@
 import { recordActivity } from "@/lib/activity";
 import { invalidateByPrefix, audioCache, imageCache } from "@/lib/cache";
 import { broadcast } from "@/lib/event-bus";
+import { markDoneBySongId, markFailedBySongId } from "@/lib/generation-queue";
 import { logger } from "@/lib/logger";
 import { notifyFollowersOfNewSong, notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -232,10 +233,7 @@ async function createAlternateSongs(
 }
 
 async function markQueueItemDone(songId: string): Promise<void> {
-  await prisma.generationQueueItem.updateMany({
-    where: { songId, status: "processing" },
-    data: { status: "done" },
-  });
+  await markDoneBySongId(songId);
 }
 
 async function markSongFailed(
@@ -250,10 +248,7 @@ async function markSongFailed(
       errorMessage,
     },
   });
-  await prisma.generationQueueItem.updateMany({
-    where: { songId: song.id, status: "processing" },
-    data: { status: "failed", errorMessage },
-  });
+  await markFailedBySongId(song.id, errorMessage);
 }
 
 // ── Side-effect helpers ─────────────────────────────────────────────

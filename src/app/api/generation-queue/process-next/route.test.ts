@@ -236,12 +236,14 @@ describe("POST /api/generation-queue/process-next", () => {
       })
     );
 
-    expect(prisma.generationQueueItem.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "item-1" },
-        data: expect.objectContaining({ songId: "song-1", status: "processing" }),
-      })
-    );
+    expect(prisma.generationQueueItem.update).toHaveBeenCalledWith({
+      where: { id: "item-1" },
+      data: { status: "processing" },
+    });
+    expect(prisma.generationQueueItem.update).toHaveBeenCalledWith({
+      where: { id: "item-1" },
+      data: { songId: "song-1" },
+    });
   });
 
   it("records credit usage after successful generation", async () => {

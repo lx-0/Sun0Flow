@@ -15,10 +15,10 @@ import { CircuitOpenError, onCircuitClose } from "@/lib/circuit-breaker";
 import { recordGenerationStart, recordGenerationEnd } from "@/lib/metrics";
 import { invalidateByPrefix } from "@/lib/cache";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
-import { drainGenerationQueue } from "@/lib/queue-processor";
+import { drainQueue, enqueueFromSpec } from "@/lib/generation-queue";
 
 onCircuitClose(() => {
-  drainGenerationQueue().catch((err) => {
+  drainQueue().catch((err) => {
     logger.error({ err }, "generation: queue drain failed after circuit close");
   });
 });
@@ -322,24 +322,7 @@ function afterCreation(spec: GenerationSpec, song: Song): void {
 async function enqueueGeneration(spec: GenerationSpec): Promise<GenerationOutcome> {
   logger.warn({ userId: spec.userId }, "generation: circuit open — queuing request");
 
-  const maxPos = await prisma.generationQueueItem.aggregate({
-    _max: { position: true },
-    where: { userId: spec.userId, status: "pending" },
-  });
-  const position = (maxPos._max.position ?? 0) + 1;
-
-  await prisma.generationQueueItem.create({
-    data: {
-      userId: spec.userId,
-      prompt: spec.songParams.prompt,
-      title: spec.songParams.title ?? null,
-      tags: spec.songParams.tags ?? null,
-      makeInstrumental: spec.songParams.isInstrumental,
-      personaId: spec.songParams.personaId ?? null,
-      status: "pending",
-      position,
-    },
-  });
+  await enqueueFromSpec(spec.userId, spec.songParams);
 
   return {
     status: "queued",
