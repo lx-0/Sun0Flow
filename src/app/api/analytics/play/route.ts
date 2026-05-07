@@ -1,62 +1,18 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { internalError } from "@/lib/api-error";
-import { logServerError } from "@/lib/error-logger";
+import { authRoute } from "@/lib/route-handler";
+import { recordPlay } from "@/lib/analytics-data";
 
-export async function POST(request: Request) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
+export const POST = authRoute(async (request, { auth }) => {
+  const { songId, durationSec } = await request.json();
+  const result = await recordPlay(auth.userId, songId, durationSec);
 
-    const body = await request.json();
-    const { songId, durationSec } = body;
-
-    if (!songId || typeof songId !== "string") {
-      return NextResponse.json(
-        { error: "songId is required", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    // Verify the song exists and is public (or belongs to user for private plays)
-    const song = await prisma.song.findFirst({
-      where: {
-        id: songId,
-        OR: [{ userId }, { isPublic: true }],
-      },
-      select: { id: true, userId: true },
-    });
-
-    if (!song) {
-      return NextResponse.json(
-        { error: "Song not found", code: "NOT_FOUND" },
-        { status: 404 }
-      );
-    }
-
-    // Don't count the owner's own plays toward public analytics
-    if (song.userId === userId) {
-      return NextResponse.json({ ok: true, skipped: true }, { status: 200 });
-    }
-
-    const [event] = await prisma.$transaction([
-      prisma.playEvent.create({
-        data: {
-          songId,
-          listenerId: userId,
-          durationSec: typeof durationSec === "number" ? durationSec : null,
-        },
-      }),
-      prisma.song.update({
-        where: { id: songId },
-        data: { playCount: { increment: 1 } },
-      }),
-    ]);
-
-    return NextResponse.json({ ok: true, eventId: event.id }, { status: 201 });
-  } catch (error) {
-    logServerError("POST /api/analytics/play", error, { route: "/api/analytics/play" });
-    return internalError();
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error, code: result.code },
+      { status: result.status },
+    );
   }
-}
+
+  const status = result.data.eventId ? 201 : 200;
+  return NextResponse.json(result.data, { status });
+});
