@@ -1,6 +1,6 @@
 import type { GenerationQueueItem } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { logger } from "@/lib/logger";
+
 
 export const MAX_QUEUE_SIZE = 10;
 

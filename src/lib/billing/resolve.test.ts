@@ -25,7 +25,6 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import {
-  tierFromPriceId,
   stripeStatusToPrisma,
   resolveSubscriptionDetails,
   resolveInvoiceContext,

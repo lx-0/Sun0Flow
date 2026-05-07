@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { parseTags, collectSongTokens, tagOverlapScore } from "@/lib/tags";
+import { collectSongTokens, tagOverlapScore } from "@/lib/tags";
 
 const MIN_FAVORITES_FOR_COLLABORATIVE = 10;
 
