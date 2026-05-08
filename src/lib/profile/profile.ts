@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { stripHtml } from "@/lib/sanitize";
-import { success, Err, type ProfileResult } from "./result";
+import { type Result, success, Err } from "@/lib/result";
 
 const PROFILE_SELECT = {
   id: true,
@@ -49,7 +49,7 @@ export interface ProfileUpdateInput {
 export async function updateProfile(
   userId: string,
   input: ProfileUpdateInput,
-): Promise<ProfileResult<typeof UPDATE_SELECT extends infer S ? { [K in keyof S]: unknown } : never>> {
+): Promise<Result<typeof UPDATE_SELECT extends infer S ? { [K in keyof S]: unknown } : never>> {
   const data: Record<string, unknown> = {};
 
   if (input.name !== undefined) {
@@ -152,7 +152,7 @@ export async function deleteAccount(
 function validateUrl(
   value: string | null | undefined,
   label: string,
-): ProfileResult<never> | null {
+): Result<never> | null {
   if (value !== null && value !== undefined && typeof value !== "string") {
     return Err.validation(`${label} must be a string`);
   }
@@ -172,7 +172,7 @@ function validateUrl(
 async function validateUsername(
   username: string | null | undefined,
   userId: string,
-): Promise<ProfileResult<{ username: string | null }>> {
+): Promise<Result<{ username: string | null }>> {
   if (username !== null && username !== undefined && typeof username !== "string") {
     return Err.validation("Username must be a string");
   }

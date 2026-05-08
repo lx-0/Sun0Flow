@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { success, Err } from "./result";
+import { success, Err } from "@/lib/result";
 
 export const VALID_STYLES = [
   "pop", "rock", "electronic", "hip-hop", "jazz", "classical",

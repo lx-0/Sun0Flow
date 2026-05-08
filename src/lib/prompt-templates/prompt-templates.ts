@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { success, Err } from "./result";
+import { success, Err } from "@/lib/result";
 
 const MAX_USER_TEMPLATES = 20;
 

@@ -1,5 +1,3 @@
-export type { AnalyticsResult } from "./result";
-
 export type { UserOverview } from "./overview";
 export { getUserOverview } from "./overview";
 

@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { prisma } from "@/lib/prisma";
-import { type ExportResult, success, Err } from "./result";
+import { type Result, success, Err } from "@/lib/result";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -181,7 +181,7 @@ export async function exportUserData(
   userId: string,
   format: string,
   type: string,
-): Promise<ExportResult<ExportOutput>> {
+): Promise<Result<ExportOutput>> {
   if (!VALID_FORMATS.includes(format)) {
     return Err.validation("Invalid format. Use 'json' or 'csv'.");
   }
@@ -304,7 +304,7 @@ async function fetchGdprPlaylists(userId: string) {
 
 export async function exportGdprZip(
   userId: string,
-): Promise<ExportResult<GdprExportOutput>> {
+): Promise<Result<GdprExportOutput>> {
   const [user, songs, playlists, generationAttempts, reactions, subscription, creditUsages] =
     await Promise.all([
       prisma.user.findUnique({

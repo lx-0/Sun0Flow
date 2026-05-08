@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { type AnalyticsResult, success, Err } from "./result";
+import { type Result, success, Err } from "@/lib/result";
 
 export interface PlayResult {
   ok: true;
@@ -11,7 +11,7 @@ export async function recordPlay(
   userId: string,
   songId: string,
   durationSec: unknown,
-): Promise<AnalyticsResult<PlayResult>> {
+): Promise<Result<PlayResult>> {
   if (!songId || typeof songId !== "string") {
     return Err.validation("songId is required");
   }
@@ -49,7 +49,7 @@ export async function recordPlay(
 
 export async function recordView(
   songId: string,
-): Promise<AnalyticsResult<{ ok: true }>> {
+): Promise<Result<{ ok: true }>> {
   if (!songId || typeof songId !== "string") {
     return Err.validation("songId is required");
   }

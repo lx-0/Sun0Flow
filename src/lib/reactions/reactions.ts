@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { success, Err, type ReactionResult } from "./result";
+import { type Result, success, Err } from "@/lib/result";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ function isSingleEmoji(str: string): boolean {
   );
 }
 
-function validateEmoji(raw: unknown): ReactionResult<string> {
+function validateEmoji(raw: unknown): Result<string> {
   if (typeof raw !== "string" || !isSingleEmoji(raw)) {
     return Err.validation("emoji must be a single emoji character");
   }
@@ -68,7 +68,7 @@ function validateEmoji(raw: unknown): ReactionResult<string> {
 function validateTimestamp(
   raw: unknown,
   songDuration: number | null | undefined,
-): ReactionResult<number> {
+): Result<number> {
   if (typeof raw !== "number" || isNaN(raw) || raw < 0) {
     return Err.validation("timestamp must be a non-negative number");
   }
@@ -99,7 +99,7 @@ export async function listReactions(
   songId: string,
   userId: string | null,
   after: string | null,
-): Promise<ReactionResult<ReactionPage>> {
+): Promise<Result<ReactionPage>> {
   const song = await prisma.song.findUnique({
     where: { id: songId },
     select: { id: true, userId: true, isPublic: true, isHidden: true },
@@ -134,7 +134,7 @@ export async function createReaction(
   songId: string,
   userId: string,
   input: CreateReactionInput,
-): Promise<ReactionResult<ReactionEntry>> {
+): Promise<Result<ReactionEntry>> {
   const song = await prisma.song.findUnique({
     where: { id: songId },
     select: { id: true, duration: true, isHidden: true },

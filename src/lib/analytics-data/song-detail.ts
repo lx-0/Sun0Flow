@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { fillDailySeries } from "./dates";
-import { type AnalyticsResult, success, Err } from "./result";
+import { type Result, success, Err } from "@/lib/result";
 
 export interface SongAnalytics {
   songId: string;
@@ -18,7 +18,7 @@ export interface SongAnalytics {
 export async function getSongAnalytics(
   userId: string,
   songId: string,
-): Promise<AnalyticsResult<SongAnalytics>> {
+): Promise<Result<SongAnalytics>> {
   const song = await prisma.song.findFirst({
     where: { id: songId, userId },
     select: {

@@ -1,4 +1,3 @@
-export type { ProfileResult } from "./result";
 export type { ProfileUpdateInput, DeleteAccountInput } from "./profile";
 export type { PreferencesUpdateInput } from "./preferences";
 

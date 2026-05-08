@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
-import { success, Err, type SearchResult } from "./result";
+import { type Result, success, Err } from "@/lib/result";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -90,7 +90,7 @@ function playlistTextMatch(
 export async function searchUserContent(
   userId: string,
   query: string,
-): Promise<SearchResult<SearchOutput>> {
+): Promise<Result<SearchOutput>> {
   const q = query.trim();
 
   if (!q) {
