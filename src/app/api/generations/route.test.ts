@@ -136,7 +136,11 @@ describe("GET /api/generations", () => {
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          prompt: { contains: "pop", mode: "insensitive" },
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              prompt: { contains: "pop", mode: "insensitive" },
+            }),
+          ]),
         }),
       })
     );
@@ -179,7 +183,11 @@ describe("GET /api/generations", () => {
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          createdAt: expect.objectContaining({ lt: new Date(cursor) }),
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              createdAt: expect.objectContaining({ lt: new Date(cursor) }),
+            }),
+          ]),
         }),
       })
     );
@@ -209,9 +217,14 @@ describe("GET /api/generations", () => {
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          createdAt: expect.objectContaining({
-            gte: new Date("2026-03-01"),
-          }),
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              createdAt: expect.objectContaining({
+                gte: new Date("2026-03-01"),
+                lte: expect.any(Date),
+              }),
+            }),
+          ]),
         }),
       })
     );

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { adminRoute } from "@/lib/route-handler";
 import { listReports } from "@/lib/moderation";
 
-export const GET = adminRoute(async (request, _ctx) => {
+export const GET = adminRoute(async (request) => {
   const params = request.nextUrl.searchParams;
   const status = params.get("status") || "pending";
   const page = Math.max(1, parseInt(params.get("page") || "1", 10));

@@ -549,7 +549,7 @@ describe("POST /api/billing/webhook", () => {
 
   // ── Unhandled events ────────────────────────────────────────────────────────
 
-  it("returns 200 for unhandled event types without processing", async () => {
+  it("returns 200 for unhandled event types and records the event", async () => {
     mockConstructEvent.mockReturnValue(
       makeStripeEvent("customer.created", { id: "cus_new" })
     );
@@ -558,7 +558,14 @@ describe("POST /api/billing/webhook", () => {
     expect(res.status).toBe(200);
     expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
-    expect(mockPaymentEventCreate).not.toHaveBeenCalled();
+    expect(mockPaymentEventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "customer.created",
+          status: "processed",
+        }),
+      })
+    );
   });
 
   // ── Error handling ──────────────────────────────────────────────────────────

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { adminRoute } from "@/lib/route-handler";
-import { badRequest } from "@/lib/api-error";
 import { bulkResolveReports, VALID_ACTIONS } from "@/lib/moderation";
 
 const bulkActionBody = z.object({
