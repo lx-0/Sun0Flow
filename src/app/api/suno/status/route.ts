@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { getRemainingCredits } from "@/lib/sunoapi/status";
-import { SunoApiError } from "@/lib/sunoapi/http";
+import { SunoApiError } from "@/lib/sunoapi/errors";
 
 export async function GET(request: Request) {
   const { userId, error: authError } = await resolveUser(request);

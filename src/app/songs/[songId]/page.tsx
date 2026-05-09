@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PublicSongView } from "@/app/s/[slug]/PublicSongView";
 import { cached, cacheKey, CacheTTL } from "@/lib/cache";
-import { getVariantFamily } from "@/lib/variant-family";
+import { getVariantFamily } from "@/lib/songs";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sunoflow.app";
 

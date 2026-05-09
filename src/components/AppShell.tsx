@@ -225,14 +225,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Load collapsed preference from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem("sidebar-collapsed");
-    if (stored === "true") setSidebarCollapsed(true);
+    try {
+      const stored = localStorage.getItem("sidebar-collapsed");
+      if (stored === "true") setSidebarCollapsed(true);
+    } catch {
+      // localStorage unavailable (iOS PWA restrictions, private browsing)
+    }
   }, []);
 
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
-      localStorage.setItem("sidebar-collapsed", String(next));
+      try {
+        localStorage.setItem("sidebar-collapsed", String(next));
+      } catch {
+        // localStorage unavailable
+      }
       return next;
     });
   }, []);

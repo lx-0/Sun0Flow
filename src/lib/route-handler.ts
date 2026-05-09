@@ -1,0 +1,179 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { resolveUser, requireAdmin } from "@/lib/auth";
+import { logServerError } from "@/lib/error-logger";
+import { badRequest, internalError } from "@/lib/api-error";
+import type { Result } from "@/lib/result";
+
+export type AuthContext = {
+  userId: string;
+  isApiKey: boolean;
+  isAdmin: boolean;
+};
+
+export type AdminContext = {
+  adminId: string;
+};
+
+type RouteOptions = {
+  route?: string;
+};
+
+type SegmentData<P> = { params: Promise<P> };
+
+async function parseBody<B>(
+  request: NextRequest,
+  schema: z.ZodType<B>
+): Promise<{ data: B; error?: never } | { data?: never; error: NextResponse }> {
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return { error: badRequest("Invalid JSON body") };
+  }
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => {
+      const path = i.path.join(".");
+      return path ? `${path}: ${i.message}` : i.message;
+    });
+    return { error: badRequest(messages.join("; ")) };
+  }
+  return { data: result.data };
+}
+
+/**
+ * Wrap an authenticated route handler. Resolves auth, catches unhandled errors,
+ * and logs them with request context.
+ *
+ * Usage (no dynamic params):
+ *   export const GET = authRoute(async (request, { auth }) => { ... });
+ *
+ * Usage (with dynamic params):
+ *   export const GET = authRoute<{ id: string }>(async (request, { auth, params }) => { ... });
+ *
+ * Usage (with body validation):
+ *   export const POST = authRoute(async (request, { auth, body }) => {
+ *     body.name // typed string
+ *   }, { body: z.object({ name: z.string().min(1) }) });
+ */
+export function authRoute<
+  P extends Record<string, string> = Record<string, never>,
+  B = undefined,
+>(
+  handler: (
+    request: NextRequest,
+    ctx: { auth: AuthContext; params: P; body: B }
+  ) => Promise<NextResponse>,
+  options?: RouteOptions & { body?: z.ZodType<B> }
+) {
+  return async (
+    request: NextRequest,
+    segmentData: SegmentData<P>
+  ): Promise<NextResponse> => {
+    const result = await resolveUser(request);
+    if (result.error) return result.error;
+
+    try {
+      const params = segmentData?.params
+        ? await segmentData.params
+        : ({} as P);
+
+      let body: B = undefined as B;
+      if (options?.body) {
+        const parsed = await parseBody(request, options.body);
+        if (parsed.error) return parsed.error;
+        body = parsed.data;
+      }
+
+      return await handler(request, {
+        auth: {
+          userId: result.userId,
+          isApiKey: result.isApiKey,
+          isAdmin: result.isAdmin,
+        },
+        params,
+        body,
+      });
+    } catch (error) {
+      logServerError("route-handler", error, {
+        userId: result.userId,
+        route: options?.route ?? new URL(request.url).pathname,
+      });
+      return internalError();
+    }
+  };
+}
+
+/**
+ * Wrap an admin route handler. Verifies admin access, catches unhandled errors.
+ *
+ * Usage:
+ *   export const GET = adminRoute(async (request, { admin }) => { ... });
+ *   export const PATCH = adminRoute<{ id: string }>(async (request, { admin, params }) => { ... });
+ *
+ * Usage (with body validation):
+ *   export const POST = adminRoute(async (request, { admin, body }) => {
+ *     body.title // typed string
+ *   }, { body: z.object({ title: z.string() }) });
+ */
+export function adminRoute<
+  P extends Record<string, string> = Record<string, never>,
+  B = undefined,
+>(
+  handler: (
+    request: NextRequest,
+    ctx: { admin: AdminContext; params: P; body: B }
+  ) => Promise<NextResponse>,
+  options?: RouteOptions & { body?: z.ZodType<B> }
+) {
+  return async (
+    request: NextRequest,
+    segmentData: SegmentData<P>
+  ): Promise<NextResponse> => {
+    const { error, user } = await requireAdmin();
+    if (error) return error;
+
+    try {
+      const params = segmentData?.params
+        ? await segmentData.params
+        : ({} as P);
+
+      let body: B = undefined as B;
+      if (options?.body) {
+        const parsed = await parseBody(request, options.body);
+        if (parsed.error) return parsed.error;
+        body = parsed.data;
+      }
+
+      return await handler(request, {
+        admin: { adminId: user!.id },
+        params,
+        body,
+      });
+    } catch (error) {
+      logServerError("admin-route-handler", error, {
+        userId: user!.id,
+        route: options?.route ?? new URL(request.url).pathname,
+      });
+      return internalError();
+    }
+  };
+}
+
+/**
+ * Convert a Result<T> into a NextResponse. Centralises the
+ * ok / error → JSON mapping that was previously duplicated in 35+ routes.
+ */
+export function resultResponse<T>(
+  result: Result<T>,
+  options?: { status?: number; headers?: HeadersInit },
+): NextResponse {
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error, code: result.code },
+      { status: result.status },
+    );
+  }
+  return NextResponse.json(result.data, options);
+}

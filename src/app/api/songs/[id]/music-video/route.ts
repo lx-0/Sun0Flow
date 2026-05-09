@@ -1,24 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createMusicVideo, SunoApiError } from "@/lib/sunoapi";
-import { acquireRateLimitSlot } from "@/lib/rate-limit";
+import { createMusicVideo } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-
-function userFriendlyError(error: unknown): string {
-  if (error instanceof SunoApiError) {
-    if (error.status === 402) return "Insufficient credits. Please check your balance or top up to continue.";
-    if (error.status === 409) return "A conflicting request is already in progress. Please wait and try again.";
-    if (error.status === 422) return `Validation error: ${error.message}`;
-    if (error.status === 429) return "The music generation service is busy. Please try again in a few minutes.";
-    if (error.status === 451) return "This request was blocked for compliance reasons. Please modify your prompt and try again.";
-    if (error.status === 400) return "Invalid parameters. Please adjust your settings and try again.";
-    if (error.status === 401 || error.status === 403) return "API authentication failed. Please check your API key in settings.";
-    if (error.status >= 500) return "The music generation service is temporarily unavailable. Please try again later.";
-  }
-  return "Music video generation failed. Please try again.";
-}
+import { executeTransform, respondToTransform } from "@/lib/generation";
 
 /** POST /api/songs/[id]/music-video — generate an MP4 music video */
 export async function POST(
@@ -40,47 +26,29 @@ export async function POST(
       return NextResponse.json({ error: "Song must be fully generated before creating a music video.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
-    if (!acquired) {
-      const retryAfterSec = Math.max(1, Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000));
-      return NextResponse.json(
-        { error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, code: "RATE_LIMIT", resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
-      );
-    }
-
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    let taskId: string | null = null;
-    let status: "pending" | "ready" = "pending";
-
-    if (!hasApiKey) {
-      taskId = `mock-video-${songId}`;
-      status = "ready";
-    } else {
-      if (!song.sunoJobId || !song.sunoAudioId) {
-        return NextResponse.json({ error: "Song is missing Suno identifiers for music video generation.", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-
-      try {
-        const result = await createMusicVideo(
-          { taskId: song.sunoJobId, audioId: song.sunoAudioId },
-          userApiKey
-        );
-        taskId = result.taskId;
-      } catch (apiError) {
-        logServerError("music-video-api", apiError, { userId, route: `/api/songs/${songId}/music-video` });
-        return NextResponse.json(
-          { error: userFriendlyError(apiError), rateLimit: rateLimitStatus },
-          { status: 502 }
-        );
-      }
+    if (hasApiKey && (!song.sunoJobId || !song.sunoAudioId)) {
+      return NextResponse.json({ error: "Song is missing Suno identifiers for music video generation.", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
-    return NextResponse.json(
-      { taskId, status, songId, format: "mp4", rateLimit: rateLimitStatus },
-      { status: 200 }
+    const outcome = await executeTransform({
+      userId,
+      action: "generate",
+      apiCall: () => createMusicVideo(
+        { taskId: song.sunoJobId!, audioId: song.sunoAudioId! },
+        userApiKey
+      ),
+      hasApiKey,
+      mockTaskId: `mock-video-${songId}`,
+      fallbackErrorMessage: "Music video generation failed. Please try again.",
+    });
+
+    return respondToTransform(
+      outcome,
+      { label: "music-video-api", userId, route: `/api/songs/${songId}/music-video` },
+      { songId, format: "mp4" },
     );
   } catch (error) {
     logServerError("music-video-route", error, { route: "/api/songs/music-video" });

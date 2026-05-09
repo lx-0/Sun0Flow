@@ -252,7 +252,10 @@ self.addEventListener("fetch", (event) => {
               }
               return networkResponse;
             })
-            .catch(() => cachedResponse);
+            .catch(() => cachedResponse ?? new Response('{"error":"offline"}', {
+              status: 503,
+              headers: { "Content-Type": "application/json" },
+            }));
 
           return cachedResponse || fetchPromise;
         })

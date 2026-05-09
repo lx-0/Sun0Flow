@@ -1,0 +1,522 @@
+import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
+import type { Song } from "@prisma/client";
+import { acquireRateLimitSlot, releaseRateLimitSlot, type RateLimitStatus } from "@/lib/rate-limit";
+
+export { pollToCompletion } from "./completion";
+export type { CompletionUpdate, CompletionTarget } from "./completion";
+export { respondToGeneration, respondToTransform } from "./respond";
+import { rateLimited, insufficientCredits } from "@/lib/api-error";
+import { checkCredits, deductCredits } from "@/lib/credits";
+import { generateSong, SunoApiError } from "@/lib/sunoapi";
+import { ErrorCode } from "@/lib/api-error";
+import { logger } from "@/lib/logger";
+import { prisma } from "@/lib/prisma";
+import { SUNOAPI_KEY } from "@/lib/env";
+import { CircuitOpenError, onCircuitClose } from "@/lib/circuit-breaker";
+import { recordGenerationStart, recordGenerationEnd } from "@/lib/metrics";
+import { invalidateByPrefix } from "@/lib/cache";
+import { generateCoverArtVariants } from "@/lib/cover-art-generator";
+import { enqueueFromSpec, markDone, markFailed } from "@/lib/generation-queue";
+
+onCircuitClose(() => {
+  drainQueuedItems().catch((err) => {
+    logger.error({ err }, "generation: queue drain failed after circuit close");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+export interface GenerationError {
+  message: string;
+  code: string;
+  details?: Record<string, unknown>;
+}
+
+export function userFriendlyError(error: unknown, fallbackMessage?: string): GenerationError {
+  if (error instanceof SunoApiError) {
+    if (error.status === 402)
+      return { message: "Insufficient credits. Please check your balance or top up to continue.", code: ErrorCode.INSUFFICIENT_CREDITS };
+    if (error.status === 409)
+      return { message: "A conflicting request is already in progress. Please wait and try again.", code: ErrorCode.CONFLICT };
+    if (error.status === 422)
+      return { message: `Validation error: ${error.message}`, code: ErrorCode.VALIDATION_ERROR, details: error.details };
+    if (error.status === 429)
+      return { message: "The music generation service is busy. Please try again in a few minutes.", code: ErrorCode.SUNO_RATE_LIMIT };
+    if (error.status === 451)
+      return { message: "This request was blocked for compliance reasons. Please modify your prompt and try again.", code: ErrorCode.COMPLIANCE_BLOCK };
+    if (error.status === 400)
+      return { message: "Invalid parameters. Please adjust your settings and try again.", code: ErrorCode.VALIDATION_ERROR };
+    if (error.status === 401 || error.status === 403)
+      return { message: "API authentication failed. Please check your API key in settings.", code: ErrorCode.SUNO_AUTH_ERROR };
+    if (error.status >= 500)
+      return { message: "The music generation service is temporarily unavailable. Please try again later.", code: ErrorCode.SERVICE_UNAVAILABLE };
+    return { message: `Operation failed: ${error.message}`, code: ErrorCode.SUNO_API_ERROR };
+  }
+  if (error instanceof TypeError && (error.message.includes("fetch") || error.message.includes("network"))) {
+    return { message: "Could not reach the music generation service. Please check your connection and try again.", code: ErrorCode.SERVICE_UNAVAILABLE };
+  }
+  return { message: fallbackMessage ?? "Operation failed. Please try again.", code: ErrorCode.INTERNAL_ERROR };
+}
+
+// ---------------------------------------------------------------------------
+// Generation
+// ---------------------------------------------------------------------------
+
+export interface SongParams {
+  title: string | null;
+  prompt: string;
+  tags: string | null;
+  isInstrumental: boolean;
+  parentSongId?: string | null;
+  batchId?: string;
+  personaId?: string | null;
+}
+
+export interface MockData {
+  title?: string | null;
+  tags?: string | null;
+  audioUrl?: string | null;
+  imageUrl?: string | null;
+  duration?: number | null;
+  lyrics?: string | null;
+  model?: string | null;
+}
+
+type SongRecordInput =
+  | { status: "ready"; mock: MockData }
+  | { status: "pending"; sunoJobId: string }
+  | { status: "failed"; errorMessage: string };
+
+function createSongRecord(
+  userId: string,
+  params: SongParams,
+  input: SongRecordInput
+): Promise<Song> {
+  const base = {
+    userId,
+    title: params.title || null,
+    prompt: params.prompt,
+    tags: params.tags || null,
+    isInstrumental: params.isInstrumental,
+    parentSongId: params.parentSongId ?? null,
+    batchId: params.batchId,
+  };
+
+  switch (input.status) {
+    case "ready":
+      return prisma.song.create({
+        data: {
+          ...base,
+          title: input.mock.title || base.title,
+          tags: input.mock.tags || base.tags,
+          audioUrl: input.mock.audioUrl || null,
+          imageUrl: input.mock.imageUrl || null,
+          duration: input.mock.duration ?? null,
+          lyrics: input.mock.lyrics || null,
+          sunoModel: input.mock.model || null,
+          generationStatus: "ready",
+        },
+      });
+    case "pending":
+      return prisma.song.create({
+        data: {
+          ...base,
+          sunoJobId: input.sunoJobId,
+          generationStatus: "pending",
+        },
+      });
+    case "failed":
+      return prisma.song.create({
+        data: {
+          ...base,
+          errorMessage: input.errorMessage,
+          generationStatus: "failed",
+        },
+      });
+  }
+}
+
+export type GuardPolicy =
+  | "standard"
+  | "free"
+  | "admin"
+  | "personal-key"
+  | "pre-authorized";
+
+function resolveGuards(policy: GuardPolicy) {
+  switch (policy) {
+    case "standard":       return { rateLimit: true,  creditCheck: true,  creditRecording: true };
+    case "free":           return { rateLimit: true,  creditCheck: false, creditRecording: false };
+    case "admin":          return { rateLimit: false, creditCheck: true,  creditRecording: true };
+    case "personal-key":   return { rateLimit: false, creditCheck: false, creditRecording: false };
+    case "pre-authorized": return { rateLimit: false, creditCheck: false, creditRecording: true };
+  }
+}
+
+export interface GenerationSpec {
+  userId: string;
+  action: string;
+  songParams: SongParams;
+  apiCall: () => Promise<{ taskId: string }>;
+  mockFallback: MockData;
+  hasApiKey: boolean;
+  description: string;
+  guards?: GuardPolicy;
+  coverArt?: boolean;
+}
+
+export type GenerationOutcome =
+  | { status: "denied"; response: Response }
+  | { status: "created"; song: Song; rateLimitStatus?: RateLimitStatus }
+  | { status: "queued"; message: string }
+  | { status: "failed"; song: Song; error: string; rawError: unknown; rateLimitStatus?: RateLimitStatus };
+
+type RateLimitResult =
+  | { limited: true; response: NextResponse }
+  | { limited: false; status: RateLimitStatus };
+
+async function enforceRateLimit(
+  userId: string,
+  action = "generate"
+): Promise<RateLimitResult> {
+  const { acquired, status } = await acquireRateLimitSlot(userId, action);
+  if (acquired) {
+    return { limited: false, status };
+  }
+
+  const retryAfterSec = Math.max(
+    1,
+    Math.ceil((new Date(status.resetAt).getTime() - Date.now()) / 1000)
+  );
+
+  logger.warn(
+    { userId, action, limit: status.limit, resetAt: status.resetAt },
+    "rate-limit: generation limit exceeded"
+  );
+  Sentry.addBreadcrumb({
+    category: "rate-limit",
+    message: "Generation rate limit exceeded",
+    level: "warning",
+    data: { userId, action, limit: status.limit, resetAt: status.resetAt },
+  });
+
+  return {
+    limited: true,
+    response: rateLimited(
+      `Rate limit exceeded. You can generate up to ${status.limit} songs per hour.`,
+      { resetAt: status.resetAt, rateLimit: status },
+      { "Retry-After": String(retryAfterSec) }
+    ),
+  };
+}
+
+async function checkCreditBalance(
+  userId: string,
+  action: string
+): Promise<{ denied: NextResponse } | { ok: true }> {
+  const result = await checkCredits(userId, action);
+  if (!result.ok) {
+    return {
+      denied: insufficientCredits(
+        `Insufficient credits. You need ${result.creditCost} credits but only have ${result.creditsRemaining} remaining.`
+      ),
+    };
+  }
+  return { ok: true };
+}
+
+interface CoreSpec {
+  userId: string;
+  action: string;
+  songParams: SongParams;
+  apiCall: () => Promise<{ taskId: string }>;
+  description: string;
+  creditRecording: boolean;
+  coverArt?: boolean;
+}
+
+type CoreOutcome =
+  | { status: "created"; song: Song }
+  | { status: "api_error"; rawError: unknown; song: Song; errorMessage: string }
+  | { status: "circuit_open" };
+
+async function executeCore(core: CoreSpec): Promise<CoreOutcome> {
+  recordGenerationStart();
+  const startMs = Date.now();
+
+  try {
+    const result = await core.apiCall();
+    recordGenerationEnd(Date.now() - startMs, true);
+
+    const song = await createSongRecord(core.userId, core.songParams, {
+      status: "pending",
+      sunoJobId: result.taskId,
+    });
+
+    if (core.creditRecording) {
+      await deductCredits(core.userId, core.action, {
+        songId: song.id,
+        description: core.description,
+      });
+    }
+
+    afterCreation(
+      { userId: core.userId, songParams: core.songParams, coverArt: core.coverArt },
+      song
+    );
+    return { status: "created", song };
+  } catch (apiError) {
+    if (apiError instanceof CircuitOpenError) {
+      recordGenerationEnd(0, false);
+      return { status: "circuit_open" };
+    }
+
+    recordGenerationEnd(Date.now() - startMs, false);
+    const { message: errorMsg } = userFriendlyError(apiError);
+    const song = await createSongRecord(core.userId, core.songParams, {
+      status: "failed",
+      errorMessage: errorMsg,
+    });
+    return { status: "api_error", rawError: apiError, song, errorMessage: errorMsg };
+  }
+}
+
+export async function executeGeneration(spec: GenerationSpec): Promise<GenerationOutcome> {
+  const guards = resolveGuards(spec.guards ?? "standard");
+  let rateLimitStatus: RateLimitStatus | undefined;
+
+  if (guards.rateLimit) {
+    const result = await enforceRateLimit(spec.userId, spec.action);
+    if (result.limited) return { status: "denied", response: result.response };
+    rateLimitStatus = result.status;
+  }
+
+  if (guards.creditCheck) {
+    const result = await checkCreditBalance(spec.userId, spec.action);
+    if ("denied" in result) return { status: "denied", response: result.denied };
+  }
+
+  if (!spec.hasApiKey) {
+    const song = await createSongRecord(spec.userId, spec.songParams, {
+      status: "ready",
+      mock: spec.mockFallback,
+    });
+    if (guards.creditRecording) {
+      await deductCredits(spec.userId, spec.action, {
+        songId: song.id,
+        description: spec.description,
+      });
+    }
+    afterCreation(spec, song);
+    return { status: "created", song, rateLimitStatus };
+  }
+
+  const outcome = await executeCore({
+    userId: spec.userId,
+    action: spec.action,
+    songParams: spec.songParams,
+    apiCall: spec.apiCall,
+    description: spec.description,
+    creditRecording: guards.creditRecording,
+    coverArt: spec.coverArt,
+  });
+
+  switch (outcome.status) {
+    case "created":
+      return { status: "created", song: outcome.song, rateLimitStatus };
+    case "circuit_open":
+      return enqueueGeneration(spec);
+    case "api_error":
+      if (guards.rateLimit) {
+        await releaseRateLimitSlot(spec.userId).catch(() => {});
+      }
+      return {
+        status: "failed",
+        song: outcome.song,
+        error: outcome.errorMessage,
+        rawError: outcome.rawError,
+        rateLimitStatus,
+      };
+  }
+}
+
+function afterCreation(
+  spec: Pick<GenerationSpec, "userId" | "songParams" | "coverArt">,
+  song: Song
+): void {
+  invalidateByPrefix(`dashboard-stats:${spec.userId}`);
+
+  if (spec.coverArt) {
+    try {
+      const [variant] = generateCoverArtVariants({
+        songId: song.id,
+        title: spec.songParams.title,
+        tags: spec.songParams.tags,
+      });
+      prisma.song.update({
+        where: { id: song.id },
+        data: { imageUrl: variant.dataUrl },
+      }).catch(() => {});
+    } catch {
+      // Non-critical
+    }
+  }
+}
+
+async function enqueueGeneration(spec: GenerationSpec): Promise<GenerationOutcome> {
+  logger.warn({ userId: spec.userId }, "generation: circuit open — queuing request");
+
+  await enqueueFromSpec(spec.userId, spec.songParams);
+
+  return {
+    status: "queued",
+    message: "Music generation is temporarily unavailable. Your request has been queued and will be processed automatically when the service recovers.",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Queue drain — processes queued items using the same creation path as live
+// generation, ensuring credits, metrics, cache, and cover art are applied.
+// ---------------------------------------------------------------------------
+
+const DRAIN_BATCH_SIZE = 5;
+
+export async function drainQueuedItems(): Promise<void> {
+  if (!SUNOAPI_KEY) {
+    logger.warn("generation: SUNOAPI_KEY not set — cannot drain queue");
+    return;
+  }
+
+  const items = await prisma.generationQueueItem.findMany({
+    where: { status: "pending" },
+    orderBy: { position: "asc" },
+    take: DRAIN_BATCH_SIZE,
+  });
+
+  if (items.length === 0) return;
+
+  logger.info({ count: items.length }, "generation: draining queued items");
+
+  for (const item of items) {
+    await prisma.generationQueueItem.update({
+      where: { id: item.id },
+      data: { status: "processing" },
+    });
+
+    const songParams: SongParams = {
+      title: item.title ?? null,
+      prompt: item.prompt,
+      tags: item.tags ?? null,
+      isInstrumental: item.makeInstrumental,
+    };
+
+    const outcome = await executeCore({
+      userId: item.userId,
+      action: "generate",
+      songParams,
+      apiCall: () =>
+        generateSong(
+          item.prompt,
+          {
+            title: item.title ?? undefined,
+            style: item.tags ?? undefined,
+            instrumental: item.makeInstrumental,
+            personaId: item.personaId ?? undefined,
+          },
+          SUNOAPI_KEY
+        ),
+      description: `Song generation (queued): ${item.title || "Untitled"}`,
+      creditRecording: true,
+      coverArt: false,
+    });
+
+    switch (outcome.status) {
+      case "created":
+        await markDone(item.id, outcome.song.id);
+        logger.info(
+          { queueItemId: item.id, songId: outcome.song.id },
+          "generation: queued item processed"
+        );
+        break;
+
+      case "circuit_open":
+        await prisma.generationQueueItem.update({
+          where: { id: item.id },
+          data: { status: "pending" },
+        });
+        logger.warn(
+          { queueItemId: item.id },
+          "generation: circuit opened during drain — stopping"
+        );
+        return;
+
+      case "api_error":
+        logger.error(
+          { queueItemId: item.id, err: outcome.rawError },
+          "generation: queued item failed"
+        );
+        await markFailed(item.id, outcome.errorMessage, outcome.song.id).catch(
+          (updateErr) => {
+            logger.error(
+              { queueItemId: item.id, updateErr },
+              "generation: failed to mark queued item as failed"
+            );
+          }
+        );
+        break;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transform
+// ---------------------------------------------------------------------------
+
+export interface TransformSpec {
+  userId: string;
+  action: string;
+  apiCall: () => Promise<{ taskId: string }>;
+  hasApiKey: boolean;
+  mockTaskId: string;
+  fallbackErrorMessage?: string;
+  guards?: GuardPolicy;
+}
+
+export type TransformOutcome =
+  | { status: "denied"; response: Response }
+  | { status: "completed"; taskId: string; mockMode: boolean; rateLimitStatus?: RateLimitStatus }
+  | { status: "failed"; error: string; rawError: unknown; rateLimitStatus?: RateLimitStatus };
+
+export async function executeTransform(spec: TransformSpec): Promise<TransformOutcome> {
+  const guards = resolveGuards(spec.guards ?? "free");
+  let rateLimitStatus: RateLimitStatus | undefined;
+
+  if (guards.rateLimit) {
+    const result = await enforceRateLimit(spec.userId, spec.action);
+    if (result.limited) return { status: "denied", response: result.response };
+    rateLimitStatus = result.status;
+  }
+
+  if (guards.creditCheck) {
+    const result = await checkCreditBalance(spec.userId, spec.action);
+    if ("denied" in result) return { status: "denied", response: result.denied };
+  }
+
+  if (!spec.hasApiKey) {
+    return { status: "completed", taskId: spec.mockTaskId, mockMode: true, rateLimitStatus };
+  }
+
+  try {
+    const result = await spec.apiCall();
+    return { status: "completed", taskId: result.taskId, mockMode: false, rateLimitStatus };
+  } catch (apiError) {
+    if (guards.rateLimit) {
+      await releaseRateLimitSlot(spec.userId).catch(() => {});
+    }
+    const { message: errorMsg } = userFriendlyError(apiError, spec.fallbackErrorMessage);
+    return { status: "failed", error: errorMsg, rawError: apiError, rateLimitStatus };
+  }
+}

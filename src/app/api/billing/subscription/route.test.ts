@@ -13,33 +13,24 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    subscription: { findUnique: vi.fn() },
-  },
-}));
-
+const mockGetSubscriptionStatus = vi.fn();
 vi.mock("@/lib/billing", () => ({
-  TIER_LIMITS: {
-    free: { creditsPerMonth: 200, generationsPerHour: 5 },
-    starter: { creditsPerMonth: 1500, generationsPerHour: 25 },
-    pro: { creditsPerMonth: 5000, generationsPerHour: 50 },
-    studio: { creditsPerMonth: 15000, generationsPerHour: 100 },
-  },
+  getSubscriptionStatus: (...args: unknown[]) => mockGetSubscriptionStatus(...args),
 }));
 
 vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-import { resolveUser } from "@/lib/auth-resolver";
-import { prisma } from "@/lib/prisma";
+import { resolveUser } from "@/lib/auth";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const seg = { params: Promise.resolve({}) } as never;
 
 function makeRequest(): Request {
   return new Request("http://localhost/api/billing/subscription");
@@ -51,20 +42,23 @@ const periodEnd = new Date("2026-02-01T00:00:00Z");
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(resolveUser).mockResolvedValue({
     userId: "user-1",
     isApiKey: false,
     isAdmin: false,
     error: null,
   });
-  vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
+  mockGetSubscriptionStatus.mockResolvedValue({
     tier: "pro",
     status: "active",
+    creditsPerMonth: 5000,
+    generationsPerHour: 50,
     currentPeriodStart: now,
     currentPeriodEnd: periodEnd,
     cancelAtPeriodEnd: false,
     trialEnd: null,
-  } as never);
+  });
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -79,16 +73,25 @@ describe("GET /api/billing/subscription", () => {
         error: new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }) as never,
       });
 
-      const res = await GET(makeRequest() as never);
+      const res = await GET(makeRequest() as never, seg);
       expect(res.status).toBe(401);
     });
   });
 
   describe("no subscription record", () => {
     it("returns free tier defaults when no subscription exists", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue(null as never);
+      mockGetSubscriptionStatus.mockResolvedValue({
+        tier: "free",
+        status: "active",
+        creditsPerMonth: 200,
+        generationsPerHour: 5,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        trialEnd: null,
+      });
 
-      const res = await GET(makeRequest() as never);
+      const res = await GET(makeRequest() as never, seg);
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.tier).toBe("free");
@@ -101,7 +104,7 @@ describe("GET /api/billing/subscription", () => {
 
   describe("active subscription", () => {
     it("returns pro tier info with correct limits", async () => {
-      const res = await GET(makeRequest() as never);
+      const res = await GET(makeRequest() as never, seg);
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.tier).toBe("pro");
@@ -112,39 +115,41 @@ describe("GET /api/billing/subscription", () => {
     });
 
     it("includes period dates in the response", async () => {
-      const res = await GET(makeRequest() as never);
+      const res = await GET(makeRequest() as never, seg);
       const data = await res.json();
       expect(data.currentPeriodStart).toBe(now.toISOString());
       expect(data.currentPeriodEnd).toBe(periodEnd.toISOString());
     });
 
     it("includes trialEnd as null when not on trial", async () => {
-      const res = await GET(makeRequest() as never);
+      const res = await GET(makeRequest() as never, seg);
       const data = await res.json();
       expect(data.trialEnd).toBeNull();
     });
 
     it("reflects cancelAtPeriodEnd when subscription is scheduled for cancellation", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
+      mockGetSubscriptionStatus.mockResolvedValue({
         tier: "starter",
         status: "active",
+        creditsPerMonth: 1500,
+        generationsPerHour: 25,
         currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
         cancelAtPeriodEnd: true,
         trialEnd: null,
-      } as never);
+      });
 
-      const res = await GET(makeRequest() as never);
+      const res = await GET(makeRequest() as never, seg);
       const data = await res.json();
       expect(data.cancelAtPeriodEnd).toBe(true);
     });
   });
 
   describe("error handling", () => {
-    it("returns 500 when prisma throws", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockRejectedValue(new Error("DB error"));
+    it("returns 500 when module throws", async () => {
+      mockGetSubscriptionStatus.mockRejectedValue(new Error("DB error"));
 
-      const res = await GET(makeRequest() as never);
+      const res = await GET(makeRequest() as never, seg);
       expect(res.status).toBe(500);
       const data = await res.json();
       expect(data.code).toBe("INTERNAL_ERROR");

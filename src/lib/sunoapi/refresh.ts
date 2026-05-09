@@ -1,4 +1,5 @@
-import { BASE_URL, buildHeaders } from "./http";
+import { BASE_URL } from "./constants";
+import { buildHeaders } from "./fetch";
 import { logger } from "@/lib/logger";
 
 function extractUrls(raw: Record<string, unknown>): { audioUrl?: string; imageUrl?: string } | null {

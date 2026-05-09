@@ -12,6 +12,7 @@ import { track } from "@/lib/analytics";
 import { fetchWithTimeout, clientFetchErrorMessage } from "@/lib/fetch-client";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationQueue } from "./GenerationQueue";
+import { BatchGeneratePanel } from "./BatchGeneratePanel";
 import dynamic from "next/dynamic";
 // Lazy-load confetti — only shown after generation success, not needed on initial render
 const Confetti = dynamic(() => import("./Confetti").then((m) => m.Confetti), { ssr: false });
@@ -51,6 +52,14 @@ interface GenerationPreset {
   lyricsPrompt: string | null;
   isInstrumental: boolean;
   customMode: boolean;
+  createdAt: string;
+}
+
+interface StyleTemplate {
+  id: string;
+  name: string;
+  tags: string;
+  sourceSongId: string | null;
   createdAt: string;
 }
 
@@ -121,6 +130,9 @@ export function GenerateForm() {
 
   // Style boost state
   const [isBoosting, setIsBoosting] = useState(false);
+
+  // Style template state
+  const [styleTemplates, setStyleTemplates] = useState<StyleTemplate[]>([]);
 
   // Credit usage state
   const [creditInfo, setCreditInfo] = useState<{
@@ -268,6 +280,18 @@ export function GenerateForm() {
     }
   }, []);
 
+  const fetchStyleTemplates = useCallback(async () => {
+    try {
+      const res = await fetch("/api/style-templates");
+      if (res.ok) {
+        const data = await res.json();
+        setStyleTemplates(data.templates);
+      }
+    } catch {
+      // Non-critical
+    }
+  }, []);
+
   const fetchSuggestions = useCallback(async () => {
     try {
       const res = await fetch("/api/suggestions/prompts");
@@ -298,9 +322,10 @@ export function GenerateForm() {
     fetchPersonas();
     fetchCredits();
     fetchPresets();
+    fetchStyleTemplates();
     fetchSuggestions();
     fetchTrendingCombos();
-  }, [fetchRateLimit, fetchTemplates, fetchPersonas, fetchCredits, fetchPresets, fetchSuggestions, fetchTrendingCombos]);
+  }, [fetchRateLimit, fetchTemplates, fetchPersonas, fetchCredits, fetchPresets, fetchStyleTemplates, fetchSuggestions, fetchTrendingCombos]);
 
   async function handleBoostStyle() {
     if (isBoosting || !stylePrompt.trim()) return;
@@ -1211,6 +1236,30 @@ export function GenerateForm() {
               {promptError}
             </p>
           )}
+          {styleTemplates.length > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <AdjustmentsHorizontalIcon className="h-4 w-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+              <select
+                value=""
+                onChange={(e) => {
+                  const tmpl = styleTemplates.find((t) => t.id === e.target.value);
+                  if (tmpl) {
+                    setStylePrompt(tmpl.tags);
+                    if (promptError && !customMode) setPromptError(null);
+                  }
+                }}
+                disabled={isSubmitting}
+                className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent disabled:opacity-50"
+              >
+                <option value="">Apply a saved style template…</option>
+                {styleTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} — {t.tags.length > 40 ? t.tags.slice(0, 40) + "…" : t.tags}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Persona picker */}
@@ -1261,15 +1310,15 @@ export function GenerateForm() {
           {showLyricsGenerator && (
             <div className="mt-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
               <div className="flex gap-2">
-                <input
-                  type="text"
+                <textarea
                   value={lyricsPrompt}
                   onChange={(e) => setLyricsPrompt(e.target.value)}
                   placeholder="Describe your song theme, mood, or topic..."
                   aria-label="Lyrics generation prompt"
-                  maxLength={200}
+                  maxLength={2000}
+                  rows={3}
                   disabled={isGeneratingLyrics}
-                  className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-2.5 text-base sm:text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent disabled:opacity-50"
+                  className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-2.5 text-base sm:text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent disabled:opacity-50 resize-none"
                 />
                 <button
                   type="button"
@@ -1460,6 +1509,21 @@ export function GenerateForm() {
             </div>
           );
         })()}
+
+        {/* Batch Generate Variations */}
+        <BatchGeneratePanel
+          basePrompt={customMode ? lyrics : stylePrompt}
+          baseTitle={title}
+          baseStyle={stylePrompt}
+          isInstrumental={instrumental}
+          onBatchStarted={(batchId, songIds) => {
+            for (const songId of songIds) {
+              trackSong(songId, null);
+            }
+            fetchCredits();
+          }}
+          creditInfo={creditInfo}
+        />
 
         {/* Submit */}
         <div className="flex gap-2">

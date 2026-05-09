@@ -8,7 +8,7 @@ import { registerTool } from "../registry";
 import { prisma } from "@/lib/prisma";
 import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
-import { getMonthlyCreditUsage, recordCreditUsage, CREDIT_COSTS } from "@/lib/credits";
+import { checkCredits, deductCredits } from "@/lib/credits";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { stripHtml } from "@/lib/sanitize";
 
@@ -130,10 +130,10 @@ registerTool({
     // Check credits
     const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
     if (!usingPersonalKey) {
-      const usage = await getMonthlyCreditUsage(userId);
-      if (usage.creditsRemaining < CREDIT_COSTS.generate) {
+      const check = await checkCredits(userId, "generate");
+      if (!check.ok) {
         throw new Error(
-          `Insufficient credits: need ${CREDIT_COSTS.generate}, have ${usage.creditsRemaining}`
+          `Insufficient credits: need ${check.creditCost}, have ${check.creditsRemaining}`
         );
       }
     }
@@ -188,9 +188,8 @@ registerTool({
       });
 
       if (!usingPersonalKey) {
-        await recordCreditUsage(userId, "generate", {
+        await deductCredits(userId, "generate", {
           songId: song.id,
-          creditCost: CREDIT_COSTS.generate,
           description: `MCP song generation: ${cleanTitle ?? "Untitled"}`,
         });
       }

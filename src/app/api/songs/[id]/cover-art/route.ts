@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { invalidateByPrefix } from "@/lib/cache";
 import { logServerError } from "@/lib/error-logger";
@@ -62,7 +62,7 @@ export async function PATCH(
 
     const updated = await prisma.song.update({
       where: { id: song.id },
-      data: { imageUrl },
+      data: { imageUrl, imageUrlIsCustom: true },
       select: { id: true, imageUrl: true },
     });
 

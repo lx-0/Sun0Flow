@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { broadcast } from "@/lib/event-bus";
+import { notifyUser } from "@/lib/notifications";
 import { checkFirstFollowerMilestone } from "@/lib/streaks";
-import { sendPushToUser } from "@/lib/push";
 
 export async function POST(
   _request: Request,
@@ -58,33 +57,16 @@ export async function POST(
           where: { id: followerId },
           select: { name: true, username: true },
         });
-        const followedUser = await prisma.user.findUnique({
-          where: { id: followingId },
-          select: { pushNewFollower: true },
-        });
         const followerName = follower?.name ?? follower?.username ?? "Someone";
-        const profileHref = follower?.username ? `/u/${follower.username}` : undefined;
-        const notification = await prisma.notification.create({
-          data: {
-            userId: followingId,
-            type: "new_follower",
-            title: "New follower",
-            message: `${followerName} started following you`,
-            href: profileHref ?? null,
-          },
+        const profileHref = follower?.username ? `/u/${follower.username}` : null;
+        await notifyUser({
+          userId: followingId,
+          type: "new_follower",
+          title: "New follower",
+          message: `${followerName} started following you`,
+          href: profileHref,
+          push: { tag: `new-follower-${followerId}` },
         });
-        broadcast(followingId, {
-          type: "notification",
-          data: { id: notification.id, type: "new_follower" },
-        });
-        if (followedUser?.pushNewFollower !== false) {
-          sendPushToUser(followingId, {
-            title: "New follower",
-            body: `${followerName} started following you`,
-            url: profileHref ?? "/",
-            tag: `new-follower-${followerId}`,
-          }).catch(() => {});
-        }
       } catch {
         // Non-critical
       }

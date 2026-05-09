@@ -835,7 +835,7 @@ function InspireContent() {
           const parts: string[] = [];
           if (rssItem.title) parts.push(rssItem.title);
           const body = rssItem.content || rssItem.description || "";
-          if (body) parts.push(body.slice(0, 800));
+          if (body) parts.push(body.slice(0, 2000));
           if (rssItem.topics && rssItem.topics.length > 0) parts.push(`Themes: ${rssItem.topics.join(", ")}`);
           if (rssItem.mood && rssItem.mood !== "neutral") parts.push(`Mood: ${rssItem.mood}`);
           const lyricsPrompt = parts.join("\n\n");

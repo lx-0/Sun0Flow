@@ -14,7 +14,7 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
@@ -70,33 +70,38 @@ vi.mock("@/lib/error-logger", () => ({
 
 vi.mock("@/lib/credits", () => ({
   recordCreditUsage: vi.fn().mockResolvedValue(undefined),
-  shouldNotifyLowCredits: vi.fn().mockResolvedValue(false),
-  createLowCreditNotification: vi.fn().mockResolvedValue(undefined),
   getMonthlyCreditUsage: vi.fn().mockResolvedValue({ creditsRemaining: 100, budget: 500 }),
   CREDIT_COSTS: { generate: 1 },
+  checkCredits: vi.fn().mockResolvedValue({ ok: true, creditCost: 1, creditsRemaining: 100 }),
+  deductCredits: vi.fn().mockResolvedValue(undefined),
+  getCreditCost: vi.fn().mockReturnValue(1),
 }));
 
 vi.mock("@/lib/cache", () => ({
   invalidateByPrefix: vi.fn(),
 }));
 
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateSong, SunoApiError } from "@/lib/sunoapi";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { recordCreditUsage } from "@/lib/credits";
+import { deductCredits } from "@/lib/credits";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeRequest(): Request {
-  return new Request("http://localhost/api/generation-queue/process-next", {
+import { NextRequest } from "next/server";
+
+function makeRequest(): NextRequest {
+  return new NextRequest("http://localhost/api/generation-queue/process-next", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
   });
 }
+
+const seg = { params: Promise.resolve({}) };
 
 const baseQueueItem = {
   id: "item-1",
@@ -155,7 +160,7 @@ describe("POST /api/generation-queue/process-next", () => {
       isAdmin: false,
       error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest(), seg);
     expect(res.status).toBe(401);
   });
 
@@ -163,7 +168,7 @@ describe("POST /api/generation-queue/process-next", () => {
     vi.mocked(prisma.generationQueueItem.findFirst)
       .mockResolvedValueOnce({ ...baseQueueItem, status: "processing" } as never);
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest(), seg);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.message).toBe("Already processing");
@@ -175,7 +180,7 @@ describe("POST /api/generation-queue/process-next", () => {
       .mockResolvedValueOnce(null)  // no processing item
       .mockResolvedValueOnce(null); // no pending item
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest(), seg);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.message).toBe("Queue empty");
@@ -191,7 +196,7 @@ describe("POST /api/generation-queue/process-next", () => {
       status: { remaining: 0, limit: 10, resetAt: new Date().toISOString() },
     });
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest(), seg);
     expect(res.status).toBe(429);
     expect(generateSong).not.toHaveBeenCalled();
   });
@@ -207,7 +212,7 @@ describe("POST /api/generation-queue/process-next", () => {
       audioUrl: "https://example.com/mock.mp3",
     } as never);
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest(), seg);
     expect(res.status).toBe(201);
     expect(generateSong).not.toHaveBeenCalled();
     expect(prisma.song.create).toHaveBeenCalledWith(
@@ -223,7 +228,7 @@ describe("POST /api/generation-queue/process-next", () => {
       .mockResolvedValueOnce({ ...baseQueueItem } as never);
     vi.mocked(generateSong).mockResolvedValue({ taskId: "task-xyz" });
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest(), seg);
     expect(res.status).toBe(201);
 
     expect(prisma.song.create).toHaveBeenCalledWith(
@@ -235,12 +240,14 @@ describe("POST /api/generation-queue/process-next", () => {
       })
     );
 
-    expect(prisma.generationQueueItem.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "item-1" },
-        data: expect.objectContaining({ songId: "song-1", status: "processing" }),
-      })
-    );
+    expect(prisma.generationQueueItem.update).toHaveBeenCalledWith({
+      where: { id: "item-1" },
+      data: { status: "processing" },
+    });
+    expect(prisma.generationQueueItem.update).toHaveBeenCalledWith({
+      where: { id: "item-1" },
+      data: { songId: "song-1" },
+    });
   });
 
   it("records credit usage after successful generation", async () => {
@@ -249,12 +256,12 @@ describe("POST /api/generation-queue/process-next", () => {
       .mockResolvedValueOnce({ ...baseQueueItem } as never);
     vi.mocked(generateSong).mockResolvedValue({ taskId: "task-xyz" });
 
-    await POST(makeRequest());
+    await POST(makeRequest(), seg);
 
-    expect(recordCreditUsage).toHaveBeenCalledWith(
+    expect(deductCredits).toHaveBeenCalledWith(
       "user-1",
       "generate",
-      expect.objectContaining({ songId: "song-1", creditCost: 1 })
+      expect.objectContaining({ songId: "song-1" })
     );
   });
 
@@ -270,7 +277,7 @@ describe("POST /api/generation-queue/process-next", () => {
       errorMessage: "temporarily unavailable",
     } as never);
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest(), seg);
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.error).toContain("temporarily unavailable");
@@ -294,7 +301,7 @@ describe("POST /api/generation-queue/process-next", () => {
       generationStatus: "ready",
     } as never);
 
-    await POST(makeRequest());
+    await POST(makeRequest(), seg);
 
     expect(prisma.generationQueueItem.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -306,7 +313,7 @@ describe("POST /api/generation-queue/process-next", () => {
   it("returns 500 on unexpected internal error", async () => {
     vi.mocked(prisma.generationQueueItem.findFirst).mockRejectedValue(new Error("DB error"));
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest(), seg);
     expect(res.status).toBe(500);
     expect(logServerError).toHaveBeenCalled();
   });

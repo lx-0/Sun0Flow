@@ -38,6 +38,16 @@ vi.mock("@/lib/stripe", () => ({
     get pro() { return process.env.STRIPE_PRICE_PRO ?? ""; },
     get studio() { return process.env.STRIPE_PRICE_STUDIO ?? ""; },
   },
+  STRIPE_TOPUP_PRICES: {
+    get credits_10() { return "price_topup_10"; },
+    get credits_25() { return "price_topup_25"; },
+    get credits_50() { return "price_topup_50"; },
+  },
+  TOPUP_PACKAGES: [
+    { id: "credits_10", credits: 10, label: "10 Credits", priceLabel: "$0.99" },
+    { id: "credits_25", credits: 25, label: "25 Credits", priceLabel: "$1.99" },
+    { id: "credits_50", credits: 50, label: "50 Credits", priceLabel: "$3.49" },
+  ],
 }));
 
 import {

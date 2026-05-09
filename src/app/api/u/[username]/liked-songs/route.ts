@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { SongFilters } from "@/lib/songs";
 
 const PAGE_SIZE = 20;
 
@@ -26,12 +27,7 @@ export async function GET(
 
     const where = {
       userId: user.id,
-      song: {
-        isPublic: true,
-        isHidden: false,
-        archivedAt: null,
-        generationStatus: "ready",
-      },
+      song: SongFilters.publicDiscovery(),
     };
 
     const [favorites, total] = await Promise.all([
