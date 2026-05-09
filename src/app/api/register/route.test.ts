@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "./route";
 
+vi.mock("@/lib/auth/session", () => ({
+  auth: vi.fn(),
+  handlers: {},
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+  googleEnabled: false,
+}));
+
 vi.mock("@/lib/env", () => ({
   get DATABASE_URL() { return "postgres://test:test@localhost:5432/test"; },
   get AUTH_SECRET() { return "test-secret"; },

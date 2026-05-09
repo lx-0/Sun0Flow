@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { SongFilters } from "@/lib/songs";
 
 const PAGE_SIZE = 20;
 
@@ -27,11 +28,8 @@ export async function GET(
     const [songs, total] = await Promise.all([
       prisma.song.findMany({
         where: {
+          ...SongFilters.publicDiscovery(),
           userId: user.id,
-          isPublic: true,
-          isHidden: false,
-          archivedAt: null,
-          generationStatus: "ready",
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * PAGE_SIZE,
@@ -50,11 +48,8 @@ export async function GET(
       }),
       prisma.song.count({
         where: {
+          ...SongFilters.publicDiscovery(),
           userId: user.id,
-          isPublic: true,
-          isHidden: false,
-          archivedAt: null,
-          generationStatus: "ready",
         },
       }),
     ]);

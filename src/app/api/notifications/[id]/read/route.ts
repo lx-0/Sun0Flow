@@ -1,40 +1,12 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { prisma } from "@/lib/prisma";
-import { invalidateByPrefix, cacheKey } from "@/lib/cache";
+import { authRoute } from "@/lib/route-handler";
+import { markRead } from "@/lib/notifications";
+import { notFound } from "@/lib/api-error";
 
-// PATCH /api/notifications/[id]/read — mark single notification as read
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
+export const PATCH = authRoute<{ id: string }>(async (_request, { auth, params }) => {
+  const result = await markRead(auth.userId, params.id);
 
-    if (authError) return authError;
+  if (result.notFound) return notFound();
 
-    const { id } = await params;
-
-    const notification = await prisma.notification.findUnique({
-      where: { id },
-    });
-
-    if (!notification || notification.userId !== userId) {
-      return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
-    }
-
-    await prisma.notification.update({
-      where: { id },
-      data: { read: true },
-    });
-
-    invalidateByPrefix(cacheKey("notifications-unread", userId));
-
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+  return NextResponse.json({ ok: true });
+}, { route: "/api/notifications/[id]/read" });

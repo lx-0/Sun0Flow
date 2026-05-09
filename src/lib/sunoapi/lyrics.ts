@@ -1,5 +1,8 @@
 import type { GenerateLyricsOptions, LyricsResult, TimestampedLyricsResult } from "./types";
-import { SunoApiError, BASE_URL, getCallbackUrl, fetchWithRetry, buildHeaders, extractTaskId } from "./http";
+import { SunoApiError } from "./errors";
+import { BASE_URL, getCallbackUrl } from "./constants";
+import { fetchWithRetry, buildHeaders } from "./fetch";
+import { extractTaskId } from "./mappers";
 import { validateLyricsPrompt } from "./validation";
 
 /**

@@ -11,7 +11,7 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
@@ -32,7 +32,7 @@ vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const SONG_ID = "song-abc";

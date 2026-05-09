@@ -1,31 +1,14 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateSong, SunoApiError } from "@/lib/sunoapi";
+import { generateSong } from "@/lib/sunoapi";
 import { mockSongs } from "@/lib/sunoapi/mock";
-import { acquireRateLimitSlot, releaseRateLimitSlot } from "@/lib/rate-limit";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { recordCreditUsage, getMonthlyCreditUsage, CREDIT_COSTS, shouldNotifyLowCredits, createLowCreditNotification } from "@/lib/credits";
-import { insufficientCredits } from "@/lib/api-error";
+import { executeGeneration, respondToGeneration } from "@/lib/generation";
 
 const MAX_VARIATIONS = 5;
 
-function userFriendlyError(error: unknown): string {
-  if (error instanceof SunoApiError) {
-    if (error.status === 402) return "Insufficient credits. Please check your balance or top up to continue.";
-    if (error.status === 409) return "A conflicting request is already in progress. Please wait and try again.";
-    if (error.status === 422) return `Validation error: ${error.message}`;
-    if (error.status === 429) return "The music generation service is busy. Please try again in a few minutes.";
-    if (error.status === 451) return "This request was blocked for compliance reasons. Please modify your prompt and try again.";
-    if (error.status === 400) return "Invalid generation parameters. Please adjust your prompt and try again.";
-    if (error.status === 401 || error.status === 403) return "API authentication failed. Please check your API key in settings.";
-    if (error.status >= 500) return "The music generation service is temporarily unavailable. Please try again later.";
-  }
-  return "Song generation failed. Please try again.";
-}
-
-/** GET /api/songs/[id]/variations — list variations for a song */
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -42,10 +25,8 @@ export async function GET(
       return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
     }
 
-    // Find the root song (walk up the parent chain)
     let rootId = id;
     if (song.parentSongId) {
-      // This song is itself a variation — find the root
       let current = song;
       while (current.parentSongId) {
         const parent = await prisma.song.findUnique({ where: { id: current.parentSongId } });
@@ -55,7 +36,6 @@ export async function GET(
       rootId = current.id;
     }
 
-    // Fetch the root song and all its direct variations
     const root = rootId === id ? song : await prisma.song.findUnique({ where: { id: rootId } });
     const variations = await prisma.song.findMany({
       where: { parentSongId: rootId },
@@ -99,7 +79,6 @@ export async function GET(
   }
 }
 
-/** POST /api/songs/[id]/variations — create a variation of a song */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -110,16 +89,13 @@ export async function POST(
     if (authError) return authError;
     const { id: parentId } = await params;
 
-    // Verify parent song exists and belongs to user
     const parentSong = await prisma.song.findUnique({ where: { id: parentId } });
     if (!parentSong || parentSong.userId !== userId) {
       return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
     }
 
-    // Find the root song for variation counting
     const rootId = parentSong.parentSongId ?? parentId;
 
-    // Check variation limit
     const variationCount = await prisma.song.count({
       where: { parentSongId: rootId },
     });
@@ -130,32 +106,9 @@ export async function POST(
       );
     }
 
-    // Check credit balance before consuming any upstream resources
-    const creditUsage = await getMonthlyCreditUsage(userId);
-    if (creditUsage.creditsRemaining < CREDIT_COSTS.generate) {
-      return insufficientCredits(
-        `Insufficient credits. You need ${CREDIT_COSTS.generate} credits but only have ${creditUsage.creditsRemaining} remaining.`
-      );
-    }
-
-    // Check rate limit
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
-    if (!acquired) {
-      const retryAfterSec = Math.max(
-        1,
-        Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000)
-      );
-      return NextResponse.json(
-        { error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, code: "RATE_LIMIT", resetAt: rateLimitStatus.resetAt, rateLimit: rateLimitStatus },
-        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
-      );
-    }
-
-    // Parse body — allow overrides for prompt, tags, title
     const body = await request.json();
     const prompt = (body.prompt?.trim() || parentSong.prompt || "").trim();
     const rawTags = (body.tags?.trim() || parentSong.tags || "").trim();
-    // Variations always inherit parent tags plus a "remix" label
     const tags = rawTags
       ? rawTags.toLowerCase().includes("remix") ? rawTags : `${rawTags}, remix`
       : "remix";
@@ -169,95 +122,27 @@ export async function POST(
     const userApiKey = await resolveUserApiKey(userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
-    let savedSong;
-    if (!hasApiKey) {
-      // Mock mode
-      const mock = mockSongs[0];
-      savedSong = await prisma.song.create({
-        data: {
-          userId,
-          parentSongId: rootId,
-          title: mock.title || title || null,
-          prompt,
-          tags: mock.tags || tags || null,
-          audioUrl: mock.audioUrl || null,
-          imageUrl: mock.imageUrl || null,
-          duration: mock.duration ?? null,
-          lyrics: mock.lyrics || null,
-          sunoModel: mock.model || null,
-          isInstrumental: Boolean(makeInstrumental),
-          generationStatus: "ready",
-        },
-      });
-    } else {
-      try {
-        const result = await generateSong(
-          prompt,
-          { title: title || undefined, style: tags || undefined, instrumental: Boolean(makeInstrumental) },
-          userApiKey
-        );
-
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: rootId,
-            sunoJobId: result.taskId,
-            title: title || null,
-            prompt,
-            tags: tags || null,
-            isInstrumental: Boolean(makeInstrumental),
-            generationStatus: "pending",
-          },
-        });
-      } catch (apiError) {
-        logServerError("variation-api", apiError, { userId, route: `/api/songs/${parentId}/variations` });
-
-        // Release the rate limit slot so the failed attempt doesn't count
-        await releaseRateLimitSlot(userId).catch(() => {});
-
-        const errorMsg = userFriendlyError(apiError);
-        savedSong = await prisma.song.create({
-          data: {
-            userId,
-            parentSongId: rootId,
-            title: title || null,
-            prompt,
-            tags: tags || null,
-            isInstrumental: Boolean(makeInstrumental),
-            generationStatus: "failed",
-            errorMessage: errorMsg,
-          },
-        });
-
-        return NextResponse.json(
-          { song: savedSong, error: errorMsg, rateLimit: rateLimitStatus },
-          { status: 201 }
-        );
-      }
-    }
-
-    // Record credit usage for this variation generation
-    await recordCreditUsage(userId, "generate", {
-      songId: savedSong.id,
-      creditCost: CREDIT_COSTS.generate,
-      description: `Variation generation: ${savedSong.title || "Untitled"}`,
+    const outcome = await executeGeneration({
+      userId,
+      action: "generate",
+      songParams: {
+        title: title || null,
+        prompt,
+        tags: tags || null,
+        isInstrumental: Boolean(makeInstrumental),
+        parentSongId: rootId,
+      },
+      hasApiKey,
+      mockFallback: mockSongs[0],
+      description: `Variation generation: ${title || "Untitled"}`,
+      apiCall: () => generateSong(
+        prompt,
+        { title: title || undefined, style: tags || undefined, instrumental: Boolean(makeInstrumental) },
+        userApiKey
+      ),
     });
 
-    // Check if user should be warned about low credits
-    try {
-      const shouldNotify = await shouldNotifyLowCredits(userId);
-      if (shouldNotify) {
-        const usage = await getMonthlyCreditUsage(userId);
-        await createLowCreditNotification(userId, usage.creditsRemaining, usage.budget);
-      }
-    } catch {
-      // Non-critical — don't block generation
-    }
-
-    return NextResponse.json(
-      { song: savedSong, rateLimit: rateLimitStatus },
-      { status: 201 }
-    );
+    return respondToGeneration(outcome, { label: "variation-api", userId, route: `/api/songs/${parentId}/variations` });
   } catch (error) {
     logServerError("variation-route", error, { route: "/api/songs/variations" });
     return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });

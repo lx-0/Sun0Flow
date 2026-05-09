@@ -1,62 +1,20 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { prisma } from "@/lib/prisma";
+import { authRoute, resultResponse } from "@/lib/route-handler";
+import { Tags } from "@/lib/tags";
 
-const MAX_TAGS_PER_USER = 50;
+export const GET = authRoute(async (_request, { auth }) => {
+  const tags = await Tags.list(auth.userId);
+  return NextResponse.json({ tags });
+}, { route: "/api/tags" });
 
-export async function GET(request: Request) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-
-    if (authError) return authError;
-
-    const tags = await prisma.tag.findMany({
-      where: { userId: userId },
-      include: { _count: { select: { songTags: true } } },
-      orderBy: { name: "asc" },
-    });
-
-    return NextResponse.json({ tags });
-  } catch {
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-
-    if (authError) return authError;
-
-    const body = await request.json();
-    const name = typeof body.name === "string" ? body.name.trim().toLowerCase() : "";
-    const rawColor = typeof body.color === "string" ? body.color.trim() : "#7c3aed";
-    const color = /^#[0-9A-Fa-f]{6}$/.test(rawColor) ? rawColor : "#7c3aed";
-
-    if (!name || name.length > 50) {
-      return NextResponse.json({ error: "Tag name is required (max 50 chars)", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-
-    // Check user tag limit
-    const count = await prisma.tag.count({ where: { userId: userId } });
-    if (count >= MAX_TAGS_PER_USER) {
-      return NextResponse.json({ error: `Maximum ${MAX_TAGS_PER_USER} tags allowed`, code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-
-    // Check for duplicate
-    const existing = await prisma.tag.findUnique({
-      where: { userId_name: { userId: userId, name } },
-    });
-    if (existing) {
-      return NextResponse.json({ tag: existing });
-    }
-
-    const tag = await prisma.tag.create({
-      data: { name, color, userId: userId },
-    });
-
-    return NextResponse.json({ tag }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
-  }
-}
+export const POST = authRoute(async (request, { auth }) => {
+  const body = await request.json();
+  const result = await Tags.create(
+    auth.userId,
+    typeof body.name === "string" ? body.name : "",
+    typeof body.color === "string" ? body.color : undefined,
+  );
+  if (!result.ok) return resultResponse(result);
+  const { tag, created } = result.data;
+  return NextResponse.json({ tag }, { status: created ? 201 : 200 });
+}, { route: "/api/tags" });

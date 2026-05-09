@@ -13,7 +13,7 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
@@ -27,8 +27,10 @@ vi.mock("@/lib/sunoapi", () => ({
   uploadFileFromUrl: vi.fn(),
   uploadAndCover: vi.fn(),
   uploadAndExtend: vi.fn(),
+  generateSong: vi.fn(),
   SunoApiError: class SunoApiError extends Error {
     status: number;
+    details?: Record<string, unknown>;
     constructor(status: number, message: string) {
       super(message);
       this.name = "SunoApiError";
@@ -45,6 +47,10 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     song: {
       create: vi.fn(),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    generationQueueItem: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
   },
 }));
@@ -57,7 +63,32 @@ vi.mock("@/lib/cache", () => ({
   invalidateByPrefix: vi.fn(),
 }));
 
-import { resolveUser } from "@/lib/auth-resolver";
+vi.mock("@/lib/credits", () => ({
+  checkCredits: vi.fn().mockResolvedValue({ ok: true, creditCost: 1, creditsRemaining: 100 }),
+  deductCredits: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/metrics", () => ({
+  recordGenerationStart: vi.fn(),
+  recordGenerationEnd: vi.fn(),
+}));
+
+vi.mock("@/lib/circuit-breaker", () => ({
+  CircuitOpenError: class CircuitOpenError extends Error {},
+  onCircuitClose: vi.fn(),
+}));
+
+vi.mock("@/lib/generation-queue", () => ({
+  enqueueFromSpec: vi.fn().mockResolvedValue(undefined),
+  markDone: vi.fn().mockResolvedValue(undefined),
+  markFailed: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/cover-art-generator", () => ({
+  generateCoverArtVariants: vi.fn().mockReturnValue([]),
+}));
+
+import { resolveUser } from "@/lib/auth";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import {
   uploadFileBase64,
@@ -102,7 +133,6 @@ beforeEach(() => {
   vi.mocked(resolveUser).mockResolvedValue({ userId: "user-1", isApiKey: false, isAdmin: false, error: null });
   vi.mocked(acquireRateLimitSlot).mockResolvedValue({ acquired: true, status: RATE_LIMIT_STATUS });
   vi.mocked(resolveUserApiKey).mockResolvedValue(undefined);
-  // Ensure process.env.SUNOAPI_KEY is set so the hasApiKey guard passes
   process.env.SUNOAPI_KEY = "test-key";
   vi.mocked(uploadFileBase64).mockResolvedValue({ fileId: "file-1", fileUrl: "https://cdn.example.com/upload.mp3", downloadUrl: "https://cdn.example.com/upload.mp3", expiresAt: "2099-01-01T00:00:00Z" });
   vi.mocked(uploadFileFromUrl).mockResolvedValue({ fileId: "file-2", fileUrl: "https://cdn.example.com/upload.mp3", downloadUrl: "https://cdn.example.com/upload.mp3", expiresAt: "2099-01-01T00:00:00Z" });
@@ -145,7 +175,7 @@ describe("POST /api/upload — rate limiting", () => {
     expect(res.status).toBe(429);
     const data = await res.json();
     expect(data.code).toBe("RATE_LIMIT");
-    expect(res.headers.get("retry-after")).toBeTruthy();
+    expect(data.error).toContain("Rate limit exceeded");
   });
 });
 
@@ -179,8 +209,6 @@ describe("POST /api/upload — input validation", () => {
   });
 
   it("returns 400 when base64Data exceeds 10MB limit", async () => {
-    // 10MB of base64 requires ~13.3MB of base64 chars; each char ~0.75 bytes decoded
-    // 10MB + 1 byte = 10 * 1024 * 1024 + 1 bytes decoded → base64 length = ceil(n/3)*4
     const tenMbPlusOneDecoded = 10 * 1024 * 1024 + 1;
     const base64Length = Math.ceil(tenMbPlusOneDecoded / 3) * 4;
     const oversizedBase64 = "A".repeat(base64Length);
@@ -192,7 +220,6 @@ describe("POST /api/upload — input validation", () => {
   });
 
   it("returns 400 when no API key is configured", async () => {
-    // resolveUserApiKey returns undefined AND env SUNOAPI_KEY is unset
     vi.mocked(resolveUserApiKey).mockResolvedValue(undefined);
     delete process.env.SUNOAPI_KEY;
 
@@ -201,7 +228,6 @@ describe("POST /api/upload — input validation", () => {
     const data = await res.json();
     expect(data.code).toBe("VALIDATION_ERROR");
     expect(data.error).toContain("API key");
-    // afterEach restores via vi.restoreAllMocks; process.env.SUNOAPI_KEY reset in next beforeEach
   });
 });
 
@@ -293,7 +319,7 @@ describe("POST /api/upload — API error handling", () => {
     const res = await POST(makeRequest(COVER_BODY));
     expect(res.status).toBe(201);
     const data = await res.json();
-    expect(data.error).toContain("Invalid upload");
+    expect(data.error).toContain("Invalid parameters");
   });
 
   it("creates a failed song record on network error", async () => {

@@ -5,7 +5,9 @@ import type {
   MusicVideoOptions,
   GenerateResult,
 } from "./types";
-import { BASE_URL, getCallbackUrl, fetchWithRetry, buildHeaders, extractTaskId } from "./http";
+import { BASE_URL, getCallbackUrl } from "./constants";
+import { fetchWithRetry, buildHeaders } from "./fetch";
+import { extractTaskId } from "./mappers";
 import { validateAuthor, validateDomainName } from "./validation";
 
 /**

@@ -13,7 +13,7 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
@@ -28,10 +28,12 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const seg = { params: Promise.resolve({}) } as never;
 
 function makeRequest(method: string, body?: Record<string, unknown>): Request {
   return new Request("http://localhost/api/generation-queue", {
@@ -78,7 +80,7 @@ describe("GET /api/generation-queue", () => {
       isAdmin: false,
       error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
-    const res = await GET(makeRequest("GET"));
+    const res = await GET(makeRequest("GET") as never, seg);
     expect(res.status).toBe(401);
   });
 
@@ -88,7 +90,7 @@ describe("GET /api/generation-queue", () => {
       { ...baseQueueItem, id: "item-2", status: "processing", position: 1 },
     ] as never);
 
-    const res = await GET(makeRequest("GET"));
+    const res = await GET(makeRequest("GET") as never, seg);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.items).toHaveLength(2);
@@ -99,7 +101,7 @@ describe("GET /api/generation-queue", () => {
   it("queries only pending and processing statuses for the current user", async () => {
     vi.mocked(prisma.generationQueueItem.findMany).mockResolvedValue([]);
 
-    await GET(makeRequest("GET"));
+    await GET(makeRequest("GET") as never, seg);
 
     expect(prisma.generationQueueItem.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -112,7 +114,7 @@ describe("GET /api/generation-queue", () => {
   it("returns empty items array when queue is empty", async () => {
     vi.mocked(prisma.generationQueueItem.findMany).mockResolvedValue([]);
 
-    const res = await GET(makeRequest("GET"));
+    const res = await GET(makeRequest("GET") as never, seg);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.items).toHaveLength(0);
@@ -128,26 +130,26 @@ describe("POST /api/generation-queue", () => {
       isAdmin: false,
       error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
-    const res = await POST(makeRequest("POST", { prompt: "test" }));
+    const res = await POST(makeRequest("POST", { prompt: "test" }) as never, seg);
     expect(res.status).toBe(401);
   });
 
   it("returns 400 for empty prompt", async () => {
-    const res = await POST(makeRequest("POST", { prompt: "" }));
+    const res = await POST(makeRequest("POST", { prompt: "" }) as never, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain("prompt is required");
   });
 
   it("returns 400 for missing prompt", async () => {
-    const res = await POST(makeRequest("POST", { title: "No prompt" }));
+    const res = await POST(makeRequest("POST", { title: "No prompt" }) as never, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.code).toBe("VALIDATION_ERROR");
   });
 
   it("returns 400 for prompt exceeding 3000 characters", async () => {
-    const res = await POST(makeRequest("POST", { prompt: "a".repeat(3001) }));
+    const res = await POST(makeRequest("POST", { prompt: "a".repeat(3001) }) as never, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain("3000 characters");
@@ -156,7 +158,7 @@ describe("POST /api/generation-queue", () => {
   it("returns 400 when queue is full (10 items)", async () => {
     vi.mocked(prisma.generationQueueItem.count).mockResolvedValue(10);
 
-    const res = await POST(makeRequest("POST", { prompt: "new song" }));
+    const res = await POST(makeRequest("POST", { prompt: "new song" }) as never, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain("Queue is full");
@@ -170,7 +172,7 @@ describe("POST /api/generation-queue", () => {
       position: 2,
     } as never);
 
-    const res = await POST(makeRequest("POST", { prompt: "upbeat pop song", title: "Test", tags: "pop" }));
+    const res = await POST(makeRequest("POST", { prompt: "upbeat pop song", title: "Test", tags: "pop" }) as never, seg);
     expect(res.status).toBe(201);
 
     expect(prisma.generationQueueItem.create).toHaveBeenCalledWith(
@@ -192,7 +194,7 @@ describe("POST /api/generation-queue", () => {
       position: 0,
     } as never);
 
-    const res = await POST(makeRequest("POST", { prompt: "first song" }));
+    const res = await POST(makeRequest("POST", { prompt: "first song" }) as never, seg);
     expect(res.status).toBe(201);
 
     expect(prisma.generationQueueItem.create).toHaveBeenCalledWith(
@@ -207,7 +209,7 @@ describe("POST /api/generation-queue", () => {
     vi.mocked(prisma.generationQueueItem.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.generationQueueItem.create).mockResolvedValue({ ...baseQueueItem } as never);
 
-    const res = await POST(makeRequest("POST", { prompt: "upbeat pop song" }));
+    const res = await POST(makeRequest("POST", { prompt: "upbeat pop song" }) as never, seg);
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.item.id).toBe("item-1");
@@ -227,7 +229,7 @@ describe("POST /api/generation-queue", () => {
       prompt: "instrumental",
       makeInstrumental: true,
       personaId: "persona-1",
-    }));
+    }) as never, seg);
 
     expect(prisma.generationQueueItem.create).toHaveBeenCalledWith(
       expect.objectContaining({

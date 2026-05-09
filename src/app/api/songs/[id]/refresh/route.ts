@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTaskStatus } from "@/lib/sunoapi/status";
 import { SunoApiError } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { downloadAndCache } from "@/lib/audio-cache";
-import { downloadAndCacheImage, hasCachedImage } from "@/lib/image-cache";
+import { audioCache, imageCache } from "@/lib/cache";
 
 // Conservative expiry after a successful refresh (12 days).
 const CDN_URL_TTL_MS = 12 * 24 * 60 * 60 * 1000;
@@ -73,16 +72,18 @@ export async function POST(
       data: {
         audioUrl: fresh.audioUrl || song.audioUrl,
         audioUrlExpiresAt: fresh.audioUrl ? expiresAt : song.audioUrlExpiresAt,
-        imageUrl: fresh.imageUrl || song.imageUrl,
-        imageUrlExpiresAt: fresh.imageUrl ? expiresAt : song.imageUrlExpiresAt,
+        ...(!song.imageUrlIsCustom && {
+          imageUrl: fresh.imageUrl || song.imageUrl,
+          imageUrlExpiresAt: fresh.imageUrl ? expiresAt : song.imageUrlExpiresAt,
+        }),
       },
     });
 
     if (updated.audioUrl) {
-      downloadAndCache(id, updated.audioUrl).catch(() => {});
+      audioCache.downloadAndPut(id, updated.audioUrl).catch(() => {});
     }
-    if (updated.imageUrl && !hasCachedImage(id)) {
-      downloadAndCacheImage(id, updated.imageUrl).catch(() => {});
+    if (updated.imageUrl && !imageCache.has(id)) {
+      imageCache.downloadAndPut(id, updated.imageUrl).catch(() => {});
     }
 
     return NextResponse.json({ ok: true, song: updated });
