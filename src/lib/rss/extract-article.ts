@@ -3,8 +3,9 @@ import { decodeHtmlEntities } from "./parse";
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_HTML_SIZE = 512_000;
 const MIN_USEFUL_CONTENT_LENGTH = 100;
+const MAX_REDIRECTS = 5;
 
-function isSsrfUrl(raw: string): boolean {
+export function isSsrfUrl(raw: string): boolean {
   let url: URL;
   try {
     url = new URL(raw);
@@ -13,7 +14,8 @@ function isSsrfUrl(raw: string): boolean {
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return true;
   const hostname = url.hostname.toLowerCase();
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return true;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0") return true;
+  if (/^::ffff:/i.test(hostname)) return true;
   if (/^169\.254\./.test(hostname)) return true;
   if (/^10\./.test(hostname) || /^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname) || /^192\.168\./.test(hostname)) return true;
   if (/^(::1|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:)/.test(hostname)) return true;
@@ -82,23 +84,41 @@ function extractMainContent(html: string): string {
   return plainText;
 }
 
+async function safeFetch(url: string): Promise<Response | null> {
+  let currentUrl = url;
+  for (let i = 0; i <= MAX_REDIRECTS; i++) {
+    if (isSsrfUrl(currentUrl)) return null;
+
+    const response = await fetch(currentUrl, {
+      headers: {
+        Accept: "text/html, application/xhtml+xml, */*",
+        "User-Agent":
+          "Mozilla/5.0 (compatible; SunoFlow/1.0; +https://sunoflow.com)",
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) return null;
+      currentUrl = new URL(location, currentUrl).href;
+      continue;
+    }
+
+    return response;
+  }
+  return null;
+}
+
 export async function extractArticleContent(
   url: string
 ): Promise<string | null> {
   if (isSsrfUrl(url)) return null;
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: "text/html, application/xhtml+xml, */*",
-        "User-Agent":
-          "Mozilla/5.0 (compatible; SunoFlow/1.0; +https://sunoflow.com)",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-
-    if (!response.ok) return null;
+    const response = await safeFetch(url);
+    if (!response || !response.ok) return null;
 
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("html") && !contentType.includes("xml")) {
