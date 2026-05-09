@@ -1,6 +1,6 @@
 export { ownerWhere, memberWhere, editorWhere } from "./access";
-export { MAX_PLAYLISTS, MAX_SONGS_PER_PLAYLIST, INVITE_TTL_DAYS } from "./constants";
-export type { PlaylistResult } from "./result";
+
+export const MAX_SONGS_PER_PLAYLIST = 500;
 
 export {
   listPlaylists,

@@ -8,8 +8,9 @@ import {
 } from "@/lib/cache";
 import { recordActivity } from "@/lib/activity";
 import { ownerWhere, memberWhere } from "./access";
-import { MAX_PLAYLISTS } from "./constants";
-import { success, Err, type PlaylistResult } from "./result";
+import { type Result, success, Err } from "@/lib/result";
+
+const MAX_PLAYLISTS = 50;
 
 export async function listPlaylists(userId: string) {
   const playlists = await cached(
@@ -89,7 +90,7 @@ export async function updatePlaylist(
   playlistId: string,
   userId: string,
   input: { name?: string; description?: string | null },
-): Promise<PlaylistResult<{ playlist: Awaited<ReturnType<typeof prisma.playlist.update>> }>> {
+): Promise<Result<{ playlist: Awaited<ReturnType<typeof prisma.playlist.update>> }>> {
   const playlist = await prisma.playlist.findFirst({
     where: ownerWhere(playlistId, userId),
   });
