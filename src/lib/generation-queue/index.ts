@@ -8,6 +8,10 @@ import { SUNOAPI_KEY } from "@/lib/env";
 import { logServerError } from "@/lib/error-logger";
 import { executeGeneration, userFriendlyError } from "@/lib/generation";
 
+// Register circuit-breaker drain listener on module load.
+import "./drain";
+export { drainQueuedItems } from "./drain";
+
 
 export const MAX_QUEUE_SIZE = 10;
 

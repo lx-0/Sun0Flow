@@ -3,8 +3,8 @@ import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { onCircuitClose } from "@/lib/circuit-breaker";
-import { markDone, markFailed } from "@/lib/generation-queue";
-import { executeCore, type SongParams } from "./core";
+import { executeCore, type SongParams } from "@/lib/generation/core";
+import { markDone, markFailed } from ".";
 
 const DRAIN_BATCH_SIZE = 5;
 

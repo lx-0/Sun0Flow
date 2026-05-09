@@ -3,7 +3,6 @@ import type { RateLimitStatus } from "@/lib/rate-limit";
 import { releaseRateLimitSlot } from "@/lib/rate-limit";
 import { deductCredits } from "@/lib/credits";
 import { logger } from "@/lib/logger";
-import { enqueueFromSpec } from "@/lib/generation-queue";
 import { resolveGuards, enforceRateLimit, checkCreditBalance, type GuardPolicy } from "./guards";
 import { createSongRecord, afterCreation, executeCore, type SongParams, type MockData } from "./core";
 
@@ -15,12 +14,8 @@ export { userFriendlyError } from "./errors";
 export type { GenerationError } from "./errors";
 export { executeTransform } from "./transform";
 export type { TransformSpec, TransformOutcome } from "./transform";
-export { drainQueuedItems } from "./queue-drain";
 export { type GuardPolicy } from "./guards";
 export { executeCore, type SongParams, type MockData } from "./core";
-
-// Ensure queue-drain's circuit-breaker listener is registered on module load.
-import "./queue-drain";
 
 // ---------------------------------------------------------------------------
 // Generation
@@ -106,6 +101,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
 async function enqueueGeneration(spec: GenerationSpec): Promise<GenerationOutcome> {
   logger.warn({ userId: spec.userId }, "generation: circuit open — queuing request");
 
+  const { enqueueFromSpec } = await import("@/lib/generation-queue");
   await enqueueFromSpec(spec.userId, spec.songParams);
 
   return {
