@@ -74,6 +74,9 @@ export type {
   StreamUploadResult,
 } from "./types";
 
+// Mappers & predicates
+export { isTerminalFailure } from "./mappers";
+
 // Error classes
 export { SunoApiError, type SunoApiErrorCode } from "./errors";
 export { SunoValidationError } from "./validation";

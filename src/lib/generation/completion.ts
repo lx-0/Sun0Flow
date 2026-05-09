@@ -1,18 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { getTaskStatus } from "@/lib/sunoapi";
+import { isTerminalFailure } from "@/lib/sunoapi/mappers";
 import { logServerError } from "@/lib/error-logger";
-import { invalidateByPrefix } from "@/lib/cache";
-import { broadcast } from "@/lib/event-bus";
+import { handleSongSuccess, handleSongFailure } from "@/lib/song-completion";
+import type { SongRecord } from "@/lib/song-completion";
 
 const POLL_INTERVAL_MS = 4000;
 const MAX_POLL_ATTEMPTS = 60;
-
-const TERMINAL_FAILURE_STATUSES = new Set([
-  "CREATE_TASK_FAILED",
-  "GENERATE_AUDIO_FAILED",
-  "CALLBACK_EXCEPTION",
-  "SENSITIVE_WORD_ERROR",
-]);
 
 export interface CompletionUpdate {
   songId: string;
@@ -45,6 +39,25 @@ export interface CompletionTarget {
   };
 }
 
+function buildSongRecord(target: CompletionTarget, pollCount: number): SongRecord {
+  return {
+    id: target.songId,
+    userId: target.userId,
+    prompt: target.existingSong.prompt,
+    tags: target.existingSong.tags,
+    audioUrl: target.existingSong.audioUrl,
+    audioUrlExpiresAt: null,
+    imageUrl: target.existingSong.imageUrl,
+    imageUrlExpiresAt: null,
+    duration: target.existingSong.duration,
+    lyrics: target.existingSong.lyrics,
+    title: target.existingSong.title,
+    sunoModel: target.existingSong.sunoModel,
+    isInstrumental: target.existingSong.isInstrumental,
+    pollCount,
+  };
+}
+
 export async function* pollToCompletion(
   target: CompletionTarget,
   signal?: AbortSignal,
@@ -55,19 +68,9 @@ export async function* pollToCompletion(
     pollCount += 1;
 
     if (pollCount > MAX_POLL_ATTEMPTS) {
-      const updated = await prisma.song.update({
-        where: { id: target.songId },
-        data: {
-          generationStatus: "failed",
-          pollCount,
-          errorMessage: "Generation timed out",
-        },
-      });
-      broadcast(target.userId, {
-        type: "generation_update",
-        data: { songId: target.songId, status: "failed", errorMessage: updated.errorMessage },
-      });
-      yield { songId: target.songId, status: "failed", errorMessage: updated.errorMessage };
+      const songRecord = buildSongRecord(target, pollCount - 1);
+      await handleSongFailure(songRecord, "Generation timed out");
+      yield { songId: target.songId, status: "failed", errorMessage: "Generation timed out" };
       return;
     }
 
@@ -90,12 +93,25 @@ export async function* pollToCompletion(
     }
 
     if (taskResult.status === "SUCCESS" && taskResult.songs.length > 0) {
-      yield* handleSuccess(target, taskResult, pollCount);
+      const songRecord = buildSongRecord(target, pollCount - 1);
+      await handleSongSuccess(songRecord, taskResult.songs);
+      const firstSong = taskResult.songs[0];
+      yield {
+        songId: target.songId,
+        status: "ready",
+        title: firstSong.title || target.existingSong.title,
+        audioUrl: firstSong.audioUrl || target.existingSong.audioUrl,
+        imageUrl: firstSong.imageUrl || target.existingSong.imageUrl,
+        alternateCount: taskResult.songs.length - 1,
+      };
       return;
     }
 
-    if (TERMINAL_FAILURE_STATUSES.has(taskResult.status)) {
-      yield* handleFailure(target, taskResult, pollCount);
+    if (isTerminalFailure(taskResult.status)) {
+      const errorMessage = taskResult.errorMessage || `Generation failed: ${taskResult.status}`;
+      const songRecord = buildSongRecord(target, pollCount - 1);
+      await handleSongFailure(songRecord, errorMessage);
+      yield { songId: target.songId, status: "failed", errorMessage };
       return;
     }
 
@@ -106,98 +122,6 @@ export async function* pollToCompletion(
     yield { songId: target.songId, status: "processing", pollCount };
     await sleep(POLL_INTERVAL_MS);
   }
-}
-
-async function* handleSuccess(
-  target: CompletionTarget,
-  taskResult: { songs: Array<{ title?: string; audioUrl?: string; imageUrl?: string; duration?: number; lyrics?: string; tags?: string; model?: string; id?: string }> },
-  pollCount: number,
-): AsyncGenerator<CompletionUpdate> {
-  const firstSong = taskResult.songs[0];
-  const existing = target.existingSong;
-
-  const updated = await prisma.song.update({
-    where: { id: target.songId },
-    data: {
-      generationStatus: "ready",
-      audioUrl: firstSong.audioUrl || existing.audioUrl,
-      imageUrl: firstSong.imageUrl || existing.imageUrl,
-      duration: firstSong.duration ?? existing.duration,
-      lyrics: firstSong.lyrics || existing.lyrics,
-      title: firstSong.title || existing.title,
-      tags: firstSong.tags || existing.tags,
-      sunoModel: firstSong.model || existing.sunoModel,
-      pollCount,
-    },
-  });
-
-  for (let i = 1; i < taskResult.songs.length; i++) {
-    const extra = taskResult.songs[i];
-    const alternateSong = await prisma.song.create({
-      data: {
-        userId: target.userId,
-        sunoJobId: extra.id || null,
-        title: extra.title || existing.title,
-        prompt: existing.prompt ?? "",
-        tags: extra.tags || existing.tags,
-        audioUrl: extra.audioUrl || null,
-        imageUrl: extra.imageUrl || null,
-        duration: extra.duration ?? null,
-        lyrics: extra.lyrics || null,
-        sunoModel: extra.model || null,
-        isInstrumental: existing.isInstrumental,
-        generationStatus: "ready",
-        parentSongId: target.songId,
-      },
-    });
-    broadcast(target.userId, {
-      type: "generation_update",
-      data: {
-        songId: alternateSong.id,
-        parentSongId: target.songId,
-        status: "ready",
-        title: alternateSong.title,
-        audioUrl: alternateSong.audioUrl,
-        imageUrl: alternateSong.imageUrl,
-      },
-    });
-  }
-
-  const alternateCount = taskResult.songs.length - 1;
-  invalidateByPrefix(`dashboard-stats:${target.userId}`);
-
-  const eventData: CompletionUpdate = {
-    songId: target.songId,
-    status: "ready",
-    title: updated.title,
-    audioUrl: updated.audioUrl,
-    imageUrl: updated.imageUrl,
-    alternateCount,
-  };
-  broadcast(target.userId, { type: "generation_update", data: { ...eventData } });
-  yield eventData;
-}
-
-async function* handleFailure(
-  target: CompletionTarget,
-  taskResult: { status: string; errorMessage?: string | null },
-  pollCount: number,
-): AsyncGenerator<CompletionUpdate> {
-  const updated = await prisma.song.update({
-    where: { id: target.songId },
-    data: {
-      generationStatus: "failed",
-      pollCount,
-      errorMessage: taskResult.errorMessage || `Generation failed: ${taskResult.status}`,
-    },
-  });
-  const eventData: CompletionUpdate = {
-    songId: target.songId,
-    status: "failed",
-    errorMessage: updated.errorMessage,
-  };
-  broadcast(target.userId, { type: "generation_update", data: { ...eventData } });
-  yield eventData;
 }
 
 function sleep(ms: number): Promise<void> {

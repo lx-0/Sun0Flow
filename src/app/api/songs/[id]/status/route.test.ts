@@ -41,9 +41,13 @@ vi.mock("@/lib/email", () => ({
   sendGenerationCompleteEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/sunoapi", () => ({
-  getTaskStatus: vi.fn(),
-}));
+vi.mock("@/lib/sunoapi", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/sunoapi")>("@/lib/sunoapi");
+  return {
+    ...actual,
+    getTaskStatus: vi.fn(),
+  };
+});
 
 vi.mock("@/lib/sunoapi/resolve-key", () => ({
   resolveUserApiKey: vi.fn(),
