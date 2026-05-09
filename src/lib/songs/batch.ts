@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { MAX_SONGS_PER_PLAYLIST } from "@/lib/playlists/constants";
+import { MAX_SONGS_PER_PLAYLIST } from "@/lib/playlists";
 
 const MAX_BATCH_SIZE = 50;
 

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { generatePersona, getTaskStatus, SunoApiError } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { success, Err, type PersonaResult } from "./result";
+import { type Result, success, Err } from "@/lib/result";
 
 const MAX_PERSONAS = 50;
 const MAX_NAME_LENGTH = 100;
@@ -39,7 +39,7 @@ const PERSONA_SELECT = {
 
 export async function listPersonas(
   userId: string,
-): Promise<PersonaResult<PersonaEntry[]>> {
+): Promise<Result<PersonaEntry[]>> {
   const personas = await prisma.persona.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
@@ -51,7 +51,7 @@ export async function listPersonas(
 export async function createPersona(
   userId: string,
   input: CreatePersonaInput,
-): Promise<PersonaResult<PersonaEntry>> {
+): Promise<Result<PersonaEntry>> {
   const { taskId, name, description, vocalStart, vocalEnd, style, songId } = input;
 
   if (!taskId || typeof taskId !== "string" || !name || typeof name !== "string") {

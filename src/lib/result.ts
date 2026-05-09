@@ -22,4 +22,8 @@ export const Err = {
   rateLimited: (msg: string) => fail(msg, "RATE_LIMITED", 429),
   limitReached: (msg: string) => fail(msg, "LIMIT_REACHED", 400),
   expired: (msg: string) => fail(msg, "EXPIRED", 410),
+  alreadyUsed: (msg: string) => fail(msg, "ALREADY_USED", 410),
+  duplicate: (msg: string) => fail(msg, "DUPLICATE_COMMENT", 429),
+  clipNotFound: (msg: string) => fail(msg, "CLIP_NOT_FOUND", 404),
+  upstream: (msg: string, status: number) => fail(msg, "SUNO_API_ERROR", status),
 };
