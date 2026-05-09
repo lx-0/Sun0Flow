@@ -14,11 +14,19 @@ export function isSsrfUrl(raw: string): boolean {
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return true;
   const hostname = url.hostname.toLowerCase();
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0") return true;
-  if (/^::ffff:/i.test(hostname)) return true;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0") return true;
   if (/^169\.254\./.test(hostname)) return true;
   if (/^10\./.test(hostname) || /^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname) || /^192\.168\./.test(hostname)) return true;
-  if (/^(::1|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:)/.test(hostname)) return true;
+  const bare = hostname.replace(/^\[|\]$/g, "");
+  if (bare === "::1") return true;
+  if (/^(fc[0-9a-f]{2}:|fd[0-9a-f]{2}:)/i.test(bare)) return true;
+  const v4Mapped = bare.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (v4Mapped) {
+    const hi = parseInt(v4Mapped[1], 16);
+    const lo = parseInt(v4Mapped[2], 16);
+    const ip = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+    return isSsrfUrl(`http://${ip}/`);
+  }
   return false;
 }
 

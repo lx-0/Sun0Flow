@@ -14,10 +14,6 @@ describe("isSsrfUrl", () => {
     expect(isSsrfUrl("http://0.0.0.0/")).toBe(true);
   });
 
-  it("blocks ::ffff:127.0.0.1 (IPv6-mapped IPv4)", () => {
-    expect(isSsrfUrl("http://[::ffff:127.0.0.1]/")).toBe(true);
-  });
-
   it("blocks 10.x private range", () => {
     expect(isSsrfUrl("http://10.0.0.1/")).toBe(true);
   });
@@ -52,6 +48,25 @@ describe("isSsrfUrl", () => {
   it("allows 172.x outside private range", () => {
     expect(isSsrfUrl("http://172.15.0.1/")).toBe(false);
     expect(isSsrfUrl("http://172.32.0.1/")).toBe(false);
+  });
+
+  it("blocks ::1 (IPv6 loopback)", () => {
+    expect(isSsrfUrl("http://[::1]/")).toBe(true);
+  });
+
+  it("blocks IPv6-mapped private IPs", () => {
+    expect(isSsrfUrl("http://[::ffff:127.0.0.1]/")).toBe(true);
+    expect(isSsrfUrl("http://[::ffff:10.0.0.1]/")).toBe(true);
+    expect(isSsrfUrl("http://[::ffff:192.168.1.1]/")).toBe(true);
+  });
+
+  it("allows IPv6-mapped public IPs", () => {
+    expect(isSsrfUrl("http://[::ffff:8.8.8.8]/")).toBe(false);
+  });
+
+  it("blocks IPv6 unique local addresses", () => {
+    expect(isSsrfUrl("http://[fc00::1]/")).toBe(true);
+    expect(isSsrfUrl("http://[fd12::1]/")).toBe(true);
   });
 });
 
@@ -98,12 +113,13 @@ describe("extractArticleContent", () => {
     expect(result).toContain(content);
   });
 
-  it("returns null for SSRF-blocked URL", async () => {
-    const fetchSpy = vi.stubGlobal("fetch", vi.fn());
+  it("returns null for SSRF-blocked URL without calling fetch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await extractArticleContent("http://169.254.169.254/latest");
     expect(result).toBeNull();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns null for non-HTML content-type", async () => {
