@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createNotification } from "@/lib/notifications";
+import { notifyUser } from "@/lib/notifications";
 import { checkFirstFollowerMilestone } from "@/lib/streaks";
-import { sendPushToUser } from "@/lib/push";
 
 export async function POST(
   _request: Request,
@@ -58,27 +57,16 @@ export async function POST(
           where: { id: followerId },
           select: { name: true, username: true },
         });
-        const followedUser = await prisma.user.findUnique({
-          where: { id: followingId },
-          select: { pushNewFollower: true },
-        });
         const followerName = follower?.name ?? follower?.username ?? "Someone";
-        const profileHref = follower?.username ? `/u/${follower.username}` : undefined;
-        await createNotification({
+        const profileHref = follower?.username ? `/u/${follower.username}` : null;
+        await notifyUser({
           userId: followingId,
           type: "new_follower",
           title: "New follower",
           message: `${followerName} started following you`,
-          href: profileHref ?? null,
+          href: profileHref,
+          push: { tag: `new-follower-${followerId}` },
         });
-        if (followedUser?.pushNewFollower !== false) {
-          sendPushToUser(followingId, {
-            title: "New follower",
-            body: `${followerName} started following you`,
-            url: profileHref ?? "/",
-            tag: `new-follower-${followerId}`,
-          }).catch(() => {});
-        }
       } catch {
         // Non-critical
       }

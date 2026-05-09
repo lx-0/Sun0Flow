@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/songs/[id]/lyrics/timestamps — list all timestamps for the song

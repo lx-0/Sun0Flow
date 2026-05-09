@@ -1,56 +1,42 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { resolveUser } from "@/lib/auth-resolver";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
+import { badRequest, notFound } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
 
-// DELETE /api/account — soft-deletes the authenticated user's account
-// Requires password and email confirmation. Cancels Stripe subscription if present.
-export async function DELETE(request: Request) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
-  const { password, confirmEmail } = await request.json();
-
-  if (!password || !confirmEmail) {
-    return NextResponse.json(
-      { error: "Password and email confirmation are required", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
-  }
+export const DELETE = authRoute(async (_request, { auth, body }) => {
+  const { password, confirmEmail } = body;
 
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: auth.userId },
     select: { email: true, passwordHash: true },
   });
 
   if (!user) {
-    return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 });
+    return notFound("User not found");
   }
 
   if (!user.passwordHash) {
-    return NextResponse.json(
-      { error: "Account deletion requires a password. Use your account provider to delete OAuth-only accounts.", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
+    return badRequest("Account deletion requires a password. Use your account provider to delete OAuth-only accounts.");
   }
 
   if (confirmEmail !== user.email) {
-    return NextResponse.json(
-      { error: "Email does not match your account", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
+    return badRequest("Email does not match your account");
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
-    return NextResponse.json(
-      { error: "Password is incorrect", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
+    return badRequest("Password is incorrect");
   }
 
-  // Cascade delete: songs, playlists, templates, accounts, sessions all cascade via schema
-  await prisma.user.delete({ where: { id: userId } });
+  await prisma.user.delete({ where: { id: auth.userId } });
 
   return NextResponse.json({ success: true });
-}
+}, {
+  route: "/api/account",
+  body: z.object({
+    password: z.string().min(1),
+    confirmEmail: z.string().email(),
+  }),
+});

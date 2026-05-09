@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { getSongById } from "@/lib/sunoapi/songs";
 import { SunoApiError } from "@/lib/sunoapi/errors";

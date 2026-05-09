@@ -269,7 +269,9 @@
     "deleteTemplate": "Delete template",
     "deleteTemplateConfirm": "Delete this template? This cannot be undone.",
     "templateName": "Template name",
-    "templateNamePlaceholder": "My template"
+    "templateNamePlaceholder": "My template",
+    "promptTemplatesTab": "Prompt Templates",
+    "styleTemplatesTab": "Style Templates"
   },
   "personas": {
     "title": "Personas",

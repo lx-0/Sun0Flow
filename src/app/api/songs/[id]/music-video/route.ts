@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createMusicVideo } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { executeTransform } from "@/lib/generation";
+import { executeTransform, respondToTransform } from "@/lib/generation";
 
 /** POST /api/songs/[id]/music-video — generate an MP4 music video */
 export async function POST(
@@ -45,17 +45,10 @@ export async function POST(
       fallbackErrorMessage: "Music video generation failed. Please try again.",
     });
 
-    if (outcome.status === "denied") return outcome.response;
-    if (outcome.status === "failed") {
-      logServerError("music-video-api", outcome.rawError, { userId, route: `/api/songs/${songId}/music-video` });
-      return NextResponse.json(
-        { error: outcome.error, rateLimit: outcome.rateLimitStatus },
-        { status: 502 }
-      );
-    }
-    return NextResponse.json(
-      { taskId: outcome.taskId, status: outcome.mockMode ? "ready" : "pending", songId, format: "mp4", rateLimit: outcome.rateLimitStatus },
-      { status: 200 }
+    return respondToTransform(
+      outcome,
+      { label: "music-video-api", userId, route: `/api/songs/${songId}/music-video` },
+      { songId, format: "mp4" },
     );
   } catch (error) {
     logServerError("music-video-route", error, { route: "/api/songs/music-video" });

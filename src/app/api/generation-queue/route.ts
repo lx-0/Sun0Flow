@@ -1,75 +1,39 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
+import { badRequest } from "@/lib/api-error";
+import { listItems, addItem } from "@/lib/generation-queue";
 
-const MAX_QUEUE_SIZE = 10;
-
-/** GET: List queue items for the current user */
-export async function GET(request: Request) {
-  const { userId, error } = await resolveUser(request);
-  if (error) return error;
-
-  const items = await prisma.generationQueueItem.findMany({
-    where: { userId, status: { in: ["pending", "processing"] } },
-    orderBy: { position: "asc" },
-  });
-
+export const GET = authRoute(async (_request, { auth }) => {
+  const items = await listItems(auth.userId);
   return NextResponse.json({ items });
-}
+}, { route: "/api/generation-queue" });
 
-/** POST: Add an item to the queue */
-export async function POST(request: Request) {
-  const { userId, error } = await resolveUser(request);
-  if (error) return error;
+export const POST = authRoute(async (_request, { auth, body }) => {
+  const { prompt, title, tags, makeInstrumental, personaId } = body;
 
-  const { prompt, title, tags, makeInstrumental, personaId } =
-    await request.json();
-
-  if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
-    return NextResponse.json(
-      { error: "A prompt is required", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
+  if (!prompt.trim()) {
+    return badRequest("A prompt is required");
   }
 
   if (prompt.length > 3000) {
-    return NextResponse.json(
-      { error: "Prompt must be 3000 characters or less", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
+    return badRequest("Prompt must be 3000 characters or less");
   }
 
-  // Check queue size
-  const pendingCount = await prisma.generationQueueItem.count({
-    where: { userId, status: { in: ["pending", "processing"] } },
-  });
+  const result = await addItem(auth.userId, { prompt, title, tags, makeInstrumental, personaId });
 
-  if (pendingCount >= MAX_QUEUE_SIZE) {
-    return NextResponse.json(
-      { error: `Queue is full (max ${MAX_QUEUE_SIZE} items)` },
-      { status: 400 }
-    );
+  if (!result.ok) {
+    return NextResponse.json({ error: result.message }, { status: 400 });
   }
 
-  // Get next position
-  const lastItem = await prisma.generationQueueItem.findFirst({
-    where: { userId },
-    orderBy: { position: "desc" },
-    select: { position: true },
-  });
-  const nextPosition = (lastItem?.position ?? -1) + 1;
-
-  const item = await prisma.generationQueueItem.create({
-    data: {
-      userId,
-      prompt: prompt.trim(),
-      title: title?.trim() || null,
-      tags: tags?.trim() || null,
-      makeInstrumental: Boolean(makeInstrumental),
-      personaId: personaId || null,
-      position: nextPosition,
-    },
-  });
-
-  return NextResponse.json({ item }, { status: 201 });
-}
+  return NextResponse.json({ item: result.item }, { status: 201 });
+}, {
+  route: "/api/generation-queue",
+  body: z.object({
+    prompt: z.string(),
+    title: z.string().optional(),
+    tags: z.string().optional(),
+    makeInstrumental: z.boolean().optional(),
+    personaId: z.string().optional(),
+  }),
+});

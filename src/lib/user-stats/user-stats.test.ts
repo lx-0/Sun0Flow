@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { calculateListeningTime } from "./listening-time";
-import { buildPeakHoursHeatmap } from "./peak-hours";
-import { calculateActivityStreaks } from "./streaks";
-import { breakdownGenres } from "./genres";
-import { buildCreditChart } from "./credits";
+import {
+  calculateListeningTime,
+  buildPeakHoursHeatmap,
+  calculateActivityStreaks,
+  breakdownGenres,
+  buildCreditChart,
+} from "./index";
 
 describe("calculateListeningTime", () => {
   it("aggregates total and daily listening from play history", () => {

@@ -8,7 +8,7 @@
  * Protected behind admin auth — not exposed to regular users.
  */
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth-resolver";
+import { requireAdmin } from "@/lib/auth";
 import { getMetricsSnapshot } from "@/lib/metrics";
 
 export async function GET() {

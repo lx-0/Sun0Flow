@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, generateApiKey } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateApiKey } from "@/lib/api-keys";
 import { logServerError } from "@/lib/error-logger";
 import { canUseFeature, SubscriptionTier } from "@/lib/feature-gates";
 

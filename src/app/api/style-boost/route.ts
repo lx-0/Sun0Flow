@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { boostStyle, SunoApiError } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";

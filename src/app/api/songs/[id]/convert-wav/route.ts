@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { convertToWav } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { executeTransform } from "@/lib/generation";
+import { executeTransform, respondToTransform } from "@/lib/generation";
 
 /** POST /api/songs/[id]/convert-wav — convert a track to WAV format */
 export async function POST(
@@ -45,17 +45,10 @@ export async function POST(
       fallbackErrorMessage: "WAV conversion failed. Please try again.",
     });
 
-    if (outcome.status === "denied") return outcome.response;
-    if (outcome.status === "failed") {
-      logServerError("convert-wav-api", outcome.rawError, { userId, route: `/api/songs/${songId}/convert-wav` });
-      return NextResponse.json(
-        { error: outcome.error, rateLimit: outcome.rateLimitStatus },
-        { status: 502 }
-      );
-    }
-    return NextResponse.json(
-      { taskId: outcome.taskId, status: outcome.mockMode ? "ready" : "pending", songId, format: "wav", rateLimit: outcome.rateLimitStatus },
-      { status: 200 }
+    return respondToTransform(
+      outcome,
+      { label: "convert-wav-api", userId, route: `/api/songs/${songId}/convert-wav` },
+      { songId, format: "wav" },
     );
   } catch (error) {
     logServerError("convert-wav-route", error, { route: "/api/songs/convert-wav" });

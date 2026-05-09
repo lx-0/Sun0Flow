@@ -99,7 +99,8 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload,
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
   const hasAudio = !!song.audioUrl;
-  const coverUrl = song.imageUrl || generateCoverArtVariants({ songId: song.id, title: song.title, tags: song.tags })[0].dataUrl;
+  const generatedCoverUrl = generateCoverArtVariants({ songId: song.id, title: song.title, tags: song.tags })[0].dataUrl;
+  const coverUrl = song.imageUrl || generatedCoverUrl;
 
   return (
     <div className="group relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden transition-shadow hover:shadow-lg hover:shadow-violet-500/10">
@@ -113,6 +114,7 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload,
           className="object-cover"
           loading="lazy"
           songId={song.id}
+          fallbackSrc={generatedCoverUrl}
         />
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">

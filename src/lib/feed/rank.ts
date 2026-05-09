@@ -1,5 +1,6 @@
+import { trendingScore } from "@/lib/scoring";
 import { parseTags } from "@/lib/tags";
-import { trendingScore, affinityScore } from "./score";
+
 export type TasteProfile = Map<string, number>;
 
 export type FeedReason =
@@ -41,6 +42,30 @@ export type SongRow = {
   createdAt: Date;
   user: { id: string; name: string | null; username: string | null };
 };
+
+// --- Scoring strategy weights ---
+// Each bucket gets a base score that determines its priority band.
+// Affinity (tag overlap with taste profile) boosts within and across bands.
+const RANK_WEIGHTS = {
+  followedArtist: 1000,
+  recommended: 800,
+  trending: 500,
+  newRelease: 100,
+  trendingScale: 0.01,
+  recommendedAffinityThreshold: 2,
+} as const;
+
+export function affinityScore(
+  songTags: string[],
+  preferredTags: Map<string, number>,
+): number {
+  if (preferredTags.size === 0 || songTags.length === 0) return 0;
+  let score = 0;
+  for (const tag of songTags) {
+    score += preferredTags.get(tag) ?? 0;
+  }
+  return score;
+}
 
 export function toFeedItem(
   song: SongRow,
@@ -127,7 +152,7 @@ export function rankPersonalizedFeed(
     const taff = affinityScore(parseTags(song.tags), tasteProfile);
     allScored.push({
       item: toFeedItem(song, "followed_artist", `From ${artistName}`),
-      score: 1000 + taff,
+      score: RANK_WEIGHTS.followedArtist + taff,
     });
   }
 
@@ -144,7 +169,7 @@ export function rankPersonalizedFeed(
     const taff = affinityScore(parseTags(song.tags), tasteProfile);
     allScored.push({
       item: toFeedItem(song, "trending", "Trending"),
-      score: 500 + tScore * 0.01 + taff,
+      score: RANK_WEIGHTS.trending + tScore * RANK_WEIGHTS.trendingScale + taff,
     });
   }
 
@@ -152,15 +177,15 @@ export function rankPersonalizedFeed(
     if (seen.has(song.id)) continue;
     seen.add(song.id);
     const taff = affinityScore(parseTags(song.tags), tasteProfile);
-    if (hasHistory && taff > 2) {
+    if (hasHistory && taff > RANK_WEIGHTS.recommendedAffinityThreshold) {
       allScored.push({
         item: toFeedItem(song, "recommended", "Recommended for you"),
-        score: 800 + taff,
+        score: RANK_WEIGHTS.recommended + taff,
       });
     } else {
       allScored.push({
         item: toFeedItem(song, "new_release", "New Release"),
-        score: 100 + taff,
+        score: RANK_WEIGHTS.newRelease + taff,
       });
     }
   }

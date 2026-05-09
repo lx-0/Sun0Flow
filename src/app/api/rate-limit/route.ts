@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {

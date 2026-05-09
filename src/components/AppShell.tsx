@@ -35,7 +35,6 @@ import {
   MusicalNoteIcon,
   RectangleStackIcon,
   Squares2X2Icon,
-  SwatchIcon,
 } from "@heroicons/react/24/outline";
 import { useTheme } from "./ThemeProvider";
 import dynamic from "next/dynamic";
@@ -59,7 +58,6 @@ const NAV_ITEM_DEFS = [
   { key: "inspire" as const, href: "/inspire", icon: LightBulbIcon, dataTour: "nav-inspire" as string | undefined, prefetch: false },
   { key: "generate" as const, href: "/generate", icon: PlusCircleIcon, dataTour: "nav-generate" as string | undefined, prefetch: true },
   { key: "templates" as const, href: "/templates", icon: BookmarkIcon, dataTour: undefined as string | undefined, prefetch: false },
-  { key: "styleTemplates" as const, href: "/style-templates", icon: SwatchIcon, dataTour: undefined as string | undefined, prefetch: false },
   { key: "personas" as const, href: "/personas", icon: UserGroupIcon, dataTour: undefined as string | undefined, prefetch: false },
   { key: "mashup" as const, href: "/mashup", icon: SparklesIcon, dataTour: undefined as string | undefined, prefetch: false },
   { key: "feed" as const, href: "/feed", icon: RssIcon, dataTour: undefined as string | undefined, prefetch: false },
@@ -227,14 +225,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Load collapsed preference from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem("sidebar-collapsed");
-    if (stored === "true") setSidebarCollapsed(true);
+    try {
+      const stored = localStorage.getItem("sidebar-collapsed");
+      if (stored === "true") setSidebarCollapsed(true);
+    } catch {
+      // localStorage unavailable (iOS PWA restrictions, private browsing)
+    }
   }, []);
 
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
-      localStorage.setItem("sidebar-collapsed", String(next));
+      try {
+        localStorage.setItem("sidebar-collapsed", String(next));
+      } catch {
+        // localStorage unavailable
+      }
       return next;
     });
   }, []);
