@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { recordActivity } from "@/lib/activity";
 import { editorWhere, ownerWhere } from "./access";
-import { MAX_SONGS_PER_PLAYLIST } from "./constants";
-import { success, Err } from "./result";
+import { success, Err } from "@/lib/result";
+
+const MAX_SONGS_PER_PLAYLIST = 500;
 
 export async function addSong(
   playlistId: string,

@@ -2,9 +2,10 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { createNotification } from "@/lib/notifications";
 import { ownerWhere, memberWhere } from "./access";
-import { INVITE_TTL_DAYS } from "./constants";
-import { success, Err } from "./result";
+import { success, Err } from "@/lib/result";
 import { invalidateByPrefix, cacheKey } from "@/lib/cache";
+
+const INVITE_TTL_DAYS = 7;
 
 function generateInviteToken(): string {
   return crypto.randomBytes(24).toString("hex");
