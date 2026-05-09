@@ -6,6 +6,8 @@ import { rankCandidates, coldStartFallback } from "./rank";
 export { getAlsoLiked } from "./also-liked";
 export { getSimilarSongs } from "./similar";
 export type { SimilarSong } from "./similar";
+export { findSimilarByEmbedding } from "./embedding-similarity";
+export type { EmbeddingSimilarityResult } from "./embedding-similarity";
 export { getRelatedSongs } from "./related";
 export type { RelatedSong, RelatedResult } from "./related";
 export { getDailyMix } from "./daily-mix";
