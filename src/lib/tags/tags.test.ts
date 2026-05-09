@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseTags, normalizeTagCombo, collectSongTokens, tagOverlapScore } from "./tags";
+import { parseTags, normalizeTagCombo, collectSongTokens, tagOverlapScore } from "./index";
 
 describe("parseTags", () => {
   it("splits comma-separated tags", () => {
