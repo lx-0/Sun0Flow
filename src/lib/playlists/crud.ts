@@ -82,6 +82,10 @@ export async function getPlaylist(playlistId: string, userId: string) {
 
   if (!playlist) return Err.notFound();
 
+  if (playlist.smartPlaylistType !== "archive") {
+    playlist.songs = playlist.songs.filter((ps) => !ps.song.archivedAt);
+  }
+
   const isOwner = playlist.userId === userId;
   return success({ playlist, isOwner });
 }
