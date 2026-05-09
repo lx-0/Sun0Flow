@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { mondayOfWeeksAgo } from "@/lib/analytics-data/dates";
 
 export interface TagStat {
   tag: string;
@@ -153,13 +154,7 @@ export function buildWeeklyTrend(
   const result: WeeklyDataPoint[] = [];
 
   for (let i = weeks - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i * 7);
-    const dayOfWeek = d.getDay();
-    const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    d.setDate(d.getDate() + diffToMon);
-    d.setHours(0, 0, 0, 0);
-    const weekStr = d.toISOString().slice(0, 10);
+    const weekStr = mondayOfWeeksAgo(i, now);
 
     const match = rawRows.find(
       (r) => new Date(r.week).toISOString().slice(0, 10) === weekStr,

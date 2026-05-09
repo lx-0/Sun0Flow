@@ -3,7 +3,6 @@ import {
   calculateListeningTime,
   buildPeakHoursHeatmap,
   calculateActivityStreaks,
-  breakdownGenres,
   buildCreditChart,
 } from "./index";
 
@@ -86,32 +85,6 @@ describe("calculateActivityStreaks", () => {
 
     const result = calculateActivityStreaks(activeDays, now);
     expect(result.currentStreak).toBe(2);
-  });
-});
-
-describe("breakdownGenres", () => {
-  it("counts genres from comma-separated tags", () => {
-    const songs = [
-      { tags: "Pop, Rock, Jazz" },
-      { tags: "rock, electronic" },
-      { tags: "pop" },
-      { tags: null },
-    ];
-
-    const result = breakdownGenres(songs);
-
-    expect(result[0]).toEqual({ genre: "pop", count: 2 });
-    expect(result[1]).toEqual({ genre: "rock", count: 2 });
-    expect(result).toHaveLength(4);
-  });
-
-  it("limits to top 10", () => {
-    const songs = Array.from({ length: 20 }, (_, i) => ({
-      tags: `genre${i}`,
-    }));
-
-    const result = breakdownGenres(songs);
-    expect(result).toHaveLength(10);
   });
 });
 

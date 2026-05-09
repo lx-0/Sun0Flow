@@ -37,8 +37,8 @@ export function fillDailySeries(
   return result;
 }
 
-export function mondayOfWeeksAgo(weeksAgo: number): string {
-  const d = new Date();
+export function mondayOfWeeksAgo(weeksAgo: number, now: Date = new Date()): string {
+  const d = new Date(now);
   d.setDate(d.getDate() - weeksAgo * 7);
   const dayOfWeek = d.getDay();
   const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
