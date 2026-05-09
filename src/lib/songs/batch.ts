@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { MAX_SONGS_PER_PLAYLIST } from "@/lib/playlists";
+import { MAX_SONGS_PER_PLAYLIST, appendSongs } from "@/lib/playlists";
 
 const MAX_BATCH_SIZE = 50;
 
@@ -220,30 +220,8 @@ async function batchAddToPlaylist(
     );
   }
 
-  const existingPlaylistSongs = await prisma.playlistSong.findMany({
-    where: { playlistId, songId: { in: songIds } },
-    select: { songId: true },
-  });
-  const existingSet = new Set(existingPlaylistSongs.map((e) => e.songId));
-  const newSongIds = songIds.filter((id) => !existingSet.has(id));
-
-  if (newSongIds.length > 0) {
-    const lastSong = await prisma.playlistSong.findFirst({
-      where: { playlistId },
-      orderBy: { position: "desc" },
-    });
-    let nextPosition = lastSong ? lastSong.position + 1 : 0;
-
-    await prisma.playlistSong.createMany({
-      data: newSongIds.map((songId) => ({
-        playlistId,
-        songId,
-        position: nextPosition++,
-      })),
-    });
-  }
-
-  return { ok: true, affected: newSongIds.length };
+  const added = await appendSongs(playlistId, songIds, userId);
+  return { ok: true, affected: added.length };
 }
 
 async function batchMakePublic(

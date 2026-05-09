@@ -1,7 +1,5 @@
 export { ownerWhere, memberWhere, editorWhere } from "./access";
 
-export const MAX_SONGS_PER_PLAYLIST = 500;
-
 export {
   listPlaylists,
   createPlaylist,
@@ -10,7 +8,13 @@ export {
   deletePlaylist,
 } from "./crud";
 
-export { addSong, removeSong, reorderSongs } from "./songs";
+export {
+  addSong,
+  removeSong,
+  reorderSongs,
+  appendSongs,
+  MAX_SONGS_PER_PLAYLIST,
+} from "./songs";
 
 export {
   listCollaborators,

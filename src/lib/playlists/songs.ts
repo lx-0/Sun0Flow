@@ -3,7 +3,39 @@ import { recordActivity } from "@/lib/activity";
 import { editorWhere, ownerWhere } from "./access";
 import { success, Err } from "@/lib/result";
 
-const MAX_SONGS_PER_PLAYLIST = 500;
+export const MAX_SONGS_PER_PLAYLIST = 500;
+
+export async function appendSongs(
+  playlistId: string,
+  songIds: string[],
+  addedByUserId: string,
+): Promise<string[]> {
+  const existing = await prisma.playlistSong.findMany({
+    where: { playlistId, songId: { in: songIds } },
+    select: { songId: true },
+  });
+  const existingSet = new Set(existing.map((e) => e.songId));
+  const newSongIds = songIds.filter((id) => !existingSet.has(id));
+
+  if (newSongIds.length === 0) return [];
+
+  const lastSong = await prisma.playlistSong.findFirst({
+    where: { playlistId },
+    orderBy: { position: "desc" },
+  });
+  let nextPosition = lastSong ? lastSong.position + 1 : 0;
+
+  await prisma.playlistSong.createMany({
+    data: newSongIds.map((songId) => ({
+      playlistId,
+      songId,
+      position: nextPosition++,
+      addedByUserId,
+    })),
+  });
+
+  return newSongIds;
+}
 
 export async function addSong(
   playlistId: string,
