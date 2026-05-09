@@ -6,8 +6,9 @@ import {
   cacheKey,
 } from "@/lib/cache";
 import { ownerWhere } from "./access";
-import { MAX_PLAYLISTS } from "./constants";
-import { success, Err } from "./result";
+import { success, Err } from "@/lib/result";
+
+const MAX_PLAYLISTS = 50;
 
 export async function togglePublish(
   playlistId: string,

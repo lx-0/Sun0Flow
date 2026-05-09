@@ -31,6 +31,7 @@ const SECURITY_HEADERS: Record<string, string> = {
 const PUBLIC_PATHS = [
   "/login", "/register", "/forgot-password", "/reset-password", "/verify-email",
   "/api/auth", "/api/register", "/api/health", "/api/agent-skill", "/api/test/login",
+  "/api/songs/public",
   "/s/", "/p/", "/u/", "/songs/", "/embed/",
 ];
 

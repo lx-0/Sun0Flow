@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { stripHtml } from "@/lib/sanitize";
 import { notifyUser } from "@/lib/notifications";
-import { success, Err, type CommentResult } from "./result";
+import { type Result, success, Err } from "@/lib/result";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ async function checkDuplicate(
   return existing !== null;
 }
 
-function validateBody(raw: unknown): CommentResult<string> {
+function validateBody(raw: unknown): Result<string> {
   const text = typeof raw === "string" ? stripHtml(raw).trim() : "";
   if (!text || text.length > MAX_BODY_LENGTH) {
     return Err.validation(`Comment body must be 1–${MAX_BODY_LENGTH} characters`);
@@ -80,7 +80,7 @@ function validateBody(raw: unknown): CommentResult<string> {
   return success(text);
 }
 
-function validateTimestamp(raw: unknown): CommentResult<number | null> {
+function validateTimestamp(raw: unknown): Result<number | null> {
   if (raw === undefined || raw === null) return success(null);
   const ts = Number(raw);
   if (!isFinite(ts) || ts < 0) return Err.validation("Invalid timestamp");
@@ -113,7 +113,7 @@ async function notifyOwner(
 export async function listComments(
   songId: string,
   page: number,
-): Promise<CommentResult<CommentPage>> {
+): Promise<Result<CommentPage>> {
   const take = PAGE_SIZE;
   const skip = (Math.max(1, page) - 1) * take;
 
@@ -143,7 +143,7 @@ export async function createComment(
   songId: string,
   userId: string,
   input: CreateCommentInput,
-): Promise<CommentResult<CommentEntry>> {
+): Promise<Result<CommentEntry>> {
   const song = await prisma.song.findUnique({
     where: { id: songId },
     select: { id: true, title: true, isPublic: true, isHidden: true, userId: true },
