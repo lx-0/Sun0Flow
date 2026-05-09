@@ -1,9 +1,10 @@
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendWeeklyHighlightsEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
-// Types (internal to the email-digest job)
+// Types
 // ---------------------------------------------------------------------------
 
 interface DigestRecipient {
@@ -25,6 +26,12 @@ interface UserHighlights {
   weekGenerations: number;
   totalPlaysReceived: number;
   newFollowers: number;
+}
+
+export interface DigestResult {
+  sent: number;
+  failed: number;
+  total: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +121,16 @@ async function gatherUserHighlights(
   };
 }
 
+async function ensureUnsubscribeToken(user: DigestRecipient): Promise<string> {
+  if (user.unsubscribeToken) return user.unsubscribeToken;
+  const token = crypto.randomUUID();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { unsubscribeToken: token },
+  });
+  return token;
+}
+
 export function selectRecommendations(
   pool: TrendingCandidate[],
   excludeUserId: string
@@ -125,10 +142,10 @@ export function selectRecommendations(
 }
 
 // ---------------------------------------------------------------------------
-// Main entry point
+// Main entry point — used by both cron job and HTTP trigger
 // ---------------------------------------------------------------------------
 
-export async function emailDigestSend(): Promise<void> {
+export async function emailDigestSend(): Promise<DigestResult> {
   const now = Date.now();
   const users = await fetchDigestRecipients();
   const trendingPool = await fetchTrendingPool();
@@ -140,6 +157,7 @@ export async function emailDigestSend(): Promise<void> {
     if (!user.email) continue;
 
     try {
+      const unsubToken = await ensureUnsubscribeToken(user);
       const highlights = await gatherUserHighlights(user.id, now);
       const recommendedSongs = selectRecommendations(trendingPool, user.id);
 
@@ -153,22 +171,21 @@ export async function emailDigestSend(): Promise<void> {
           newFollowers: highlights.newFollowers,
           recommendedSongs,
         },
-        user.unsubscribeToken ?? user.id
+        unsubToken
       );
       sent++;
     } catch (err) {
       failed++;
       logger.error(
         { userId: user.id, err },
-        "jobs: email-digest-send user failed"
+        "email-digest: send failed for user"
       );
     }
 
     await sleep(SEND_DELAY_MS);
   }
 
-  logger.info(
-    { sent, failed, total: users.length },
-    "jobs: email-digest-send done"
-  );
+  const result = { sent, failed, total: users.length };
+  logger.info(result, "email-digest: batch complete");
+  return result;
 }

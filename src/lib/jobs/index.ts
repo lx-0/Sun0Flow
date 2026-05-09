@@ -37,7 +37,7 @@ async function analyticsSnapshot(): Promise<void> {
 
 export function registerAllJobs() {
   registerJob("smart-playlist-refresh", "0 3 * * *", smartPlaylistRefresh);
-  registerJob("email-digest-send", "0 8 * * 1", emailDigestSend);
+  registerJob("email-digest-send", "0 8 * * 1", async () => { await emailDigestSend(); });
   registerJob("analytics-aggregation", "0 * * * *", analyticsSnapshot);
   registerJob("session-cleanup", "0 2 * * *", sessionCleanup);
 }
