@@ -35,5 +35,10 @@ if [ -n "$AUDIO_CACHE_DIR" ]; then
   echo "Audio cache dir: $AUDIO_CACHE_DIR"
 fi
 
+if [ -n "$IMAGE_CACHE_DIR" ]; then
+  mkdir -p "$IMAGE_CACHE_DIR" 2>/dev/null || true
+  echo "Image cache dir: $IMAGE_CACHE_DIR"
+fi
+
 echo "Starting server..."
 exec node server.js

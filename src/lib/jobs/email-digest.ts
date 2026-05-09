@@ -1,13 +1,42 @@
 import { prisma } from "@/lib/prisma";
 import { sendWeeklyHighlightsEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
-import { gatherUserHighlights } from "./gather-user-highlights";
-import { selectRecommendations } from "./select-recommendations";
-import type { DigestRecipient, TrendingCandidate } from "./types";
+
+// ---------------------------------------------------------------------------
+// Types (internal to the email-digest job)
+// ---------------------------------------------------------------------------
+
+interface DigestRecipient {
+  id: string;
+  email: string | null;
+  unsubscribeToken: string | null;
+  _count: { songs: number };
+}
+
+interface TrendingCandidate {
+  id: string;
+  title: string | null;
+  tags: string | null;
+  userId: string;
+}
+
+interface UserHighlights {
+  topSongs: Array<{ id: string; title: string | null; playCount: number }>;
+  weekGenerations: number;
+  totalPlaysReceived: number;
+  newFollowers: number;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 const SEND_DELAY_MS = 150;
 const ACTIVE_WINDOW_DAYS = 30;
 const TRENDING_POOL_SIZE = 40;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const TOP_SONGS_LIMIT = 5;
+const MAX_RECOMMENDATIONS = 5;
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -42,6 +71,62 @@ async function fetchTrendingPool(): Promise<TrendingCandidate[]> {
     select: { id: true, title: true, tags: true, userId: true },
   });
 }
+
+async function gatherUserHighlights(
+  userId: string,
+  now: number = Date.now()
+): Promise<UserHighlights> {
+  const oneWeekAgo = new Date(now - WEEK_MS);
+
+  const [topSongs, weekGenerations, playsAggregate, newFollowers] =
+    await Promise.all([
+      prisma.song.findMany({
+        where: {
+          userId,
+          generationStatus: "ready",
+          createdAt: { gte: oneWeekAgo },
+        },
+        orderBy: { playCount: "desc" },
+        take: TOP_SONGS_LIMIT,
+        select: { id: true, title: true, playCount: true },
+      }),
+      prisma.song.count({
+        where: {
+          userId,
+          createdAt: { gte: oneWeekAgo },
+          generationStatus: "ready",
+        },
+      }),
+      prisma.song.aggregate({
+        where: { userId, generationStatus: "ready" },
+        _sum: { playCount: true },
+      }),
+      prisma.follow.count({
+        where: { followingId: userId, createdAt: { gte: oneWeekAgo } },
+      }),
+    ]);
+
+  return {
+    topSongs,
+    weekGenerations,
+    totalPlaysReceived: playsAggregate._sum.playCount ?? 0,
+    newFollowers,
+  };
+}
+
+export function selectRecommendations(
+  pool: TrendingCandidate[],
+  excludeUserId: string
+): Array<{ id: string; title: string | null; tags: string | null }> {
+  return pool
+    .filter((s) => s.userId !== excludeUserId)
+    .slice(0, MAX_RECOMMENDATIONS)
+    .map((s) => ({ id: s.id, title: s.title, tags: s.tags }));
+}
+
+// ---------------------------------------------------------------------------
+// Main entry point
+// ---------------------------------------------------------------------------
 
 export async function emailDigestSend(): Promise<void> {
   const now = Date.now();

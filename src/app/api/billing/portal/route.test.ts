@@ -13,31 +13,24 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    subscription: { findUnique: vi.fn() },
-  },
+const mockCreatePortalSession = vi.fn();
+vi.mock("@/lib/billing", () => ({
+  createPortalSession: (...args: unknown[]) => mockCreatePortalSession(...args),
 }));
 
 vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-const mockPortalSessionCreate = vi.fn();
-vi.mock("@/lib/stripe", () => ({
-  default: vi.fn(() => ({
-    billingPortal: { sessions: { create: mockPortalSessionCreate } },
-  })),
-}));
-
-import { resolveUser } from "@/lib/auth-resolver";
-import { prisma } from "@/lib/prisma";
+import { resolveUser } from "@/lib/auth";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const seg = { params: Promise.resolve({}) } as never;
 
 function makeRequest(): Request {
   return new Request("http://localhost/api/billing/portal", { method: "POST" });
@@ -46,16 +39,17 @@ function makeRequest(): Request {
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(resolveUser).mockResolvedValue({
     userId: "user-1",
     isApiKey: false,
     isAdmin: false,
     error: null,
   });
-  vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
-    stripeCustomerId: "cus_test_123",
-  } as never);
-  mockPortalSessionCreate.mockResolvedValue({ url: "https://billing.stripe.com/portal_abc" });
+  mockCreatePortalSession.mockResolvedValue({
+    ok: true,
+    url: "https://billing.stripe.com/portal_abc",
+  });
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -70,27 +64,35 @@ describe("POST /api/billing/portal", () => {
         error: new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }) as never,
       });
 
-      const res = await POST(makeRequest() as never);
+      const res = await POST(makeRequest() as never, seg);
       expect(res.status).toBe(401);
     });
   });
 
   describe("subscription checks", () => {
     it("returns 400 when no subscription record exists", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue(null as never);
+      mockCreatePortalSession.mockResolvedValue({
+        ok: false,
+        code: "NO_SUBSCRIPTION",
+        message: "No active paid subscription found",
+        status: 400,
+      });
 
-      const res = await POST(makeRequest() as never);
+      const res = await POST(makeRequest() as never, seg);
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.code).toBe("NO_SUBSCRIPTION");
     });
 
     it("returns 400 when customer is on free plan (free_ prefix)", async () => {
-      vi.mocked(prisma.subscription.findUnique).mockResolvedValue({
-        stripeCustomerId: "free_user-1",
-      } as never);
+      mockCreatePortalSession.mockResolvedValue({
+        ok: false,
+        code: "NO_SUBSCRIPTION",
+        message: "No active paid subscription found",
+        status: 400,
+      });
 
-      const res = await POST(makeRequest() as never);
+      const res = await POST(makeRequest() as never, seg);
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.code).toBe("NO_SUBSCRIPTION");
@@ -99,26 +101,23 @@ describe("POST /api/billing/portal", () => {
 
   describe("success", () => {
     it("creates a portal session and returns url", async () => {
-      const res = await POST(makeRequest() as never);
+      const res = await POST(makeRequest() as never, seg);
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.url).toBe("https://billing.stripe.com/portal_abc");
     });
 
-    it("creates the portal session with the correct customer id", async () => {
-      await POST(makeRequest() as never);
-
-      expect(mockPortalSessionCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ customer: "cus_test_123" })
-      );
+    it("passes userId to createPortalSession", async () => {
+      await POST(makeRequest() as never, seg);
+      expect(mockCreatePortalSession).toHaveBeenCalledWith("user-1");
     });
   });
 
   describe("error handling", () => {
-    it("returns 500 when Stripe throws", async () => {
-      mockPortalSessionCreate.mockRejectedValue(new Error("Stripe error"));
+    it("returns 500 when module throws", async () => {
+      mockCreatePortalSession.mockRejectedValue(new Error("Stripe error"));
 
-      const res = await POST(makeRequest() as never);
+      const res = await POST(makeRequest() as never, seg);
       expect(res.status).toBe(500);
       const data = await res.json();
       expect(data.code).toBe("INTERNAL_ERROR");

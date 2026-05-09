@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, logAdminAction } from "@/lib/auth-resolver";
+import { requireAdmin, logAdminAction } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { broadcast } from "@/lib/event-bus";
 import { invalidateByPrefix, cacheKey } from "@/lib/cache";

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { SmartPlaylistType } from "./types";
+import type { SmartPlaylistType } from "./compute";
 import { refreshSmartPlaylist } from "./refresh";
 
 const DEFAULTS: Array<{

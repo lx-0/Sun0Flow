@@ -1,8 +1,18 @@
 import { prisma } from "@/lib/prisma";
+import { SongFilters } from "@/lib/songs";
 import { parseTags } from "@/lib/tags";
-import { buildRadioFilter, curateResults } from "./helpers";
 
 /* ── Public types ─────────────────────────────────────────────── */
+
+export interface RadioSong {
+  id: string;
+  title: string | null;
+  audioUrl: string | null;
+  imageUrl: string | null;
+  duration: number | null;
+  lyrics: string | null;
+  tags: string | null;
+}
 
 export interface RadioOptions {
   userId: string;
@@ -73,6 +83,30 @@ async function deriveSeedCriteria(
   };
 }
 
+/* ── Curation ────────────────────────────────────────────────── */
+
+export function curateResults(
+  userSongs: RadioSong[],
+  publicSongs: RadioSong[],
+  limit: number,
+): RadioSong[] {
+  const seen = new Set<string>();
+  const merged: RadioSong[] = [];
+  for (const s of [...userSongs, ...publicSongs]) {
+    if (!seen.has(s.id) && s.audioUrl) {
+      seen.add(s.id);
+      merged.push(s);
+    }
+  }
+
+  for (let i = merged.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [merged[i], merged[j]] = [merged[j], merged[i]];
+  }
+
+  return merged.slice(0, limit);
+}
+
 /* ── Public entry point ───────────────────────────────────────── */
 
 export async function curateRadio(
@@ -88,13 +122,10 @@ export async function curateRadio(
     genre = seed.genre;
   }
 
-  const filter = buildRadioFilter({
-    mood,
-    genre,
-    tempoMin: options.tempoMin,
-    tempoMax: options.tempoMax,
-    excludeIds,
-  });
+  let filter = SongFilters.discoverable();
+  filter = SongFilters.withTagFilters(filter, genre || undefined, mood || undefined);
+  filter = SongFilters.withTempoRange(filter, options.tempoMin, options.tempoMax);
+  filter = SongFilters.withExcludeIds(filter, excludeIds);
 
   const [userSongs, publicSongs] = await Promise.all([
     prisma.song.findMany({

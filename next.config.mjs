@@ -63,13 +63,14 @@ const nextConfig = {
       )
     );
 
-    // node-cron uses Node.js built-ins (child_process, stream) that are not
-    // available in the edge runtime. Mark it as external so webpack skips
-    // bundling it; it is resolved at runtime by the Node.js server.
+    // node-cron and crypto use Node.js built-ins that are not available in
+    // the edge runtime. Mark them as external so webpack skips bundling;
+    // they are resolved at runtime by the Node.js server.
     if (isServer) {
       config.externals = [
         ...(Array.isArray(config.externals) ? config.externals : [config.externals]),
         "node-cron",
+        "crypto",
       ];
     }
     return config;

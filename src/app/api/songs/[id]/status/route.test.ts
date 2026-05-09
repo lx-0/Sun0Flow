@@ -17,6 +17,7 @@ vi.mock("@/lib/env", () => ({
 
 vi.mock("@/lib/auth", () => ({
   auth: vi.fn(),
+  resolveUser: vi.fn().mockResolvedValue({ userId: "user-1", isApiKey: false, isAdmin: false, error: null }),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -65,16 +66,11 @@ vi.mock("@/lib/song-completion", () => ({
   handleSongFailure: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/auth-resolver", () => ({
-  resolveUser: vi.fn().mockResolvedValue({ userId: "user-1", isApiKey: false, isAdmin: false, error: null }),
-}));
-
-import { auth } from "@/lib/auth";
+import { auth, resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTaskStatus } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
-import { resolveUser } from "@/lib/auth-resolver";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

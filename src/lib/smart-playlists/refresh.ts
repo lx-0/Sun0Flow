@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import type { SmartPlaylistType } from "./types";
 import { computeSmartPlaylistSongs } from "./compute";
+import type { SmartPlaylistType } from "./compute";
 
 export async function refreshSmartPlaylist(playlistId: string): Promise<void> {
   const playlist = await prisma.playlist.findUnique({

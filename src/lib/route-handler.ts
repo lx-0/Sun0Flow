@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { resolveUser, requireAdmin } from "@/lib/auth-resolver";
+import { resolveUser, requireAdmin } from "@/lib/auth";
 import { logServerError } from "@/lib/error-logger";
 import { badRequest, internalError } from "@/lib/api-error";
+import type { Result } from "@/lib/result";
 
 export type AuthContext = {
   userId: string;
@@ -158,4 +159,21 @@ export function adminRoute<
       return internalError();
     }
   };
+}
+
+/**
+ * Convert a Result<T> into a NextResponse. Centralises the
+ * ok / error → JSON mapping that was previously duplicated in 35+ routes.
+ */
+export function resultResponse<T>(
+  result: Result<T>,
+  options?: { status?: number; headers?: HeadersInit },
+): NextResponse {
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error, code: result.code },
+      { status: result.status },
+    );
+  }
+  return NextResponse.json(result.data, options);
 }

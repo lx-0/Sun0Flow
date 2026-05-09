@@ -14,7 +14,7 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
@@ -31,7 +31,7 @@ vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
 
@@ -136,7 +136,11 @@ describe("GET /api/generations", () => {
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          prompt: { contains: "pop", mode: "insensitive" },
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              prompt: { contains: "pop", mode: "insensitive" },
+            }),
+          ]),
         }),
       })
     );
@@ -179,7 +183,11 @@ describe("GET /api/generations", () => {
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          createdAt: expect.objectContaining({ lt: new Date(cursor) }),
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              createdAt: expect.objectContaining({ lt: new Date(cursor) }),
+            }),
+          ]),
         }),
       })
     );
@@ -209,9 +217,14 @@ describe("GET /api/generations", () => {
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          createdAt: expect.objectContaining({
-            gte: new Date("2026-03-01"),
-          }),
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              createdAt: expect.objectContaining({
+                gte: new Date("2026-03-01"),
+                lte: expect.any(Date),
+              }),
+            }),
+          ]),
         }),
       })
     );

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchFreshUrls } from "@/lib/sunoapi/refresh";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { audioCache } from "@/lib/file-cache";
+import { audioCache } from "@/lib/cache";
 import { logger } from "@/lib/logger";
 
 const REFRESH_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000;

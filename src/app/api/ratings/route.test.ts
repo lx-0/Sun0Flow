@@ -14,7 +14,7 @@ vi.mock("@/lib/env", () => ({
 }));
 
 const mockResolveUser = vi.fn();
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: (...args: unknown[]) => mockResolveUser(...args),
 }));
 

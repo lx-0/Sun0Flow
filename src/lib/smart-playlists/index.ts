@@ -1,4 +1,4 @@
-export type { SmartPlaylistType } from "./types";
+export type { SmartPlaylistType } from "./compute";
 export { computeSmartPlaylistSongs } from "./compute";
 export { refreshSmartPlaylist } from "./refresh";
 export { ensureDefaultSmartPlaylists } from "./bootstrap";

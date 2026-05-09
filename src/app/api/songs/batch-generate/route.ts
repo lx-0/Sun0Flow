@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import * as Sentry from "@sentry/nextjs";
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { generateSong } from "@/lib/sunoapi";
 import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
@@ -106,9 +106,7 @@ export async function POST(request: Request) {
         },
         hasApiKey,
         mockFallback: mockSongs[i % mockSongs.length],
-        skipCreditCheck: true,
-        skipCreditRecording: usingPersonalKey,
-        skipRateLimit: true,
+        guards: usingPersonalKey ? "personal-key" : "pre-authorized",
         description: `Batch generation ${i + 1}/${configs.length}: ${genParams.title || "Untitled"}`,
         apiCall: () =>
           Sentry.startSpan(
@@ -133,6 +131,11 @@ export async function POST(request: Request) {
 
       if (outcome.status === "denied") {
         results.push({ index: i, songId: "", sunoJobId: null, status: "failed", error: "denied" });
+        continue;
+      }
+
+      if (outcome.status === "queued") {
+        results.push({ index: i, songId: "", sunoJobId: null, status: "failed", error: "queued" });
         continue;
       }
 

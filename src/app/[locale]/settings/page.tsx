@@ -10,7 +10,7 @@ import { PlusIcon, TrashIcon, SunIcon, MoonIcon, ComputerDesktopIcon, PencilIcon
 import { useOnboarding } from "@/components/OnboardingTour";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
-import { getCachedSongsMeta, formatBytes } from "@/lib/offline-cache";
+import { getCachedSongsMeta, formatBytes } from "@/lib/cache/offline";
 import { canUseFeature, type SubscriptionTier } from "@/lib/feature-gates";
 
 // RSS feeds are now stored in the database via /api/rss/feeds
