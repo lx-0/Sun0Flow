@@ -239,7 +239,7 @@ model Playlist {
   genre            String?
   playCount        Int      @default(0)
   isSmartPlaylist  Boolean  @default(false)
-  smartPlaylistType String? // "top_hits" | "new_this_week" | "mood" | "similar_to"
+  smartPlaylistType String? // "top_hits" | "new_this_week" | "mood" | "similar_to" | "archive"
   smartPlaylistMeta Json?   // e.g. {"mood": "chill"} or {"sourceSongId": "..."}
   smartRefreshedAt  DateTime?
   createdAt        DateTime @default(now())
@@ -251,6 +251,7 @@ model Playlist {
   collaborators PlaylistCollaborator[]
   reports       Report[]               @relation("PlaylistReports")
 
+  @@unique([userId, smartPlaylistType])
   @@index([userId])
   @@index([userId, name])
   @@index([userId, isSmartPlaylist])
@@ -806,6 +807,9 @@ model PlaybackState {
   shuffle         Boolean  @default(false)
   repeat          String   @default("off")
   muted           Boolean  @default(false)
+  eqGains         Json     @default("[0,0,0,0,0]")
+  eqSpeed         Float    @default(1)
+  eqPitch         Float    @default(0)
   updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
