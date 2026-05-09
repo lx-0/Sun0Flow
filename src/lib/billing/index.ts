@@ -2,7 +2,6 @@ import Stripe from "stripe";
 import getStripe from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { createNotification } from "@/lib/notifications";
 import {
   TIER_LIMITS,
   stripeStatusToPrisma,
@@ -12,6 +11,7 @@ import {
   recordUnhandledEvent,
   userIdFromSubscriptionId,
 } from "./resolve";
+import { notifyTopupCreditsAdded, notifyCreditsRefreshed, notifyPaymentFailed } from "./notify";
 
 export { TIER_LIMITS, ensureFreeSubscription, getOrCreateStripeCustomer } from "./resolve";
 export type { TierLimits, SubscriptionDetails } from "./resolve";
@@ -133,13 +133,7 @@ async function handleTopupCheckoutCompleted(
     },
   });
 
-  await createNotification({
-    userId,
-    type: "credit_update",
-    title: "Credits added",
-    message: `${credits} credits have been added to your account and are ready to use.`,
-    href: "/settings/billing",
-  });
+  notifyTopupCreditsAdded(userId, credits);
 
   logger.info(
     { userId, credits, amountCents, sessionId: session.id },
@@ -218,16 +212,7 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
       select: { tier: true },
     });
     if (sub && sub.tier !== "free") {
-      const credits = TIER_LIMITS[sub.tier]?.creditsPerMonth;
-      if (credits) {
-        await createNotification({
-          userId,
-          type: "credit_update",
-          title: "Credits refreshed",
-          message: `Your monthly ${credits.toLocaleString()} credits are ready to use.`,
-          href: "/settings/billing",
-        });
-      }
+      notifyCreditsRefreshed(userId, sub.tier, TIER_LIMITS);
     }
   }
 
@@ -256,14 +241,7 @@ async function handleInvoicePaymentFailed(event: Stripe.Event) {
       data: { status: "past_due" },
     });
 
-    await createNotification({
-      userId,
-      type: "payment_failed",
-      title: "Payment Failed",
-      message:
-        "Your latest payment failed. Please update your payment method to keep your subscription active.",
-      href: "/settings/billing",
-    });
+    notifyPaymentFailed(userId);
   }
 
   logger.warn(
