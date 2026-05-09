@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { cached, cacheKey, CacheTTL } from "@/lib/cache";
-import { SongFilters } from "./index";
+import { buildDiscoverableFilter } from "./index";
 
 export type PublicSongSort = "newest" | "popular" | "trending";
 
@@ -102,7 +102,9 @@ export async function queryPublicSongs(
     rawLimit !== undefined && rawLimit >= 1 && rawLimit <= 100 ? rawLimit : 20;
   const offset = rawOffset !== undefined && rawOffset >= 0 ? rawOffset : 0;
 
-  const base: Prisma.SongWhereInput = { ...SongFilters.publicDiscovery() };
+  const base: Prisma.SongWhereInput = {
+    ...buildDiscoverableFilter({ genre: genre || undefined, mood: mood || undefined }),
+  };
 
   if (sort === "trending") {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -119,11 +121,7 @@ export async function queryPublicSongs(
     ];
   }
 
-  const where = SongFilters.withTagFilters(
-    base,
-    genre || undefined,
-    mood || undefined,
-  );
+  const where = base;
 
   let orderBy: Prisma.SongOrderByWithRelationInput;
   switch (sort) {

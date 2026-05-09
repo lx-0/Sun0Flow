@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { CacheTTL, cached, cacheKey } from "@/lib/cache";
-import { SongFilters } from "./index";
+import { buildDiscoverableFilter } from "./index";
 
 export interface TagCount {
   name: string;
@@ -31,7 +31,7 @@ function tokenizeTags(raw: string, separator: RegExp): string[] {
 
 async function fetchPublicTags(): Promise<{ tags: string }[]> {
   return prisma.song.findMany({
-    where: { ...SongFilters.publicDiscovery(), tags: { not: null } },
+    where: { ...buildDiscoverableFilter(), tags: { not: null } },
     select: { tags: true },
   }) as Promise<{ tags: string }[]>;
 }

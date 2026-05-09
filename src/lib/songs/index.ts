@@ -13,7 +13,41 @@ export { queryPublicSongs } from "./public";
 export type { PublicSongsQuery, PublicSongsResult, PublicSong, PublicSongSort } from "./public";
 
 // ---------------------------------------------------------------------------
-// Filters — reusable Prisma WHERE-clause builders
+// Discoverable filter — deep interface for external consumers
+// ---------------------------------------------------------------------------
+
+export interface DiscoverableFilterOptions {
+  visibility?: "public" | "discoverable";
+  genre?: string;
+  mood?: string;
+  tags?: string[];
+  tagIds?: string[];
+  tempoMin?: number;
+  tempoMax?: number;
+  excludeIds?: string[];
+}
+
+export function buildDiscoverableFilter(
+  options: DiscoverableFilterOptions = {},
+): Prisma.SongWhereInput {
+  const { visibility = "public", genre, mood, tags, tagIds, tempoMin, tempoMax, excludeIds } = options;
+
+  let where: Prisma.SongWhereInput =
+    visibility === "discoverable"
+      ? SongFilters.discoverable()
+      : SongFilters.publicDiscovery();
+
+  where = SongFilters.withTagFilters(where, genre, mood);
+  where = SongFilters.withTagContains(where, tags ?? []);
+  where = SongFilters.withSongTags(where, tagIds ?? []);
+  where = SongFilters.withTempoRange(where, tempoMin, tempoMax);
+  where = SongFilters.withExcludeIds(where, excludeIds ?? []);
+
+  return where;
+}
+
+// ---------------------------------------------------------------------------
+// Filters — low-level builders (prefer buildDiscoverableFilter for new code)
 // ---------------------------------------------------------------------------
 
 export const SongFilters = {

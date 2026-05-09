@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
-import { SongFilters, SongSelect } from "@/lib/songs";
+import { buildDiscoverableFilter, SongSelect } from "@/lib/songs";
 import { gatherUserSignals } from "@/lib/user-signals";
 import { rankAnonymousFeed, rankPersonalizedFeed, type TasteProfile } from "./rank";
 
@@ -47,10 +47,8 @@ const BUCKET_SIZE = 60;
 const songPublicSelect = SongSelect.public;
 
 function baseWhere(filters: FeedFilters) {
-  let where = SongFilters.publicDiscovery();
   const tags = [filters.tag, filters.mood].filter(Boolean) as string[];
-  where = SongFilters.withTagContains(where, tags);
-  return where;
+  return buildDiscoverableFilter({ tags });
 }
 
 async function buildTasteProfile(userId: string): Promise<TasteProfile> {

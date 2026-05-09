@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
-import { SongFilters } from "@/lib/songs";
+import { buildDiscoverableFilter } from "@/lib/songs";
 import { trendingScore } from "@/lib/scoring";
 import { cached, cacheKey, CacheTTL } from "@/lib/cache";
 
@@ -76,11 +76,7 @@ export async function trendingSongs(q: TrendingSongsQuery) {
   const { songs, total } = await cached(
     key,
     async () => {
-      const baseWhere = SongFilters.withTagFilters(
-        SongFilters.publicDiscovery(),
-        q.genre,
-        q.mood,
-      );
+      const baseWhere = buildDiscoverableFilter({ genre: q.genre, mood: q.mood });
 
       if (q.sort === "popular") {
         const [rows, count] = await Promise.all([
@@ -181,15 +177,12 @@ export async function discoverSongs(q: DiscoverSongsQuery) {
   const { songs, total } = await cached(
     key,
     async () => {
-      const where = SongFilters.withTempoRange(
-        SongFilters.withTagFilters(
-          SongFilters.publicDiscovery(),
-          q.tag || undefined,
-          q.mood || undefined,
-        ),
-        q.tempoMin ?? undefined,
-        q.tempoMax ?? undefined,
-      );
+      const where = buildDiscoverableFilter({
+        genre: q.tag || undefined,
+        mood: q.mood || undefined,
+        tempoMin: q.tempoMin ?? undefined,
+        tempoMax: q.tempoMax ?? undefined,
+      });
 
       let orderBy: Prisma.SongOrderByWithRelationInput;
       switch (q.sortBy) {

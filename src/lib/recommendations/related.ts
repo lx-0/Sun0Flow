@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { collectSongTokens, tagOverlapScore } from "@/lib/tags";
-import { SongFilters } from "@/lib/songs";
+import { buildDiscoverableFilter } from "@/lib/songs";
 
 export interface RelatedSong {
   id: string;
@@ -35,7 +35,7 @@ export async function getRelatedSongs(
 
   const candidates = await prisma.song.findMany({
     where: {
-      ...SongFilters.publicDiscovery(),
+      ...buildDiscoverableFilter(),
       id: { not: songId },
       userId: { not: song.userId },
     },
@@ -76,7 +76,7 @@ export async function getRelatedSongs(
 
   const trending = await prisma.song.findMany({
     where: {
-      ...SongFilters.publicDiscovery(),
+      ...buildDiscoverableFilter(),
       id: { not: songId },
       userId: { not: song.userId },
     },

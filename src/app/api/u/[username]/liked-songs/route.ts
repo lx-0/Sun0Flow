@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
-import { SongFilters } from "@/lib/songs";
+import { buildDiscoverableFilter } from "@/lib/songs";
 
 export async function GET(
   request: Request,
@@ -26,7 +26,7 @@ export async function GET(
 
     const where = {
       userId: user.id,
-      song: SongFilters.publicDiscovery(),
+      song: buildDiscoverableFilter(),
     };
 
     const [favorites, total] = await Promise.all([

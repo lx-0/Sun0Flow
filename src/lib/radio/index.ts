@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { SongFilters } from "@/lib/songs";
+import { buildDiscoverableFilter } from "@/lib/songs";
 import { parseTags } from "@/lib/tags";
 
 /* ── Public types ─────────────────────────────────────────────── */
@@ -122,10 +122,14 @@ export async function curateRadio(
     genre = seed.genre;
   }
 
-  let filter = SongFilters.discoverable();
-  filter = SongFilters.withTagFilters(filter, genre || undefined, mood || undefined);
-  filter = SongFilters.withTempoRange(filter, options.tempoMin, options.tempoMax);
-  filter = SongFilters.withExcludeIds(filter, excludeIds);
+  const filter = buildDiscoverableFilter({
+    visibility: "discoverable",
+    genre: genre || undefined,
+    mood: mood || undefined,
+    tempoMin: options.tempoMin,
+    tempoMax: options.tempoMax,
+    excludeIds,
+  });
 
   const [userSongs, publicSongs] = await Promise.all([
     prisma.song.findMany({
