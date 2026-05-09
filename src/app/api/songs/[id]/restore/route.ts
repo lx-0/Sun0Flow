@@ -1,49 +1,34 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  try {
-    const { userId, error: authError } = await resolveUser(request);
+export const POST = authRoute<{ id: string }>(async (_request, { auth, params }) => {
+  const song = await prisma.song.findFirst({
+    where: { id: params.id, userId: auth.userId, archivedAt: { not: null } },
+  });
 
-    if (authError) return authError;
+  if (!song) {
+    return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
+  }
 
-    const song = await prisma.song.findFirst({
-      where: { id, userId, archivedAt: { not: null } },
+  const archivePlaylist = await prisma.playlist.findFirst({
+    where: { userId: auth.userId, isSmartPlaylist: true, smartPlaylistType: "archive" },
+  });
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedSong = await tx.song.update({
+      where: { id: params.id },
+      data: { archivedAt: null },
     });
 
-    if (!song) {
-      return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
+    if (archivePlaylist) {
+      await tx.playlistSong.deleteMany({
+        where: { playlistId: archivePlaylist.id, songId: params.id },
+      });
     }
 
-    const archivePlaylist = await prisma.playlist.findFirst({
-      where: { userId, isSmartPlaylist: true, smartPlaylistType: "archive" },
-    });
+    return updatedSong;
+  });
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const updatedSong = await tx.song.update({
-        where: { id },
-        data: { archivedAt: null },
-      });
-
-      if (archivePlaylist) {
-        await tx.playlistSong.deleteMany({
-          where: { playlistId: archivePlaylist.id, songId: id },
-        });
-      }
-
-      return updatedSong;
-    });
-
-    return NextResponse.json({ song: updated });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+  return NextResponse.json({ song: updated });
+}, { route: "/api/songs/[id]/restore" });
