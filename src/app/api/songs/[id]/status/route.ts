@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTaskStatus } from "@/lib/sunoapi";
+import { getTaskStatus, isTerminalFailure } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { broadcast } from "@/lib/event-bus";
@@ -85,11 +85,7 @@ export async function GET(
     }
 
     const isComplete = taskResult.status === "SUCCESS";
-    const isFailed =
-      taskResult.status === "CREATE_TASK_FAILED" ||
-      taskResult.status === "GENERATE_AUDIO_FAILED" ||
-      taskResult.status === "CALLBACK_EXCEPTION" ||
-      taskResult.status === "SENSITIVE_WORD_ERROR";
+    const isFailed = isTerminalFailure(taskResult.status);
 
     if (isComplete && taskResult.songs.length > 0) {
       await handleSongSuccess(song, taskResult.songs);

@@ -1,6 +1,17 @@
 import type { StyleTuningOptions, SunoSong, SongStatus, TaskStatus } from "./types";
 import { SunoApiError } from "./errors";
 
+const TERMINAL_FAILURE_STATUSES: ReadonlySet<TaskStatus> = new Set<TaskStatus>([
+  "CREATE_TASK_FAILED",
+  "GENERATE_AUDIO_FAILED",
+  "CALLBACK_EXCEPTION",
+  "SENSITIVE_WORD_ERROR",
+]);
+
+export function isTerminalFailure(status: TaskStatus): boolean {
+  return TERMINAL_FAILURE_STATUSES.has(status);
+}
+
 export async function extractTaskId(res: Response, context: string): Promise<string> {
   const json = (await res.json()) as { code?: number; msg?: string; data?: { taskId?: string } };
   if (!json.data?.taskId) {
@@ -38,13 +49,6 @@ export function mapRawSong(raw: Record<string, unknown>): SunoSong {
 
 export function taskStatusToSongStatus(status: TaskStatus): SongStatus {
   if (status === "SUCCESS") return "complete";
-  if (
-    status === "CREATE_TASK_FAILED" ||
-    status === "GENERATE_AUDIO_FAILED" ||
-    status === "CALLBACK_EXCEPTION" ||
-    status === "SENSITIVE_WORD_ERROR"
-  ) {
-    return "error";
-  }
+  if (isTerminalFailure(status)) return "error";
   return "pending";
 }
