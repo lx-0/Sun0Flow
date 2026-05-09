@@ -48,6 +48,7 @@ import { CoverArtImage } from "./CoverArtImage";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
 import { SongMetadataCard } from "./SongMetadataCard";
 import { SongActionsBar } from "./SongActionsBar";
+import { AddToPlaylistButton } from "./AddToPlaylistButton";
 import { SongLyricsSection } from "./SongLyricsSection";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -710,7 +711,7 @@ export function SongDetailView({
 
       {/* Play / pause via global player */}
       {hasAudio ? (
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 flex items-center justify-center">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 flex items-center justify-center gap-3">
           <button
             onClick={() =>
               togglePlay({ id: song.id, title: song.title, audioUrl: song.audioUrl!, imageUrl: coverImageUrl ?? null, duration: song.duration ?? null, lyrics: song.lyrics })
@@ -725,10 +726,12 @@ export function SongDetailView({
             )}
             {isThisSongPlaying ? "Pause" : "Play"}
           </button>
+          <AddToPlaylistButton songId={song.id} songTitle={song.title} variant="button" />
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 text-center text-sm text-gray-400 dark:text-gray-600">
-          No audio available
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 flex items-center justify-center gap-3">
+          <span className="text-sm text-gray-400 dark:text-gray-600">No audio available</span>
+          <AddToPlaylistButton songId={song.id} songTitle={song.title} variant="button" />
         </div>
       )}
 

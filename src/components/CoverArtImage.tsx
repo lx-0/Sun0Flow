@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
 const inflightRefreshes = new Map<string, Promise<string | null>>();
@@ -57,6 +57,21 @@ export function CoverArtImage({
   const [isLoading, setIsLoading] = useState(false);
   const didRefresh = useRef(false);
   const didTryCache = useRef(false);
+  const prevSrcRef = useRef(src);
+  const prevSongIdRef = useRef(songId);
+
+  useEffect(() => {
+    if (prevSrcRef.current !== src || prevSongIdRef.current !== songId) {
+      prevSrcRef.current = src;
+      prevSongIdRef.current = songId;
+      setErrored(false);
+      setUseFallback(false);
+      setRefreshedSrc(null);
+      setIsLoading(false);
+      didRefresh.current = false;
+      didTryCache.current = false;
+    }
+  }, [src, songId]);
 
   const activeSrc = refreshedSrc ?? (useFallback && fallbackSrc ? fallbackSrc : src);
 
