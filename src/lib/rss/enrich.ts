@@ -76,7 +76,7 @@ export function suggestStyle(mood: string, topics: string[]): string {
   return parts.join(", ");
 }
 
-export function buildExcerpt(description: string, maxLen = 800): string {
+export function buildExcerpt(description: string, maxLen = 1500): string {
   const plain = stripTags(description).trim();
   if (plain.length <= maxLen) return plain;
 
@@ -103,7 +103,8 @@ export function enrichItem(item: RssItem): RssItem {
   const text = `${item.title} ${item.description} ${item.content ?? ""}`;
   const mood = detectMood(text);
   const topics = extractTopics(text);
-  const excerpt = item.description ? buildExcerpt(item.description) : undefined;
+  const excerptSource = item.content || item.description || "";
+  const excerpt = excerptSource ? buildExcerpt(excerptSource) : undefined;
   return {
     ...item,
     mood,
