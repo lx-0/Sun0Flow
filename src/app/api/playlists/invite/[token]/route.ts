@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { authRoute, resultResponse } from "@/lib/route-handler";
 import { getInviteInfo, acceptInvite } from "@/lib/playlists";
 import { logServerError } from "@/lib/error-logger";
