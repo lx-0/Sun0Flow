@@ -1237,13 +1237,14 @@ export function GenerateForm() {
             </p>
           )}
           <div className="mt-2 p-3 bg-violet-50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-800 rounded-xl">
-            <label className="block text-xs font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide mb-1.5">
+            <label htmlFor="styleTemplateSelect" className="block text-xs font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide mb-1.5">
               Apply Saved Style
             </label>
             {styleTemplates.length > 0 ? (
               <div className="flex items-center gap-2">
                 <AdjustmentsHorizontalIcon className="h-4 w-4 text-violet-400 dark:text-violet-500 flex-shrink-0" />
                 <select
+                  id="styleTemplateSelect"
                   value=""
                   onChange={(e) => {
                     const tmpl = styleTemplates.find((t) => t.id === e.target.value);

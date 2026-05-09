@@ -169,11 +169,7 @@
     "title_field": "Title",
     "titlePlaceholder": "Enter a title (optional)",
     "generationError": "Generation failed. Please try again.",
-    "generationSuccess": "Song generated successfully!",
-    "styleTemplateLabel": "Apply Saved Style",
-    "styleTemplatePlaceholder": "Choose a style template…",
-    "styleTemplateEmpty": "No style templates yet.",
-    "styleTemplateCreateLink": "Create one"
+    "generationSuccess": "Song generated successfully!"
   },
   "settings": {
     "title": "Settings",
