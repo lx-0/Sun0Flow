@@ -55,7 +55,7 @@ import {
   tierFromPriceId,
   ensureFreeSubscription,
   getOrCreateStripeCustomer,
-} from "./billing";
+} from ".";
 
 beforeEach(() => {
   vi.clearAllMocks();

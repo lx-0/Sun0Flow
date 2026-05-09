@@ -59,7 +59,7 @@ import {
   checkCredits,
   deductCredits,
   getCreditCost,
-} from "./credits";
+} from ".";
 
 // Use fake timers within the grace period so getMonthlyBudget returns 500 for
 // users created before the cutoff date.
