@@ -1,43 +1,25 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { logServerError } from "@/lib/error-logger";
+import { authRoute } from "@/lib/route-handler";
+import { notFound } from "@/lib/api-error";
 
-/** Revoke an API key by setting revokedAt. */
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
-    }
+export const DELETE = authRoute<{ id: string }>(async (_request, { auth, params }) => {
+  const apiKey = await prisma.apiKey.findFirst({
+    where: {
+      id: params.id,
+      userId: auth.userId,
+      revokedAt: null,
+    },
+  });
 
-    const apiKey = await prisma.apiKey.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-        revokedAt: null,
-      },
-    });
-
-    if (!apiKey) {
-      return NextResponse.json({ error: "API key not found", code: "NOT_FOUND" }, { status: 404 });
-    }
-
-    await prisma.apiKey.update({
-      where: { id: apiKey.id },
-      data: { revokedAt: new Date() },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    logServerError("api-keys", error, {
-      route: "DELETE /api/profile/api-keys/:id",
-      params: { id },
-    });
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
+  if (!apiKey) {
+    return notFound("API key not found");
   }
-}
+
+  await prisma.apiKey.update({
+    where: { id: apiKey.id },
+    data: { revokedAt: new Date() },
+  });
+
+  return NextResponse.json({ success: true });
+});

@@ -1,86 +1,57 @@
 import { NextResponse } from "next/server";
-import { auth, generateApiKey } from "@/lib/auth";
+import { z } from "zod";
+import { generateApiKey } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { logServerError } from "@/lib/error-logger";
+import { authRoute } from "@/lib/route-handler";
 import { canUseFeature, SubscriptionTier } from "@/lib/feature-gates";
+import { badRequest, forbidden } from "@/lib/api-error";
 
 const MAX_ACTIVE_KEYS = 5;
 
-/** List active API keys (never returns full key). */
-export async function GET() {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
-    }
+export const GET = authRoute(async (_request, { auth }) => {
+  const keys = await prisma.apiKey.findMany({
+    where: { userId: auth.userId, revokedAt: null },
+    select: {
+      id: true,
+      name: true,
+      prefix: true,
+      lastUsedAt: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
-    const keys = await prisma.apiKey.findMany({
-      where: { userId: session.user.id, revokedAt: null },
-      select: {
-        id: true,
-        name: true,
-        prefix: true,
-        lastUsedAt: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+  return NextResponse.json({ keys });
+});
 
-    return NextResponse.json({ keys });
-  } catch (error) {
-    logServerError("api-keys", error, { route: "GET /api/profile/api-keys" });
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
-  }
-}
+const createKeyBody = z.object({
+  name: z.string().trim().min(1, "Name is required").max(64, "Name must be 64 characters or less"),
+});
 
-/** Create a new API key. Returns the full key exactly once. */
-export async function POST(request: Request) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
-    }
-
-    // Server-side tier check: API keys require Studio tier
+export const POST = authRoute(
+  async (_request, { auth, body }) => {
     const subscription = await prisma.subscription.findUnique({
-      where: { userId: session.user.id },
+      where: { userId: auth.userId },
       select: { tier: true },
     });
     const tier: SubscriptionTier = subscription?.tier ?? "free";
     if (!canUseFeature("apiKeys", tier)) {
-      return NextResponse.json(
-        { error: "Studio tier required", code: "FORBIDDEN" },
-        { status: 403 }
-      );
+      return forbidden("Studio tier required");
     }
 
-    const body = await request.json();
-    const name = typeof body.name === "string" ? body.name.trim() : "";
-
-    if (!name) {
-      return NextResponse.json({ error: "Name is required", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (name.length > 64) {
-      return NextResponse.json({ error: "Name must be 64 characters or less", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-
-    // Enforce max active keys
     const activeCount = await prisma.apiKey.count({
-      where: { userId: session.user.id, revokedAt: null },
+      where: { userId: auth.userId, revokedAt: null },
     });
     if (activeCount >= MAX_ACTIVE_KEYS) {
-      return NextResponse.json(
-        { error: `Maximum of ${MAX_ACTIVE_KEYS} active API keys allowed`, code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
+      return badRequest(`Maximum of ${MAX_ACTIVE_KEYS} active API keys allowed`);
     }
 
     const { key, hash, prefix } = generateApiKey();
 
     const created = await prisma.apiKey.create({
       data: {
-        userId: session.user.id,
-        name,
+        userId: auth.userId,
+        name: body.name,
         keyHash: hash,
         prefix,
       },
@@ -93,8 +64,6 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ ...created, key }, { status: 201 });
-  } catch (error) {
-    logServerError("api-keys", error, { route: "POST /api/profile/api-keys" });
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
-  }
-}
+  },
+  { body: createKeyBody },
+);

@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
-export async function POST() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
-  }
-
+export const POST = authRoute(async (_request, { auth }) => {
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: auth.userId },
     data: { onboardingCompleted: false },
   });
 
   return NextResponse.json({ success: true });
-}
+});
