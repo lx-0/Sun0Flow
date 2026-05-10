@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
@@ -32,8 +33,10 @@ import { GET } from "./route";
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function makeRequest(url: string) {
-  return new Request(url);
+  return new NextRequest(url);
 }
+
+const noParams = { params: Promise.resolve({}) } as never;
 
 const USER_ID = "user-123";
 
@@ -53,14 +56,14 @@ describe("GET /api/suggestions/prompts", () => {
     });
     mockResolveUser.mockResolvedValue({ userId: null, isApiKey: false, isAdmin: false, error: errorResponse });
 
-    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"));
+    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"), noParams);
     expect(res.status).toBe(401);
   });
 
   it("returns curated defaults when user has no history", async () => {
     mockSongFindMany.mockResolvedValue([]);
 
-    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"));
+    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"), noParams);
     expect(res.status).toBe(200);
 
     const data = await res.json();
@@ -81,7 +84,7 @@ describe("GET /api/suggestions/prompts", () => {
       ])
       .mockResolvedValueOnce([]);
 
-    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"));
+    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"), noParams);
     expect(res.status).toBe(200);
 
     const data = await res.json();
@@ -106,7 +109,7 @@ describe("GET /api/suggestions/prompts", () => {
         { tags: "ambient, nature, relaxing", isInstrumental: true },
       ]);
 
-    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"));
+    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"), noParams);
     expect(res.status).toBe(200);
 
     const data = await res.json();
@@ -128,7 +131,7 @@ describe("GET /api/suggestions/prompts", () => {
         { tags: "pop, upbeat", isInstrumental: false },
       ]);
 
-    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"));
+    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"), noParams);
     const data = await res.json();
 
     const combos = data.suggestions.map((s: { stylePrompt: string }) => s.stylePrompt.toLowerCase().trim());
@@ -146,7 +149,7 @@ describe("GET /api/suggestions/prompts", () => {
       )
       .mockResolvedValueOnce([]);
 
-    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"));
+    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"), noParams);
     const data = await res.json();
     expect(data.suggestions.length).toBeLessThanOrEqual(5);
   });
@@ -160,7 +163,7 @@ describe("GET /api/suggestions/prompts", () => {
       ])
       .mockResolvedValueOnce([]);
 
-    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"));
+    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"), noParams);
     const data = await res.json();
 
     const personalSuggestions = data.suggestions.filter(
@@ -173,7 +176,7 @@ describe("GET /api/suggestions/prompts", () => {
   it("returns 500 on unexpected error", async () => {
     mockSongFindMany.mockRejectedValue(new Error("DB failure"));
 
-    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"));
+    const res = await GET(makeRequest("http://localhost/api/suggestions/prompts"), noParams);
     expect(res.status).toBe(500);
     const data = await res.json();
     expect(data.code).toBe("INTERNAL_ERROR");

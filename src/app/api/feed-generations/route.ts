@@ -1,18 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
-/**
- * GET /api/feed-generations
- *
- * Returns the user's pending feed generation requests awaiting approval.
- */
-export async function GET(req: NextRequest) {
-  const { userId, error: authError } = await resolveUser(req);
-  if (authError) return authError;
-
+export const GET = authRoute(async (_request, { auth }) => {
   const items = await prisma.pendingFeedGeneration.findMany({
-    where: { userId, status: "pending" },
+    where: { userId: auth.userId, status: "pending" },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -28,4 +20,4 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({ items });
-}
+});

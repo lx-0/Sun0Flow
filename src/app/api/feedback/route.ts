@@ -1,81 +1,45 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
+import { badRequest } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { stripHtml } from "@/lib/sanitize";
 
-const VALID_CATEGORIES = ["bug_report", "feature_request", "general"];
+const VALID_CATEGORIES = ["bug_report", "feature_request", "general"] as const;
 
-export async function POST(request: NextRequest) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
+const feedbackBody = z.object({
+  category: z.enum(VALID_CATEGORIES),
+  score: z.number().int().min(1).max(5).nullish(),
+  comment: z.string().max(5000).nullish(),
+  screenshotUrl: z.string().max(2000).nullish(),
+  pageUrl: z.string().min(1, "pageUrl is required").max(2000),
+});
 
-    const body = await request.json();
-    const { category, score, comment, screenshotUrl, pageUrl } = body;
+export const POST = authRoute(async (request, { auth, body }) => {
+  const sanitizedComment = body.comment
+    ? stripHtml(body.comment).trim() || null
+    : null;
 
-    if (!category || !VALID_CATEGORIES.includes(category)) {
-      return NextResponse.json(
-        { error: `category must be one of: ${VALID_CATEGORIES.join(", ")}`, code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    if (score !== undefined && score !== null && (typeof score !== "number" || score < 1 || score > 5)) {
-      return NextResponse.json(
-        { error: "score must be an integer between 1 and 5", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    let sanitizedComment: string | null = null;
-    if (comment !== undefined && comment !== null) {
-      if (typeof comment !== "string") {
-        return NextResponse.json({ error: "comment must be a string", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-      const stripped = stripHtml(comment).trim();
-      if (stripped.length > 5000) {
-        return NextResponse.json({ error: "comment must be 5000 characters or fewer", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-      sanitizedComment = stripped || null;
-    }
-
-    if (category === "bug_report" && !sanitizedComment) {
-      return NextResponse.json(
-        { error: "comment is required for bug reports", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    if (!pageUrl || typeof pageUrl !== "string") {
-      return NextResponse.json(
-        { error: "pageUrl is required", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    if (pageUrl.length > 2000) {
-      return NextResponse.json({ error: "pageUrl must be 2000 characters or fewer", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-
-    const userAgent = request.headers.get("user-agent") ?? undefined;
-
-    const feedback = await prisma.userFeedback.create({
-      data: {
-        userId,
-        category,
-        score: score ?? null,
-        comment: sanitizedComment,
-        screenshotUrl: screenshotUrl?.trim()?.slice(0, 2000) || null,
-        pageUrl: pageUrl.trim(),
-        userAgent: userAgent?.slice(0, 500) ?? null,
-      },
-    });
-
-    logger.info({ feedbackId: feedback.id, userId, category }, "user feedback submitted");
-
-    return NextResponse.json({ id: feedback.id }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
+  if (body.category === "bug_report" && !sanitizedComment) {
+    return badRequest("comment is required for bug reports");
   }
-}
+
+  const userAgent = request.headers.get("user-agent") ?? undefined;
+
+  const feedback = await prisma.userFeedback.create({
+    data: {
+      userId: auth.userId,
+      category: body.category,
+      score: body.score ?? null,
+      comment: sanitizedComment,
+      screenshotUrl: body.screenshotUrl?.trim()?.slice(0, 2000) || null,
+      pageUrl: body.pageUrl.trim(),
+      userAgent: userAgent?.slice(0, 500) ?? null,
+    },
+  });
+
+  logger.info({ feedbackId: feedback.id, userId: auth.userId, category: body.category }, "user feedback submitted");
+
+  return NextResponse.json({ id: feedback.id }, { status: 201 });
+}, { body: feedbackBody });
