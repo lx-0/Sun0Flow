@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { trendingScore } from "./scoring";
+import { trendingScore } from ".";
 
 describe("trendingScore", () => {
   afterEach(() => {
