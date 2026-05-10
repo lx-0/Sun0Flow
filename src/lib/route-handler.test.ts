@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
-import { authRoute, adminRoute } from "@/lib/route-handler";
+import { authRoute, adminRoute, cronRoute } from "@/lib/route-handler";
 
 vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
@@ -179,5 +179,76 @@ describe("adminRoute", () => {
       expect.any(Error),
       { userId: "admin-1", route: "/api/test" }
     );
+  });
+});
+
+describe("cronRoute", () => {
+  function makeRequestWithAuth(token?: string) {
+    const headers: Record<string, string> = {};
+    if (token) headers["authorization"] = token;
+    return new NextRequest("http://localhost/api/cron/test", { headers });
+  }
+
+  it("returns 401 when no authorization header is provided", async () => {
+    vi.stubEnv("CRON_SECRET", "test-secret");
+    const handler = cronRoute(async () => NextResponse.json({ ok: true }));
+    const result = await handler(makeRequestWithAuth());
+
+    expect(result.status).toBe(401);
+    const body = await result.json();
+    expect(body.code).toBe("UNAUTHORIZED");
+    vi.unstubAllEnvs();
+  });
+
+  it("returns 401 when token does not match CRON_SECRET", async () => {
+    vi.stubEnv("CRON_SECRET", "test-secret");
+    const handler = cronRoute(async () => NextResponse.json({ ok: true }));
+    const result = await handler(makeRequestWithAuth("Bearer wrong-secret"));
+
+    expect(result.status).toBe(401);
+    vi.unstubAllEnvs();
+  });
+
+  it("returns 401 when CRON_SECRET is not set", async () => {
+    vi.stubEnv("CRON_SECRET", "");
+    const handler = cronRoute(async () => NextResponse.json({ ok: true }));
+    const result = await handler(makeRequestWithAuth("Bearer anything"));
+
+    expect(result.status).toBe(401);
+    vi.unstubAllEnvs();
+  });
+
+  it("calls handler when token matches CRON_SECRET", async () => {
+    vi.stubEnv("CRON_SECRET", "test-secret");
+    const handler = cronRoute(async () =>
+      NextResponse.json({ processed: 5 })
+    );
+    const result = await handler(makeRequestWithAuth("Bearer test-secret"));
+
+    expect(result.status).toBe(200);
+    const body = await result.json();
+    expect(body.processed).toBe(5);
+    vi.unstubAllEnvs();
+  });
+
+  it("catches unhandled errors and returns 500", async () => {
+    vi.stubEnv("CRON_SECRET", "test-secret");
+    const handler = cronRoute(
+      async () => {
+        throw new Error("Cron job failed");
+      },
+      { route: "/api/cron/test" }
+    );
+    const result = await handler(makeRequestWithAuth("Bearer test-secret"));
+
+    expect(result.status).toBe(500);
+    const body = await result.json();
+    expect(body.code).toBe("INTERNAL_ERROR");
+    expect(logServerError).toHaveBeenCalledWith(
+      "cron-route-handler",
+      expect.any(Error),
+      { route: "/api/cron/test" }
+    );
+    vi.unstubAllEnvs();
   });
 });

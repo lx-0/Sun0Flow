@@ -279,6 +279,42 @@ export function anonRoute<
 }
 
 /**
+ * Wrap a cron/webhook route handler. Validates CRON_SECRET bearer token,
+ * catches unhandled errors, and logs them with route context.
+ *
+ * Usage:
+ *   export const POST = cronRoute(async () => {
+ *     const result = await doScheduledWork();
+ *     return NextResponse.json(result);
+ *   });
+ */
+export function cronRoute(
+  handler: (request: NextRequest) => Promise<NextResponse>,
+  options?: RouteOptions
+) {
+  return async (request: NextRequest): Promise<NextResponse> => {
+    const authHeader = request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { error: "Unauthorized", code: "UNAUTHORIZED" },
+        { status: 401 },
+      );
+    }
+
+    try {
+      return await handler(request);
+    } catch (error) {
+      logServerError("cron-route-handler", error, {
+        route: options?.route ?? new URL(request.url).pathname,
+      });
+      return internalError();
+    }
+  };
+}
+
+/**
  * Convert a Result<T> into a NextResponse. Centralises the
  * ok / error → JSON mapping that was previously duplicated in 35+ routes.
  */
