@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { acquireRateLimitSlot, releaseRateLimitSlot, type RateLimitStatus } from "@/lib/rate-limit";
+import { acquireRateLimitSlot, type RateLimitStatus } from "@/lib/rate-limit";
 import { rateLimited, insufficientCredits } from "@/lib/api-error";
 import { checkCredits } from "@/lib/credits";
 import { logger } from "@/lib/logger";

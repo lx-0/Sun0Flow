@@ -2,6 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 
+vi.mock("@/lib/env", () => ({
+  DATABASE_URL: "postgres://test:test@localhost:5432/test",
+  SUNOFLOW_DATABASE_URL: "postgres://test:test@localhost:5432/test",
+  AUTH_SECRET: "test-secret",
+  NEXTAUTH_URL: "http://localhost:3000",
+  RATE_LIMIT_MAX_GENERATIONS: 10,
+  WEBHOOK_BASE_URL: "http://localhost:3000",
+  SUNO_WEBHOOK_SECRET: undefined,
+  env: {},
+}));
+
 const mockResolveUser = vi.fn();
 vi.mock("@/lib/auth", () => ({
   resolveUser: (...args: unknown[]) => mockResolveUser(...args),

@@ -353,7 +353,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
       <div className="relative max-w-3xl mx-auto md:mx-0">
         {/* Floating emoji popups — rendered outside overflow-hidden so they can float up */}
         {activePopups.length > 0 && (
-          <div className="pointer-events-none absolute inset-x-2 bottom-14 h-0">
+          <div className="pointer-events-none absolute inset-x-2 bottom-14 h-0 z-30">
             {activePopups.map((popup) => (
               <span
                 key={popup.key}
@@ -389,9 +389,9 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
           </div>
         )}
 
-      <div className="bg-gray-900 dark:bg-gray-800 rounded-2xl md:rounded-none md:rounded-t-2xl shadow-2xl border border-gray-700 dark:border-gray-600 overflow-hidden">
+      <div className="bg-gray-900 dark:bg-gray-800 rounded-2xl md:rounded-none md:rounded-t-2xl shadow-2xl border border-gray-700 dark:border-gray-600">
         {/* Waveform seek bar + reaction timeline overlay */}
-        <div className="relative h-12 px-2 pt-1 pb-0.5 bg-gray-900 dark:bg-gray-800">
+        <div className="relative h-12 px-2 pt-1 pb-0.5 bg-gray-900 dark:bg-gray-800 overflow-hidden rounded-t-2xl md:rounded-none md:rounded-t-2xl">
           <PlayerWaveform
             songId={currentSong.id}
             currentTime={currentTime}

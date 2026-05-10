@@ -12,7 +12,7 @@ const querySchema = z.object({
 
 export const GET = authRoute<{ id: string }, undefined, z.infer<typeof querySchema>>(
   async (_request, { auth, params, query }) => {
-    const { data: song, error } = requireOwned(
+    const { error } = requireOwned(
       await prisma.song.findUnique({ where: { id: params.id } }),
       auth.userId,
       "Song",

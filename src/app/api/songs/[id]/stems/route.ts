@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 export const GET = authRoute<{ id: string }>(
   async (_request, { auth, params }) => {
-    const { data: song, error } = requireOwned(
+    const { error } = requireOwned(
       await prisma.song.findUnique({ where: { id: params.id } }),
       auth.userId,
       "Song",

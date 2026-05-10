@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { GET } from "./route";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/env", () => ({
@@ -7,11 +6,31 @@ vi.mock("@/lib/env", () => ({
   get AUTH_SECRET() { return "test-secret"; },
   get NEXTAUTH_URL() { return "http://localhost:3000"; },
   get RATE_LIMIT_MAX_GENERATIONS() { return 10; },
+  WEBHOOK_BASE_URL: "http://localhost:3000",
+  SUNO_WEBHOOK_SECRET: undefined,
+  SUNOFLOW_DATABASE_URL: "postgres://test:test@localhost:5432/test",
   env: {},
 }));
 
-const mockAnonFindMany = vi.fn().mockResolvedValue([]);
-const mockAnonCreate = vi.fn().mockResolvedValue({ id: "rl-1" });
+vi.mock("@/lib/auth", () => ({
+  resolveUser: vi.fn(),
+  requireAdmin: vi.fn(),
+  auth: vi.fn(),
+  handlers: {},
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+  googleEnabled: false,
+}));
+
+vi.mock("@/lib/rate-limit", () => ({
+  acquireAnonRateLimitSlot: vi.fn().mockResolvedValue({ acquired: true }),
+  acquireRateLimitSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  recordRateLimitHit: vi.fn(),
+  releaseRateLimitSlot: vi.fn(),
+  hashRateLimitKey: vi.fn(),
+  getHourlyGenerationLimit: vi.fn(),
+}));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -19,17 +38,6 @@ vi.mock("@/lib/prisma", () => ({
       findMany: vi.fn(),
       count: vi.fn(),
     },
-    anonRateLimitEntry: {
-      findMany: (...args: unknown[]) => mockAnonFindMany(...args),
-      create: (...args: unknown[]) => mockAnonCreate(...args),
-    },
-    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        anonRateLimitEntry: {
-          findMany: (...args: unknown[]) => mockAnonFindMany(...args),
-          create: (...args: unknown[]) => mockAnonCreate(...args),
-        },
-      }),
   },
 }));
 
@@ -37,15 +45,18 @@ vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-// Bypass cache for tests
-vi.mock("@/lib/cache", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/cache")>();
-  return {
-    ...actual,
-    cached: vi.fn((_key: string, fetcher: () => Promise<unknown>) => fetcher()),
-  };
-});
+vi.mock("@/lib/cache", () => ({
+  cached: vi.fn((_key: string, fetcher: () => Promise<unknown>) => fetcher()),
+  cacheKey: vi.fn((...args: string[]) => args.join(":")),
+  CacheTTL: { PUBLIC_SONG: 60 },
+  CacheControl: { publicShort: "public, max-age=60" },
+  invalidateByPrefix: vi.fn(),
+  invalidateKey: vi.fn(),
+  computeETag: vi.fn(),
+  apiCache: vi.fn(),
+}));
 
+import { GET } from "./route";
 import { prisma } from "@/lib/prisma";
 
 function makePublicSong(overrides: Record<string, unknown> = {}) {
