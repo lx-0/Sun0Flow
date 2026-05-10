@@ -20,7 +20,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { getDashboardStats } from "./index";
+import { getDashboardStats } from "./user-dashboard";
 
 describe("getDashboardStats", () => {
   beforeEach(() => {

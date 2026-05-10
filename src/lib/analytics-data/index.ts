@@ -7,8 +7,8 @@ export { getGenerationInsights } from "./generation-insights";
 export type { SongAnalytics } from "./song-detail";
 export { getSongAnalytics } from "./song-detail";
 
-export type { UserDashboardStats } from "./user-dashboard";
-export { getUserDashboardStats } from "./user-dashboard";
+export type { UserDashboardStats, DashboardStats } from "./user-dashboard";
+export { getUserDashboardStats, getDashboardStats } from "./user-dashboard";
 
 export type { AdminAnalytics } from "./admin-dashboard";
 export { getAdminAnalytics } from "./admin-dashboard";
