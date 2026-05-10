@@ -7,6 +7,7 @@ import { badRequest } from "@/lib/api-error";
 import { createNotification, NOTIFICATION_TYPES } from "@/lib/notifications";
 import type { NotificationType } from "@/lib/notifications";
 import { zLimitParam, zCursorParam } from "@/lib/query-params";
+import { cursorPaginate } from "@/lib/pagination";
 
 const notificationsQuery = z.object({
   limit: zLimitParam(20, 100),
@@ -22,9 +23,7 @@ export const GET = authRoute(
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     });
 
-    const hasMore = notifications.length > query.limit;
-    const sliced = hasMore ? notifications.slice(0, query.limit) : notifications;
-    const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
+    const { items, nextCursor } = cursorPaginate(notifications, query.limit);
 
     const unreadCount = await cached(
       cacheKey("notifications-unread", auth.userId),
@@ -36,7 +35,7 @@ export const GET = authRoute(
     );
 
     return NextResponse.json(
-      { notifications: sliced, nextCursor, unreadCount },
+      { notifications: items, nextCursor, unreadCount },
       { headers: { "Cache-Control": CacheControl.privateNoCache } },
     );
   },

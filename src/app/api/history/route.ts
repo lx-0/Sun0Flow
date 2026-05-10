@@ -4,6 +4,7 @@ import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { badRequest, notFound } from "@/lib/api-error";
 import { zLimitParam, zCursorParam } from "@/lib/query-params";
+import { cursorPaginate } from "@/lib/pagination";
 
 const MAX_HISTORY = 50;
 const DEDUP_WINDOW_MS = 5_000;
@@ -41,9 +42,7 @@ export const GET = authRoute(
       `,
     ]);
 
-    const hasMore = items.length > query.limit;
-    const sliced = hasMore ? items.slice(0, query.limit) : items;
-    const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
+    const { items: sliced, nextCursor } = cursorPaginate(items, query.limit);
 
     return NextResponse.json({
       items: sliced,

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { Song, SongTag, Tag, Favorite } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
+import { cursorPaginate } from "@/lib/pagination";
 
 export { prepareSongDownload } from "./download";
 export type { DownloadFormat, DownloadSong, DownloadRequest, DownloadResult } from "./download";
@@ -260,20 +261,6 @@ function enrichSong(song: SongWithDetail): EnrichedSong {
 
 function enrichSongs(songs: SongWithDetail[]): EnrichedSong[] {
   return songs.map(enrichSong);
-}
-
-// ---------------------------------------------------------------------------
-// Cursor pagination
-// ---------------------------------------------------------------------------
-
-function cursorPaginate<T extends { id: string }>(
-  rows: T[],
-  limit: number
-): { items: T[]; nextCursor: string | null } {
-  const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const nextCursor = hasMore ? items[items.length - 1].id : null;
-  return { items, nextCursor };
 }
 
 // ---------------------------------------------------------------------------

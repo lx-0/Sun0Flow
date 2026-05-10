@@ -10,6 +10,7 @@ import {
   zCursorParam,
   zEnumParam,
 } from "@/lib/query-params";
+import { cursorPaginate } from "@/lib/pagination";
 
 const favoritesQuery = z.object({
   q: zTrimmedParam,
@@ -87,11 +88,7 @@ export const GET = authRoute(
       }),
     ]);
 
-    const hasMore = favorites.length > query.limit;
-    const sliced = hasMore
-      ? favorites.slice(0, query.limit)
-      : favorites;
-    const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
+    const { items: sliced, nextCursor } = cursorPaginate(favorites, query.limit);
 
     const songs = sliced.map((f) => ({
       ...f.song,
