@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
 import { cached, cacheKey, CacheTTL, CacheControl } from "@/lib/cache";
 import { withTiming } from "@/lib/timing";
-import { getDashboardStats } from "@/lib/dashboard-stats";
+import { getDashboardStats } from "@/lib/analytics-data";
 
 async function handleGET(request: NextRequest) {
   const { userId, error: authError } = await resolveUser(request);
