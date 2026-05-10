@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { fillDailySeries } from "./dates";
+import { fillDailySeries } from "@/lib/date-series";
 
 export interface UserDashboardStats {
   totalGenerations: number;

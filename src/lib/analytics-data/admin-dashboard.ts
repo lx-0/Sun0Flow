@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { parseDateRange, countGenres } from "./dates";
+import { parseDateRange } from "@/lib/date-series";
+import { countGenres } from "@/lib/tags";
 
 export interface AdminAnalytics {
   totalUsers: number;

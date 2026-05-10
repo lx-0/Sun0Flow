@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { countGenres, mondayOfWeeksAgo } from "./dates";
+import { countGenres } from "@/lib/tags";
+import { mondayOfWeeksAgo } from "@/lib/date-series";
 
 export interface GenerationInsights {
   totalSongs: number;

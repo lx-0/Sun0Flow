@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseTags, normalizeTagCombo, collectSongTokens, tagOverlapScore } from "./index";
+import { parseTags, normalizeTagCombo, collectSongTokens, tagOverlapScore, countGenres } from "./index";
 
 describe("parseTags", () => {
   it("splits comma-separated tags", () => {
@@ -95,5 +95,39 @@ describe("tagOverlapScore", () => {
 
   it("uses max(|a|,|b|) as denominator", () => {
     expect(tagOverlapScore(["pop"], ["pop", "rock", "jazz"])).toBeCloseTo(1 / 3);
+  });
+});
+
+describe("countGenres", () => {
+  it("counts genres from comma-separated tags", () => {
+    const songs = [
+      { tags: "Pop, Rock, Jazz" },
+      { tags: "rock, electronic" },
+      { tags: "pop" },
+      { tags: null },
+    ];
+
+    const result = countGenres(songs);
+
+    expect(result[0]).toEqual({ genre: "pop", count: 2 });
+    expect(result[1]).toEqual({ genre: "rock", count: 2 });
+    expect(result).toHaveLength(4);
+  });
+
+  it("respects the limit parameter", () => {
+    const songs = Array.from({ length: 20 }, (_, i) => ({
+      tags: `genre${i}`,
+    }));
+
+    expect(countGenres(songs, 10)).toHaveLength(10);
+    expect(countGenres(songs, 5)).toHaveLength(5);
+  });
+
+  it("defaults to top 12", () => {
+    const songs = Array.from({ length: 20 }, (_, i) => ({
+      tags: `genre${i}`,
+    }));
+
+    expect(countGenres(songs)).toHaveLength(12);
   });
 });

@@ -46,21 +46,3 @@ export function mondayOfWeeksAgo(weeksAgo: number, now: Date = new Date()): stri
   d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
 }
-
-export function countGenres(
-  songs: Array<{ tags: string | null }>,
-  limit: number = 12,
-): Array<{ genre: string; count: number }> {
-  const counts: Record<string, number> = {};
-  for (const song of songs) {
-    if (!song.tags) continue;
-    for (const raw of song.tags.split(",")) {
-      const genre = raw.trim().toLowerCase();
-      if (genre) counts[genre] = (counts[genre] || 0) + 1;
-    }
-  }
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([genre, count]) => ({ genre, count }));
-}

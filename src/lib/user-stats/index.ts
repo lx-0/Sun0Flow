@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { countGenres } from "@/lib/analytics-data/dates";
+import { countGenres } from "@/lib/tags";
 import { getUserStreak } from "@/lib/streaks";
 
 export type PeakHour = { hour: number; count: number };

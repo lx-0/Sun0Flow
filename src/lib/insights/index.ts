@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { mondayOfWeeksAgo } from "@/lib/analytics-data/dates";
+import { mondayOfWeeksAgo } from "@/lib/date-series";
 import { tallyFeedback, normalizeTags, comboKey } from "@/lib/feedback-tally";
 
 export interface TagStat {

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { fillDailySeries } from "./dates";
+import { fillDailySeries } from "@/lib/date-series";
 import { type Result, success, Err } from "@/lib/result";
 
 export interface SongAnalytics {
