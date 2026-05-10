@@ -49,7 +49,10 @@ import {
   checkFavorite,
   addFavorite,
   removeFavorite,
+  listFavorites,
 } from "./favorites";
+import { invalidateByPrefix } from "@/lib/cache";
+import { recordActivity } from "@/lib/activity";
 
 const SONG = { id: "song-1", userId: "user-1", title: "Test Song" };
 
@@ -114,6 +117,12 @@ describe("addFavorite", () => {
       ok: true,
       data: { isFavorite: true, favoriteCount: 5, favoriteId: "fav-1" },
     });
+    expect(invalidateByPrefix).toHaveBeenCalledWith("dashboard-stats:user-1");
+    expect(recordActivity).toHaveBeenCalledWith({
+      userId: "user-1",
+      type: "song_favorited",
+      songId: "song-1",
+    });
   });
 
   it("returns not found for inaccessible song", async () => {
@@ -137,6 +146,7 @@ describe("removeFavorite", () => {
       ok: true,
       data: { isFavorite: false, favoriteCount: 4 },
     });
+    expect(invalidateByPrefix).toHaveBeenCalledWith("dashboard-stats:user-1");
   });
 
   it("returns not found for inaccessible song", async () => {
@@ -146,5 +156,78 @@ describe("removeFavorite", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.status).toBe(404);
     expect(mockFavoriteDeleteMany).not.toHaveBeenCalled();
+  });
+});
+
+const FAV_ROW = {
+  id: "fav-1",
+  userId: "user-1",
+  songId: "song-1",
+  createdAt: new Date("2024-01-01"),
+  song: {
+    ...SONG,
+    prompt: null,
+    songTags: [],
+    _count: { favorites: 3 },
+  },
+};
+
+describe("listFavorites", () => {
+  it("returns paginated favorites with enriched fields", async () => {
+    mockFavoriteFindMany.mockResolvedValue([FAV_ROW]);
+    mockFavoriteCount.mockResolvedValue(1);
+
+    const result = await listFavorites({ userId: "user-1" });
+
+    expect(result.total).toBe(1);
+    expect(result.songs).toHaveLength(1);
+    expect(result.songs[0].isFavorite).toBe(true);
+    expect(result.songs[0].favoriteCount).toBe(3);
+    expect(result.songs[0].favoritedAt).toEqual(new Date("2024-01-01"));
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("forwards cursor to Prisma query", async () => {
+    mockFavoriteFindMany.mockResolvedValue([]);
+    mockFavoriteCount.mockResolvedValue(0);
+
+    await listFavorites({ userId: "user-1", cursor: "fav-cursor-1" });
+
+    expect(mockFavoriteFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ cursor: { id: "fav-cursor-1" }, skip: 1 }),
+    );
+  });
+
+  it("applies search filter as OR on title and prompt", async () => {
+    mockFavoriteFindMany.mockResolvedValue([]);
+    mockFavoriteCount.mockResolvedValue(0);
+
+    await listFavorites({ userId: "user-1", search: "rock" });
+
+    expect(mockFavoriteFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          song: expect.objectContaining({
+            OR: [
+              { title: { contains: "rock", mode: "insensitive" } },
+              { prompt: { contains: "rock", mode: "insensitive" } },
+            ],
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("orders by title_az when sortBy=title_az", async () => {
+    mockFavoriteFindMany.mockResolvedValue([]);
+    mockFavoriteCount.mockResolvedValue(0);
+
+    await listFavorites({ userId: "user-1", sortBy: "title_az" });
+
+    expect(mockFavoriteFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: { song: { title: { sort: "asc", nulls: "last" } } },
+      }),
+    );
   });
 });

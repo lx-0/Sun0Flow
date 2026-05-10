@@ -93,11 +93,18 @@ export interface FavoritesQuery {
   cursor?: string;
 }
 
-export type FavoriteSong = {
+type FavoriteSongBase = Prisma.SongGetPayload<{
+  include: {
+    songTags: { include: { tag: true } };
+    _count: { select: { favorites: true } };
+  };
+}>;
+
+export type FavoriteSong = Omit<FavoriteSongBase, "_count"> & {
   isFavorite: true;
   favoriteCount: number;
   favoritedAt: Date;
-} & Record<string, unknown>;
+};
 
 export interface FavoritesResult {
   songs: FavoriteSong[];
