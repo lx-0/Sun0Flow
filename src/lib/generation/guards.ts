@@ -84,3 +84,34 @@ export async function checkCreditBalance(
   }
   return { ok: true };
 }
+
+// ── Composite guard application ────────────────────────────────────────
+// Encapsulates the full guard-application protocol: resolve policy flags,
+// enforce rate limit, check credit balance. Callers get a single
+// denied-or-proceed result instead of reimplementing the sequence.
+
+export type GuardResult =
+  | { denied: true; response: NextResponse }
+  | { denied: false; flags: GuardFlags; rateLimitStatus?: RateLimitStatus };
+
+export async function applyGuards(
+  policy: GuardPolicy,
+  userId: string,
+  action: string
+): Promise<GuardResult> {
+  const flags = resolveGuards(policy);
+  let rateLimitStatus: RateLimitStatus | undefined;
+
+  if (flags.rateLimit) {
+    const result = await enforceRateLimit(userId, action);
+    if (result.limited) return { denied: true, response: result.response };
+    rateLimitStatus = result.status;
+  }
+
+  if (flags.creditCheck) {
+    const result = await checkCreditBalance(userId, action);
+    if ("denied" in result) return { denied: true, response: result.denied };
+  }
+
+  return { denied: false, flags, rateLimitStatus };
+}

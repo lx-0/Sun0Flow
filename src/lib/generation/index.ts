@@ -3,7 +3,7 @@ import type { RateLimitStatus } from "@/lib/rate-limit";
 import { releaseRateLimitSlot } from "@/lib/rate-limit";
 import { deductCredits } from "@/lib/credits";
 import { logger } from "@/lib/logger";
-import { resolveGuards, enforceRateLimit, checkCreditBalance, type GuardPolicy } from "./guards";
+import { applyGuards, type GuardPolicy } from "./guards";
 import { createSongRecord, afterCreation, executeCore, type SongParams, type MockData } from "./core";
 
 // Re-exports: keep the public interface stable for all callers.
@@ -40,26 +40,17 @@ export type GenerationOutcome =
   | { status: "failed"; song: Song; error: string; rawError: unknown; rateLimitStatus?: RateLimitStatus };
 
 export async function executeGeneration(spec: GenerationSpec): Promise<GenerationOutcome> {
-  const guards = resolveGuards(spec.guards ?? "standard");
-  let rateLimitStatus: RateLimitStatus | undefined;
+  const guardResult = await applyGuards(spec.guards ?? "standard", spec.userId, spec.action);
+  if (guardResult.denied) return { status: "denied", response: guardResult.response };
 
-  if (guards.rateLimit) {
-    const result = await enforceRateLimit(spec.userId, spec.action);
-    if (result.limited) return { status: "denied", response: result.response };
-    rateLimitStatus = result.status;
-  }
-
-  if (guards.creditCheck) {
-    const result = await checkCreditBalance(spec.userId, spec.action);
-    if ("denied" in result) return { status: "denied", response: result.denied };
-  }
+  const { flags, rateLimitStatus } = guardResult;
 
   if (!spec.hasApiKey) {
     const song = await createSongRecord(spec.userId, spec.songParams, {
       status: "ready",
       mock: spec.mockFallback,
     });
-    if (guards.creditRecording) {
+    if (flags.creditRecording) {
       await deductCredits(spec.userId, spec.action, {
         songId: song.id,
         description: spec.description,
@@ -75,7 +66,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
     songParams: spec.songParams,
     apiCall: spec.apiCall,
     description: spec.description,
-    creditRecording: guards.creditRecording,
+    creditRecording: flags.creditRecording,
     coverArt: spec.coverArt,
   });
 
@@ -85,7 +76,7 @@ export async function executeGeneration(spec: GenerationSpec): Promise<Generatio
     case "circuit_open":
       return enqueueGeneration(spec);
     case "api_error":
-      if (guards.rateLimit) {
+      if (flags.rateLimit) {
         await releaseRateLimitSlot(spec.userId).catch(() => {});
       }
       return {

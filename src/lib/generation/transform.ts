@@ -1,6 +1,6 @@
 import type { RateLimitStatus } from "@/lib/rate-limit";
 import { releaseRateLimitSlot } from "@/lib/rate-limit";
-import { resolveGuards, enforceRateLimit, checkCreditBalance, type GuardPolicy } from "./guards";
+import { applyGuards, type GuardPolicy } from "./guards";
 import { userFriendlyError } from "./errors";
 
 export interface TransformSpec {
@@ -19,19 +19,10 @@ export type TransformOutcome =
   | { status: "failed"; error: string; rawError: unknown; rateLimitStatus?: RateLimitStatus };
 
 export async function executeTransform(spec: TransformSpec): Promise<TransformOutcome> {
-  const guards = resolveGuards(spec.guards ?? "free");
-  let rateLimitStatus: RateLimitStatus | undefined;
+  const guardResult = await applyGuards(spec.guards ?? "free", spec.userId, spec.action);
+  if (guardResult.denied) return { status: "denied", response: guardResult.response };
 
-  if (guards.rateLimit) {
-    const result = await enforceRateLimit(spec.userId, spec.action);
-    if (result.limited) return { status: "denied", response: result.response };
-    rateLimitStatus = result.status;
-  }
-
-  if (guards.creditCheck) {
-    const result = await checkCreditBalance(spec.userId, spec.action);
-    if ("denied" in result) return { status: "denied", response: result.denied };
-  }
+  const { flags, rateLimitStatus } = guardResult;
 
   if (!spec.hasApiKey) {
     return { status: "completed", taskId: spec.mockTaskId, mockMode: true, rateLimitStatus };
@@ -41,7 +32,7 @@ export async function executeTransform(spec: TransformSpec): Promise<TransformOu
     const result = await spec.apiCall();
     return { status: "completed", taskId: result.taskId, mockMode: false, rateLimitStatus };
   } catch (apiError) {
-    if (guards.rateLimit) {
+    if (flags.rateLimit) {
       await releaseRateLimitSlot(spec.userId).catch(() => {});
     }
     const { message: errorMsg } = userFriendlyError(apiError, spec.fallbackErrorMessage);
