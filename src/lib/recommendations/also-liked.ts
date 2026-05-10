@@ -1,45 +1,22 @@
 import { prisma } from "@/lib/prisma";
 import { collectSongTokens, tagOverlapScore } from "@/lib/tags";
+import { BASE_SONG_SELECT, formatBaseSong, type BaseSongResult } from "./format";
 
 const MIN_FAVORITES_FOR_COLLABORATIVE = 10;
-
-interface AlsoLikedSong {
-  id: string;
-  title: string | null;
-  tags: string | null;
-  imageUrl: string | null;
-  duration: number | null;
-  audioUrl: string | null;
-  createdAt: string;
-}
-
-const SONG_FIELDS = {
-  id: true,
-  title: true,
-  tags: true,
-  imageUrl: true,
-  duration: true,
-  audioUrl: true,
-  createdAt: true,
-} as const;
-
-function formatSong(s: { id: string; title: string | null; tags: string | null; imageUrl: string | null; duration: number | null; audioUrl: string | null; createdAt: Date }): AlsoLikedSong {
-  return { ...s, createdAt: s.createdAt.toISOString() };
-}
 
 async function collaborativeResults(
   songId: string,
   userId: string,
   allTargetTokens: string[],
   limit: number,
-): Promise<AlsoLikedSong[]> {
+): Promise<BaseSongResult[]> {
   const coFavoriters = await prisma.favorite.findMany({
     where: { songId, userId: { not: userId } },
     select: { userId: true },
     take: 100,
   });
 
-  let songs: AlsoLikedSong[] = [];
+  let songs: BaseSongResult[] = [];
 
   if (coFavoriters.length > 0) {
     const coFavoriterIds = coFavoriters.map((f) => f.userId);
@@ -58,9 +35,9 @@ async function collaborativeResults(
     if (coFavoritedSongs.length > 0) {
       const rows = await prisma.song.findMany({
         where: { id: { in: coFavoritedSongs.map((f) => f.songId) } },
-        select: SONG_FIELDS,
+        select: BASE_SONG_SELECT,
       });
-      songs = rows.map(formatSong);
+      songs = rows.map(formatBaseSong);
     }
   }
 
@@ -90,7 +67,7 @@ async function collaborativeResults(
       .sort((a, b) => b.score - a.score)
       .slice(0, remaining);
 
-    songs = [...songs, ...scored.map(({ song: s }) => formatSong(s))];
+    songs = [...songs, ...scored.map(({ song: s }) => formatBaseSong(s))];
   }
 
   return songs;
@@ -101,7 +78,7 @@ async function tagFallbackResults(
   userId: string,
   allTargetTokens: string[],
   limit: number,
-): Promise<AlsoLikedSong[]> {
+): Promise<BaseSongResult[]> {
   const candidates = await prisma.song.findMany({
     where: {
       userId,
@@ -122,14 +99,14 @@ async function tagFallbackResults(
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
-    .map(({ song: s }) => formatSong(s));
+    .map(({ song: s }) => formatBaseSong(s));
 }
 
 export async function getAlsoLiked(
   songId: string,
   userId: string,
   limit: number,
-): Promise<AlsoLikedSong[] | null> {
+): Promise<BaseSongResult[] | null> {
   const song = await prisma.song.findFirst({
     where: { id: songId, userId },
     include: { songTags: { include: { tag: true } } },

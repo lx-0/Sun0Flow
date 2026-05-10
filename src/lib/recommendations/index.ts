@@ -12,8 +12,8 @@ export { getRelatedSongs } from "./related";
 export type { RelatedSong, RelatedResult } from "./related";
 export { getDailyMix } from "./daily-mix";
 export { seededShuffle } from "./daily-mix";
-export type { RecommendedSong, RecommendationResult } from "./format";
-export { formatSong } from "./format";
+export type { BaseSongResult, RecommendedSong, RecommendationResult } from "./format";
+export { formatBaseSong, formatSong } from "./format";
 
 // --- Public types ---
 

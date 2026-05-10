@@ -1,14 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { collectSongTokens, tagOverlapScore } from "@/lib/tags";
+import { formatBaseSong, type BaseSongResult } from "./format";
 
-export interface SimilarSong {
-  id: string;
-  title: string | null;
-  tags: string | null;
-  imageUrl: string | null;
-  duration: number | null;
-  audioUrl: string | null;
-  createdAt: string;
+export interface SimilarSong extends BaseSongResult {
   score: number;
 }
 
@@ -38,19 +32,10 @@ export async function getSimilarSongs(
   });
 
   return candidates
-    .map((c) => {
-      const score = tagOverlapScore(targetTokens, collectSongTokens(c.songTags, c.tags));
-      return {
-        id: c.id,
-        title: c.title,
-        tags: c.tags,
-        imageUrl: c.imageUrl,
-        duration: c.duration,
-        audioUrl: c.audioUrl,
-        createdAt: c.createdAt.toISOString(),
-        score,
-      };
-    })
+    .map((c) => ({
+      ...formatBaseSong(c),
+      score: tagOverlapScore(targetTokens, collectSongTokens(c.songTags, c.tags)),
+    }))
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);

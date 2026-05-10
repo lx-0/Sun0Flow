@@ -1,4 +1,4 @@
-export interface RecommendedSong {
+export interface BaseSongResult {
   id: string;
   title: string | null;
   tags: string | null;
@@ -6,12 +6,9 @@ export interface RecommendedSong {
   duration: number | null;
   audioUrl: string | null;
   createdAt: string;
-  rating: number | null;
-  playCount: number;
-  isFavorite: boolean;
 }
 
-export type SongRow = {
+export type BaseSongRow = {
   id: string;
   title: string | null;
   tags: string | null;
@@ -19,12 +16,9 @@ export type SongRow = {
   duration: number | null;
   audioUrl: string | null;
   createdAt: Date;
-  rating: number | null;
-  playCount: number;
-  isFavorite: boolean;
 };
 
-export const SONG_SELECT_FIELDS = {
+export const BASE_SONG_SELECT = {
   id: true,
   title: true,
   tags: true,
@@ -32,12 +26,9 @@ export const SONG_SELECT_FIELDS = {
   duration: true,
   audioUrl: true,
   createdAt: true,
-  rating: true,
-  playCount: true,
-  isFavorite: true,
 } as const;
 
-export function formatSong(s: SongRow): RecommendedSong {
+export function formatBaseSong(s: BaseSongRow): BaseSongResult {
   return {
     id: s.id,
     title: s.title,
@@ -46,6 +37,31 @@ export function formatSong(s: SongRow): RecommendedSong {
     duration: s.duration,
     audioUrl: s.audioUrl,
     createdAt: s.createdAt.toISOString(),
+  };
+}
+
+export interface RecommendedSong extends BaseSongResult {
+  rating: number | null;
+  playCount: number;
+  isFavorite: boolean;
+}
+
+export type SongRow = BaseSongRow & {
+  rating: number | null;
+  playCount: number;
+  isFavorite: boolean;
+};
+
+export const SONG_SELECT_FIELDS = {
+  ...BASE_SONG_SELECT,
+  rating: true,
+  playCount: true,
+  isFavorite: true,
+} as const;
+
+export function formatSong(s: SongRow): RecommendedSong {
+  return {
+    ...formatBaseSong(s),
     rating: s.rating,
     playCount: s.playCount,
     isFavorite: s.isFavorite,
