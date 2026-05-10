@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 
+export { queryPublicActivities } from "./query";
+export type { ActivityFeedItem, ActivityFeedResult } from "./query";
+
 export async function recordActivity(params: {
   userId: string;
   type: "song_created" | "playlist_created" | "song_favorited" | "song_added_to_playlist" | "song_removed_from_playlist";

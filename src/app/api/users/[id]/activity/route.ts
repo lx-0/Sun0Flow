@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
+import { queryPublicActivities } from "@/lib/activity";
 
 export async function GET(
   request: Request,
@@ -10,9 +10,7 @@ export async function GET(
   try {
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-    const skip = pageSkip(page, DEFAULT_PAGE_SIZE);
 
-    // Verify user exists
     const user = await prisma.user.findUnique({
       where: { id },
       select: { id: true },
@@ -24,88 +22,8 @@ export async function GET(
       );
     }
 
-    const [activities, total] = await Promise.all([
-      prisma.activity.findMany({
-        where: { userId: id },
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: DEFAULT_PAGE_SIZE,
-        select: {
-          id: true,
-          type: true,
-          createdAt: true,
-          song: {
-            select: {
-              id: true,
-              publicSlug: true,
-              title: true,
-              imageUrl: true,
-              duration: true,
-              tags: true,
-              isPublic: true,
-              isHidden: true,
-              archivedAt: true,
-              generationStatus: true,
-            },
-          },
-          playlist: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              isPublic: true,
-              _count: { select: { songs: true } },
-            },
-          },
-        },
-      }),
-      prisma.activity.count({ where: { userId: id } }),
-    ]);
-
-    const items = activities
-      .filter((a) => {
-        if (a.type === "song_created" || a.type === "song_favorited") {
-          return (
-            a.song &&
-            a.song.isPublic &&
-            !a.song.isHidden &&
-            !a.song.archivedAt &&
-            a.song.generationStatus === "ready"
-          );
-        }
-        if (a.type === "playlist_created") {
-          return a.playlist && a.playlist.isPublic;
-        }
-        return false;
-      })
-      .map((a) => ({
-        id: a.id,
-        type: a.type,
-        createdAt: a.createdAt,
-        song: a.song
-          ? {
-              id: a.song.id,
-              publicSlug: a.song.publicSlug,
-              title: a.song.title,
-              imageUrl: a.song.imageUrl,
-              duration: a.song.duration,
-              tags: a.song.tags,
-            }
-          : null,
-        playlist: a.playlist
-          ? {
-              id: a.playlist.id,
-              name: a.playlist.name,
-              slug: a.playlist.slug,
-              songCount: a.playlist._count.songs,
-            }
-          : null,
-      }));
-
-    return NextResponse.json({
-      items,
-      pagination: offsetPagination(page, DEFAULT_PAGE_SIZE, total),
-    });
+    const result = await queryPublicActivities([id], page);
+    return NextResponse.json(result);
   } catch {
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

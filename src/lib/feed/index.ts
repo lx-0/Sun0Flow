@@ -2,9 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
 import { buildDiscoverableFilter, SongSelect } from "@/lib/songs";
 import { gatherUserSignals } from "@/lib/user-signals";
+import { queryPublicActivities } from "@/lib/activity";
 import { rankAnonymousFeed, rankPersonalizedFeed, type TasteProfile } from "./rank";
 
 export type { FeedReason, FeedItem, SongRow, TasteProfile } from "./rank";
+export type { ActivityFeedItem, ActivityFeedResult } from "@/lib/activity";
 
 export interface FeedFilters {
   tag?: string;
@@ -14,32 +16,6 @@ export interface FeedFilters {
 export interface FeedResult {
   items: import("./rank").FeedItem[];
   strategy: "personalized" | "trending_fallback";
-}
-
-export interface ActivityFeedItem {
-  id: string;
-  type: string;
-  createdAt: Date;
-  user: { id: string; name: string | null; image: string | null };
-  song: {
-    id: string;
-    publicSlug: string | null;
-    title: string | null;
-    imageUrl: string | null;
-    duration: number | null;
-    tags: string | null;
-  } | null;
-  playlist: {
-    id: string;
-    name: string;
-    slug: string | null;
-    songCount: number;
-  } | null;
-}
-
-export interface ActivityFeedResult {
-  items: ActivityFeedItem[];
-  pagination: { page: number; totalPages: number; total: number; hasMore: boolean };
 }
 
 const BUCKET_SIZE = 60;
@@ -68,109 +44,14 @@ export function paginate(items: import("./rank").FeedItem[], page: number) {
 export async function buildActivityFeed(
   userId: string,
   page: number,
-): Promise<ActivityFeedResult> {
-  const skip = pageSkip(page, DEFAULT_PAGE_SIZE);
-
+): Promise<import("@/lib/activity").ActivityFeedResult> {
   const following = await prisma.follow.findMany({
     where: { followerId: userId },
     select: { followingId: true },
   });
 
-  if (following.length === 0) {
-    return {
-      items: [],
-      pagination: offsetPagination(page, DEFAULT_PAGE_SIZE, 0),
-    };
-  }
-
   const followingIds = following.map((f) => f.followingId);
-
-  const [activities, total] = await Promise.all([
-    prisma.activity.findMany({
-      where: { userId: { in: followingIds } },
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: DEFAULT_PAGE_SIZE,
-      select: {
-        id: true,
-        type: true,
-        createdAt: true,
-        user: { select: { id: true, name: true, image: true } },
-        song: {
-          select: {
-            id: true,
-            publicSlug: true,
-            title: true,
-            imageUrl: true,
-            duration: true,
-            tags: true,
-            isPublic: true,
-            isHidden: true,
-            archivedAt: true,
-            generationStatus: true,
-          },
-        },
-        playlist: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            isPublic: true,
-            _count: { select: { songs: true } },
-          },
-        },
-      },
-    }),
-    prisma.activity.count({
-      where: { userId: { in: followingIds } },
-    }),
-  ]);
-
-  const items: ActivityFeedItem[] = activities
-    .filter((a) => {
-      if (a.type === "song_created" || a.type === "song_favorited") {
-        return (
-          a.song &&
-          a.song.isPublic &&
-          !a.song.isHidden &&
-          !a.song.archivedAt &&
-          a.song.generationStatus === "ready"
-        );
-      }
-      if (a.type === "playlist_created") {
-        return a.playlist && a.playlist.isPublic;
-      }
-      return false;
-    })
-    .map((a) => ({
-      id: a.id,
-      type: a.type,
-      createdAt: a.createdAt,
-      user: a.user,
-      song: a.song
-        ? {
-            id: a.song.id,
-            publicSlug: a.song.publicSlug,
-            title: a.song.title,
-            imageUrl: a.song.imageUrl,
-            duration: a.song.duration,
-            tags: a.song.tags,
-          }
-        : null,
-      playlist: a.playlist
-        ? {
-            id: a.playlist.id,
-            name: a.playlist.name,
-            slug: a.playlist.slug,
-            songCount: a.playlist._count.songs,
-          }
-        : null,
-    }));
-
-  return {
-    items,
-    pagination: offsetPagination(page, DEFAULT_PAGE_SIZE, total),
-  };
+  return queryPublicActivities(followingIds, page);
 }
 
 export async function buildAnonymousFeed(
