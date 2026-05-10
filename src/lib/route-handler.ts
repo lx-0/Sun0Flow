@@ -237,7 +237,7 @@ export function anonRoute<
 ) {
   return async (
     request: NextRequest,
-    segmentData?: SegmentData<P>
+    segmentData: SegmentData<P>
   ): Promise<NextResponse> => {
     const ip = extractClientIp(request);
 

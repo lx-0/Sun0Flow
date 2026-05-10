@@ -76,6 +76,8 @@ function makeRequest(url: string) {
   return new NextRequest(url);
 }
 
+const seg = { params: Promise.resolve({}) };
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(prisma.song.findMany).mockResolvedValue([]);
@@ -84,7 +86,7 @@ beforeEach(() => {
 
 describe("GET /api/songs/public", () => {
   it("returns 200 with empty list when no public songs", async () => {
-    const res = await GET(makeRequest("http://localhost/api/songs/public"));
+    const res = await GET(makeRequest("http://localhost/api/songs/public"), seg);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.songs).toHaveLength(0);
@@ -95,7 +97,7 @@ describe("GET /api/songs/public", () => {
     vi.mocked(prisma.song.findMany).mockResolvedValue([makePublicSong()] as never);
     vi.mocked(prisma.song.count).mockResolvedValue(1);
 
-    const res = await GET(makeRequest("http://localhost/api/songs/public"));
+    const res = await GET(makeRequest("http://localhost/api/songs/public"), seg);
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -118,7 +120,7 @@ describe("GET /api/songs/public", () => {
     ] as never);
     vi.mocked(prisma.song.count).mockResolvedValue(1);
 
-    const res = await GET(makeRequest("http://localhost/api/songs/public"));
+    const res = await GET(makeRequest("http://localhost/api/songs/public"), seg);
     const data = await res.json();
     expect(data.songs[0].creatorDisplayName).toBe("fallbackuser");
   });
@@ -129,13 +131,13 @@ describe("GET /api/songs/public", () => {
     ] as never);
     vi.mocked(prisma.song.count).mockResolvedValue(1);
 
-    const res = await GET(makeRequest("http://localhost/api/songs/public"));
+    const res = await GET(makeRequest("http://localhost/api/songs/public"), seg);
     const data = await res.json();
     expect(data.songs[0].creatorDisplayName).toBe("Anonymous");
   });
 
   it("respects limit and offset pagination params", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public?limit=10&offset=20"));
+    await GET(makeRequest("http://localhost/api/songs/public?limit=10&offset=20"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 10, skip: 20 })
@@ -143,7 +145,7 @@ describe("GET /api/songs/public", () => {
   });
 
   it("clamps limit to 100", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public?limit=200"));
+    await GET(makeRequest("http://localhost/api/songs/public?limit=200"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 20 }) // default fallback
@@ -151,7 +153,7 @@ describe("GET /api/songs/public", () => {
   });
 
   it("applies genre filter via tags contains", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public?genre=jazz"));
+    await GET(makeRequest("http://localhost/api/songs/public?genre=jazz"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -163,7 +165,7 @@ describe("GET /api/songs/public", () => {
   });
 
   it("applies mood filter via tags contains", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public?mood=chill"));
+    await GET(makeRequest("http://localhost/api/songs/public?mood=chill"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -175,7 +177,7 @@ describe("GET /api/songs/public", () => {
   });
 
   it("applies AND logic when both genre and mood are provided", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public?genre=jazz&mood=chill"));
+    await GET(makeRequest("http://localhost/api/songs/public?genre=jazz&mood=chill"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -190,7 +192,7 @@ describe("GET /api/songs/public", () => {
   });
 
   it("sorts by playCount desc for sort=popular", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public?sort=popular"));
+    await GET(makeRequest("http://localhost/api/songs/public?sort=popular"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { playCount: "desc" } })
@@ -198,7 +200,7 @@ describe("GET /api/songs/public", () => {
   });
 
   it("sorts by createdAt desc for sort=newest", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public?sort=newest"));
+    await GET(makeRequest("http://localhost/api/songs/public?sort=newest"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { createdAt: "desc" } })
@@ -206,7 +208,7 @@ describe("GET /api/songs/public", () => {
   });
 
   it("applies 30-day window and playCount sort for sort=trending", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public?sort=trending"));
+    await GET(makeRequest("http://localhost/api/songs/public?sort=trending"), seg);
 
     const call = vi.mocked(prisma.song.findMany).mock.calls[0][0] as {
       where: { createdAt?: { gte: Date } };
@@ -217,7 +219,7 @@ describe("GET /api/songs/public", () => {
   });
 
   it("applies text search with OR on title and tags", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public?q=rock"));
+    await GET(makeRequest("http://localhost/api/songs/public?q=rock"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -231,7 +233,7 @@ describe("GET /api/songs/public", () => {
   });
 
   it("filters only public, non-hidden, ready, non-archived songs", async () => {
-    await GET(makeRequest("http://localhost/api/songs/public"));
+    await GET(makeRequest("http://localhost/api/songs/public"), seg);
 
     expect(prisma.song.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -251,7 +253,7 @@ describe("GET /api/songs/public", () => {
     );
     vi.mocked(prisma.song.count).mockResolvedValue(25);
 
-    const res = await GET(makeRequest("http://localhost/api/songs/public?limit=5&offset=0"));
+    const res = await GET(makeRequest("http://localhost/api/songs/public?limit=5&offset=0"), seg);
     const data = await res.json();
 
     expect(data.pagination).toEqual({
@@ -268,7 +270,7 @@ describe("GET /api/songs/public", () => {
     );
     vi.mocked(prisma.song.count).mockResolvedValue(25);
 
-    const res = await GET(makeRequest("http://localhost/api/songs/public?limit=5&offset=20"));
+    const res = await GET(makeRequest("http://localhost/api/songs/public?limit=5&offset=20"), seg);
     const data = await res.json();
 
     expect(data.pagination.hasMore).toBe(false);
@@ -277,12 +279,12 @@ describe("GET /api/songs/public", () => {
   it("returns 500 on database error", async () => {
     vi.mocked(prisma.song.findMany).mockRejectedValue(new Error("DB error"));
 
-    const res = await GET(makeRequest("http://localhost/api/songs/public"));
+    const res = await GET(makeRequest("http://localhost/api/songs/public"), seg);
     expect(res.status).toBe(500);
   });
 
   it("sets public Cache-Control header", async () => {
-    const res = await GET(makeRequest("http://localhost/api/songs/public"));
+    const res = await GET(makeRequest("http://localhost/api/songs/public"), seg);
     expect(res.headers.get("Cache-Control")).toContain("public");
   });
 });
