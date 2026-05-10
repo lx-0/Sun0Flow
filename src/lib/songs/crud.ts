@@ -224,21 +224,18 @@ export async function restoreSong(songId: string, userId: string) {
   });
   if (!song) return Err.notFound();
 
-  const archivePlaylist = await prisma.playlist.findFirst({
-    where: { userId, isSmartPlaylist: true, smartPlaylistType: "archive" },
-  });
-
   const updated = await prisma.$transaction(async (tx) => {
     const updatedSong = await tx.song.update({
       where: { id: songId },
       data: { archivedAt: null },
     });
 
-    if (archivePlaylist) {
-      await tx.playlistSong.deleteMany({
-        where: { playlistId: archivePlaylist.id, songId },
-      });
-    }
+    await tx.playlistSong.deleteMany({
+      where: {
+        songId,
+        playlist: { userId, smartPlaylistType: "archive" },
+      },
+    });
 
     return updatedSong;
   });
