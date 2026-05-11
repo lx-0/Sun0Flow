@@ -7,10 +7,7 @@ import { SUNOAPI_KEY } from "@/lib/env";
 import { checkCredits, getCreditCost } from "@/lib/credits";
 import { stripHtml } from "@/lib/sanitize";
 import { type Result, success, fail } from "@/lib/result";
-import {
-  executeGeneration,
-  type GenerationOutcome,
-} from "@/lib/generation";
+import { executeGeneration, type GenerationOutcome } from "./execute";
 
 const MIN_BATCH = 2;
 const MAX_BATCH = 5;
