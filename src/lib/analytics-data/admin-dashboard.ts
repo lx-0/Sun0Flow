@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { parseDateRange } from "@/lib/date-series";
+import { parseDateRange, startOfToday, dateRangeStart } from "@/lib/date-series";
 import { countGenres } from "@/lib/tags";
 
 export interface AdminAnalytics {
@@ -22,9 +22,8 @@ export interface AdminAnalytics {
 
 export async function getAdminAnalytics(range: string): Promise<AdminAnalytics> {
   const sinceDate = parseDateRange(range);
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const todayStart = startOfToday();
+  const sevenDaysAgo = dateRangeStart(7);
 
   const [
     totalUsers,

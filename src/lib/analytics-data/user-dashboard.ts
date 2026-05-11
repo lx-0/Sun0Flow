@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { fillDailySeries } from "@/lib/date-series";
+import { fillDailySeries, startOfWeek, startOfMonth } from "@/lib/date-series";
 import { countGenres } from "@/lib/tags";
 import {
   songCount,
@@ -28,19 +28,6 @@ export interface DashboardStats {
     duration: number | null;
     createdAt: Date;
   }>;
-}
-
-function startOfWeek(): Date {
-  const now = new Date();
-  const d = new Date(now);
-  d.setDate(now.getDate() - now.getDay());
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function startOfMonth(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
 export async function getDashboardStats(

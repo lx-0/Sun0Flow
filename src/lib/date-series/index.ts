@@ -1,3 +1,21 @@
+export function startOfToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+export function startOfWeek(): Date {
+  const now = new Date();
+  const d = new Date(now);
+  d.setDate(now.getDate() - now.getDay());
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function startOfMonth(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
 export function dateRangeStart(days: number): Date {
   const d = new Date();
   d.setDate(d.getDate() - days);
@@ -45,4 +63,19 @@ export function mondayOfWeeksAgo(weeksAgo: number, now: Date = new Date()): stri
   d.setDate(d.getDate() + diffToMon);
   d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
+}
+
+export function fillWeeklySeries(
+  raw: Array<{ week: Date; count: bigint }>,
+  weeks: number,
+): Array<{ week: string; count: number }> {
+  const map = new Map(
+    raw.map((r) => [new Date(r.week).toISOString().slice(0, 10), Number(r.count)]),
+  );
+  const result: Array<{ week: string; count: number }> = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const weekStr = mondayOfWeeksAgo(i);
+    result.push({ week: weekStr, count: map.get(weekStr) ?? 0 });
+  }
+  return result;
 }

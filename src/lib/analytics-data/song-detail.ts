@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { fillDailySeries } from "@/lib/date-series";
+import { fillDailySeries, dateRangeStart } from "@/lib/date-series";
 import { type Result, success, Err } from "@/lib/result";
 
 export interface SongAnalytics {
@@ -33,9 +33,7 @@ export async function getSongAnalytics(
 
   if (!song) return Err.notFound("Song not found");
 
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  thirtyDaysAgo.setHours(0, 0, 0, 0);
+  const thirtyDaysAgo = dateRangeStart(30);
 
   const [
     totalEvents,

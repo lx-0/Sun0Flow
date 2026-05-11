@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { parseDateRange, mondayOfWeeksAgo } from "@/lib/date-series";
+import { parseDateRange, dateRangeStart, mondayOfWeeksAgo } from "@/lib/date-series";
 
 interface FeedbackStat {
   likes: number;
@@ -87,7 +87,7 @@ export async function getPromptQuality(range: string): Promise<PromptQualityAnal
     .sort((a, b) => a.likeRatio - b.likeRatio || b.total - a.total)
     .slice(0, 10);
 
-  const twelveWeeksAgo = new Date(Date.now() - 12 * 7 * 24 * 60 * 60 * 1000);
+  const twelveWeeksAgo = dateRangeStart(84);
   const weeklyRaw = await prisma.$queryRaw<
     Array<{ week: Date; likes: bigint; dislikes: bigint }>
   >`

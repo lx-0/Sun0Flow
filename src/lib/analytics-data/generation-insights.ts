@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { countGenres } from "@/lib/tags";
-import { mondayOfWeeksAgo } from "@/lib/date-series";
+import { dateRangeStart, fillWeeklySeries } from "@/lib/date-series";
 import {
   songCount,
   completedSongCount,
@@ -21,8 +21,7 @@ export interface GenerationInsights {
 }
 
 export async function getGenerationInsights(userId: string): Promise<GenerationInsights> {
-  const twelveWeeksAgo = new Date();
-  twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
+  const twelveWeeksAgo = dateRangeStart(84);
 
   const [
     totalSongs,
@@ -70,14 +69,7 @@ export async function getGenerationInsights(userId: string): Promise<GenerationI
     }),
   ]);
 
-  const weeklyActivity: Array<{ week: string; count: number }> = [];
-  for (let i = 11; i >= 0; i--) {
-    const weekStr = mondayOfWeeksAgo(i);
-    const match = weeklyRaw.find(
-      (r) => new Date(r.week).toISOString().slice(0, 10) === weekStr,
-    );
-    weeklyActivity.push({ week: weekStr, count: match ? Number(match.count) : 0 });
-  }
+  const weeklyActivity = fillWeeklySeries(weeklyRaw, 12);
 
   const promptMap: Record<
     string,
