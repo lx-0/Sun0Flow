@@ -2,12 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
 import { buildDiscoverableFilter, SongSelect } from "@/lib/songs";
 import { gatherUserSignals } from "@/lib/user-signals";
-import { queryPublicActivities } from "@/lib/activity";
 import { rankAnonymousFeed, rankPersonalizedFeed, type TasteProfile } from "./rank";
 
-export { trendingScore } from "@/lib/scoring";
 export type { FeedReason, FeedItem, SongRow, TasteProfile } from "./rank";
-export type { ActivityFeedItem, ActivityFeedResult } from "@/lib/activity";
 
 export interface FeedFilters {
   tag?: string;
@@ -40,19 +37,6 @@ export function paginate(items: import("./rank").FeedItem[], page: number) {
     feed: items.slice(start, start + DEFAULT_PAGE_SIZE),
     pagination: offsetPagination(page, DEFAULT_PAGE_SIZE, total),
   };
-}
-
-export async function buildActivityFeed(
-  userId: string,
-  page: number,
-): Promise<import("@/lib/activity").ActivityFeedResult> {
-  const following = await prisma.follow.findMany({
-    where: { followerId: userId },
-    select: { followingId: true },
-  });
-
-  const followingIds = following.map((f) => f.followingId);
-  return queryPublicActivities(followingIds, page);
 }
 
 export async function buildAnonymousFeed(
