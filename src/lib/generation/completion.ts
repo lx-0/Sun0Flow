@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getTaskStatus } from "@/lib/sunoapi";
-import { isTerminalFailure } from "@/lib/sunoapi/mappers";
+import { getTaskStatus, isTerminalFailure } from "@/lib/sunoapi";
 import { logServerError } from "@/lib/error-logger";
 import { handleSongSuccess, handleSongFailure } from "@/lib/song-completion";
 import type { SongRecord } from "@/lib/song-completion";
