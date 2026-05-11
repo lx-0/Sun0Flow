@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authRoute, resultResponse } from "@/lib/route-handler";
-import { executeBatchGeneration } from "@/lib/batch-generation";
+import { executeBatchGeneration } from "@/lib/generation";
 
 const bodySchema = z.object({ configs: z.unknown() });
 
