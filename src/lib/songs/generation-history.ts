@@ -93,14 +93,7 @@ function buildCountWhere(
   userId: string,
   filter: GenerationFilter,
 ): Prisma.SongWhereInput {
-  const where: Prisma.SongWhereInput = { userId };
-  if (filter.status && filter.status !== "all") {
-    (where as Record<string, unknown>).generationStatus = filter.status;
-  }
-  if (filter.source && filter.source !== "all") {
-    (where as Record<string, unknown>).source = filter.source;
-  }
-  return where;
+  return buildWhere(userId, { ...filter, cursor: undefined });
 }
 
 export async function queryGenerations(

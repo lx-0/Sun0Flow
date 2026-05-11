@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authRoute, resultResponse } from "@/lib/route-handler";
 import { respondToGeneration } from "@/lib/generation";
