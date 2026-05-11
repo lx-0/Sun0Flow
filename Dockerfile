@@ -2,7 +2,7 @@
 
 # --- Base ---
 FROM node:20-alpine AS base
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl su-exec
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
@@ -57,7 +57,8 @@ COPY --from=sharp-builder /app/node_modules/@img ./node_modules/@img
 COPY prisma ./prisma/
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 
-USER nextjs
+# Entrypoint runs as root so it can chown the persistent-volume mount points
+# (Railway mounts volumes as root), then drops to the nextjs user via su-exec.
 
 EXPOSE 3000
 ENV PORT=3000

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authRoute } from "@/lib/route-handler";
-import { queryGenerations } from "@/lib/generations";
+import { queryGenerations } from "@/lib/songs";
 
 export const GET = authRoute(async (request, { auth }) => {
   const params = request.nextUrl.searchParams;
