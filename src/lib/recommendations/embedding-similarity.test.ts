@@ -13,7 +13,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { findSimilarByEmbedding } from "./embedding-similarity";
+import { findSimilarByEmbedding } from "./similarity";
 
 beforeEach(() => {
   vi.clearAllMocks();

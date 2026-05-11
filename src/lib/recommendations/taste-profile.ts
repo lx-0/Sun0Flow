@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { gatherUserSignals } from "@/lib/user-signals";
-import { computeCentroid } from "@/lib/embeddings";
+import { computeCentroid, parseEmbeddingVector } from "@/lib/embeddings";
 
 const SIGNAL_SONGS_LIMIT = 30;
 
@@ -22,11 +22,6 @@ export async function gatherSignalIds(userId: string): Promise<Set<string>> {
   return signals.songIds;
 }
 
-function parseEmbeddingVector(raw: unknown): number[] | null {
-  if (!Array.isArray(raw) || raw.length === 0) return null;
-  return raw as number[];
-}
-
 export async function computeTasteProfile(signalIds: Set<string>): Promise<number[] | null> {
   if (signalIds.size === 0) return null;
 
@@ -41,5 +36,3 @@ export async function computeTasteProfile(signalIds: Set<string>): Promise<numbe
 
   return computeCentroid(vectors);
 }
-
-export { parseEmbeddingVector };

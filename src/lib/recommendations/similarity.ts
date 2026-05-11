@@ -1,13 +1,52 @@
 import { prisma } from "@/lib/prisma";
-import { cosineSimilarity } from "@/lib/embeddings";
-import { parseEmbeddingVector } from "./taste-profile";
-import type { SimilarSong } from "./similar";
+import { collectSongTokens, tagOverlapScore } from "@/lib/tags";
+import { cosineSimilarity, parseEmbeddingVector } from "@/lib/embeddings";
+import { formatBaseSong, BASE_SONG_SELECT, type BaseSongResult } from "./format";
 
-const CANDIDATES_LIMIT = 500;
+export interface SimilarSong extends BaseSongResult {
+  score: number;
+}
 
 export interface EmbeddingSimilarityResult {
   songs: SimilarSong[];
   total: number;
+}
+
+const EMBEDDING_CANDIDATES_LIMIT = 500;
+
+export async function getSimilarSongs(
+  songId: string,
+  userId: string,
+  limit: number,
+): Promise<SimilarSong[] | null> {
+  const song = await prisma.song.findFirst({
+    where: { id: songId, userId },
+    include: { songTags: { include: { tag: true } } },
+  });
+  if (!song) return null;
+
+  const targetTokens = collectSongTokens(song.songTags, song.tags);
+
+  const candidates = await prisma.song.findMany({
+    where: {
+      userId,
+      id: { not: songId },
+      archivedAt: null,
+      generationStatus: "ready",
+    },
+    include: { songTags: { include: { tag: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+
+  return candidates
+    .map((c) => ({
+      ...formatBaseSong(c),
+      score: tagOverlapScore(targetTokens, collectSongTokens(c.songTags, c.tags)),
+    }))
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }
 
 export async function findSimilarByEmbedding(
@@ -38,7 +77,7 @@ export async function findSimilarByEmbedding(
       songId: true,
       embedding: true,
     },
-    take: CANDIDATES_LIMIT,
+    take: EMBEDDING_CANDIDATES_LIMIT,
   });
 
   if (candidateEmbeddings.length === 0) {
@@ -61,15 +100,7 @@ export async function findSimilarByEmbedding(
 
   const songs = await prisma.song.findMany({
     where: { id: { in: topIds } },
-    select: {
-      id: true,
-      title: true,
-      tags: true,
-      imageUrl: true,
-      duration: true,
-      audioUrl: true,
-      createdAt: true,
-    },
+    select: BASE_SONG_SELECT,
   });
 
   const songMap = new Map(songs.map((s) => [s.id, s]));
@@ -78,13 +109,7 @@ export async function findSimilarByEmbedding(
       const s = songMap.get(id);
       if (!s) return null;
       return {
-        id: s.id,
-        title: s.title,
-        tags: s.tags,
-        imageUrl: s.imageUrl,
-        duration: s.duration,
-        audioUrl: s.audioUrl,
-        createdAt: s.createdAt.toISOString(),
+        ...formatBaseSong(s),
         score: scoreMap.get(id) ?? 0,
       };
     })

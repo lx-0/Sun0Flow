@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { cosineSimilarity } from "@/lib/embeddings";
-import { parseEmbeddingVector } from "./taste-profile";
+import { cosineSimilarity, parseEmbeddingVector } from "@/lib/embeddings";
 import { formatSong, SONG_SELECT_FIELDS, type RecommendationResult } from "./format";
 
 const CANDIDATES_LIMIT = 500;

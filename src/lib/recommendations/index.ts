@@ -4,10 +4,8 @@ import { rankCandidates, coldStartFallback } from "./rank";
 // --- Barrel re-exports (preserve all existing import paths) ---
 
 export { getAlsoLiked } from "./also-liked";
-export { getSimilarSongs } from "./similar";
-export type { SimilarSong } from "./similar";
-export { findSimilarByEmbedding } from "./embedding-similarity";
-export type { EmbeddingSimilarityResult } from "./embedding-similarity";
+export { getSimilarSongs, findSimilarByEmbedding } from "./similarity";
+export type { SimilarSong, EmbeddingSimilarityResult } from "./similarity";
 export { getRelatedSongs } from "./related";
 export type { RelatedSong, RelatedResult } from "./related";
 export { getDailyMix } from "./daily-mix";

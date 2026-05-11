@@ -134,4 +134,9 @@ export function computeCentroid(embeddings: number[][]): number[] | null {
   return centroid;
 }
 
+export function parseEmbeddingVector(raw: unknown): number[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  return raw as number[];
+}
+
 export { EMBEDDING_MODEL, EMBEDDING_DIMENSIONS };

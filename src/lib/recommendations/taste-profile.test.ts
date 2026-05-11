@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseEmbeddingVector } from "./taste-profile";
+import { parseEmbeddingVector } from "@/lib/embeddings";
 
 describe("parseEmbeddingVector", () => {
   it("returns the array when given a valid number array", () => {
