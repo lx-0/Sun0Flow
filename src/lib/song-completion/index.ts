@@ -127,20 +127,22 @@ export async function handleSongSuccess(
       }
     }),
     runSideEffect("cache-alternates", async () => {
-      for (const alt of alternates) {
-        if (alt.audioSource.audioUrl) {
-          await audioCache.downloadAndPut(alt.id, alt.audioSource.audioUrl);
-        }
-        if (alt.audioSource.imageUrl) {
-          await imageCache.downloadAndPut(alt.id, alt.audioSource.imageUrl);
-        }
-      }
+      await Promise.all(
+        alternates.flatMap((alt) => [
+          alt.audioSource.audioUrl
+            ? audioCache.downloadAndPut(alt.id, alt.audioSource.audioUrl)
+            : null,
+          alt.audioSource.imageUrl
+            ? imageCache.downloadAndPut(alt.id, alt.audioSource.imageUrl)
+            : null,
+        ].filter(Boolean))
+      );
     }),
     runSideEffect("invalidate-dashboard", () => {
       invalidateByPrefix(`dashboard-stats:${song.userId}`);
     }),
-    runSideEffect("record-activity", () => {
-      recordActivity({ userId: song.userId, type: "song_created", songId: song.id });
+    runSideEffect("record-activity", async () => {
+      await recordActivity({ userId: song.userId, type: "song_created", songId: song.id });
     }),
     runSideEffect("notify-followers", async () => {
       await notifyFollowersOfNewSong(song.userId, song.id);
