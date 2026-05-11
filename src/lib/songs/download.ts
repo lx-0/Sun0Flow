@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { audioCache } from "@/lib/cache";
 import { embedId3Tags, embedWavMetadata } from "@/lib/audio-metadata";
 import { wavToFlac } from "@/lib/flac-encoder";
+import { sanitizeForFilename, detectAudioFormat } from "@/lib/download-primitives";
 import type { SongMetadata } from "@/lib/audio-metadata";
 
 export type DownloadFormat = "mp3" | "wav" | "flac";
@@ -111,15 +112,6 @@ async function fetchCoverArt(
   }
 }
 
-function buildFilename(title: string | null): string {
-  return (
-    (title ?? "song")
-      .replace(/[^a-zA-Z0-9\s-]/g, "")
-      .trim()
-      .replace(/\s+/g, "-")
-      .toLowerCase() || "song"
-  );
-}
 
 function contentTypeFor(format: DownloadFormat): {
   contentType: string;
@@ -144,9 +136,7 @@ export async function prepareSongDownload(
     return { ok: false, error: "No audio available", code: "NOT_FOUND", status: 404 };
   }
 
-  const sourceExt: "mp3" | "wav" = song.audioUrl.toLowerCase().includes(".wav")
-    ? "wav"
-    : "mp3";
+  const sourceExt = detectAudioFormat(song.audioUrl);
 
   const formatResult = resolveFormat(requestedFormat, sourceExt);
   if (typeof formatResult !== "string") return formatResult;
@@ -206,7 +196,7 @@ export async function prepareSongDownload(
     audioBuffer = tagged.buffer as ArrayBuffer;
   }
 
-  const titleSlug = buildFilename(song.title);
+  const titleSlug = sanitizeForFilename(song.title);
   const { contentType, fileExt } = contentTypeFor(targetFormat);
 
   return {
