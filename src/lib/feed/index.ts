@@ -5,6 +5,7 @@ import { gatherUserSignals } from "@/lib/user-signals";
 import { queryPublicActivities } from "@/lib/activity";
 import { rankAnonymousFeed, rankPersonalizedFeed, type TasteProfile } from "./rank";
 
+export { trendingScore } from "./rank";
 export type { FeedReason, FeedItem, SongRow, TasteProfile } from "./rank";
 export type { ActivityFeedItem, ActivityFeedResult } from "@/lib/activity";
 
