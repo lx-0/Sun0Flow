@@ -1,22 +1,11 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { authRoute } from "@/lib/route-handler";
 import { CacheControl } from "@/lib/cache";
 import { getPromptSuggestions } from "@/lib/suggestions";
 
-export async function GET(request: Request) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const suggestions = await getPromptSuggestions(userId);
-
-    const response = NextResponse.json({ suggestions });
-    response.headers.set("Cache-Control", CacheControl.privateShort);
-    return response;
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+export const GET = authRoute(async (_request, { auth }) => {
+  const suggestions = await getPromptSuggestions(auth.userId);
+  return NextResponse.json({ suggestions }, {
+    headers: { "Cache-Control": CacheControl.privateShort },
+  });
+});
