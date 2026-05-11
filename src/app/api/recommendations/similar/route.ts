@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { authRoute } from "@/lib/route-handler";
+import { withTiming } from "@/lib/timing";
 import { findSimilarByEmbedding } from "@/lib/recommendations";
 import { zLimitParam } from "@/lib/query-params";
 
@@ -9,7 +10,7 @@ const similarQuery = z.object({
   limit: zLimitParam(5, 20),
 });
 
-export const GET = authRoute<
+export const GET = withTiming("/api/recommendations/similar", authRoute<
   Record<string, never>,
   undefined,
   z.infer<typeof similarQuery>
@@ -26,4 +27,4 @@ export const GET = authRoute<
     return NextResponse.json(result);
   },
   { route: "/api/recommendations/similar", query: similarQuery },
-);
+));

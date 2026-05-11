@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { authRoute } from "@/lib/route-handler";
+import { withTiming } from "@/lib/timing";
 import { getRecommendations } from "@/lib/recommendations";
 import { zLimitParam, zCsvParam } from "@/lib/query-params";
 
@@ -9,7 +10,7 @@ const recommendationsQuery = z.object({
   exclude: zCsvParam,
 });
 
-export const GET = authRoute<
+export const GET = withTiming("/api/recommendations", authRoute<
   Record<string, never>,
   undefined,
   z.infer<typeof recommendationsQuery>
@@ -23,4 +24,4 @@ export const GET = authRoute<
     return NextResponse.json(result);
   },
   { route: "/api/recommendations", query: recommendationsQuery },
-);
+));
