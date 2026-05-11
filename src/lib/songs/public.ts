@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { cached, cacheKey, CacheTTL } from "@/lib/cache";
-import { buildDiscoverableFilter } from "./index";
+import { buildDiscoverableFilter } from "./filters";
 
 export type PublicSongSort = "newest" | "popular" | "trending";
 
