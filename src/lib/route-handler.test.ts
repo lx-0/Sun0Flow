@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
-import { authRoute, adminRoute, cronRoute } from "@/lib/route-handler";
+import { authRoute, optionalAuthRoute, publicRoute, adminRoute, cronRoute } from "@/lib/route-handler";
 
 vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
@@ -124,6 +124,119 @@ describe("authRoute", () => {
       "route-handler",
       expect.any(Error),
       { userId: "user-123", route: "/api/test" }
+    );
+  });
+});
+
+describe("optionalAuthRoute", () => {
+  it("passes authenticated user context when session exists", async () => {
+    vi.mocked(resolveUser).mockResolvedValue({
+      userId: "user-123",
+      isApiKey: false,
+      isAdmin: false,
+      error: null,
+    });
+
+    const handler = optionalAuthRoute(async (_req, { auth }) => {
+      return NextResponse.json({
+        userId: auth.userId,
+        isApiKey: auth.isApiKey,
+      });
+    });
+
+    const result = await handler(makeRequest(), seg);
+    const body = await result.json();
+
+    expect(body.userId).toBe("user-123");
+    expect(body.isApiKey).toBe(false);
+  });
+
+  it("passes null userId when not authenticated instead of returning error", async () => {
+    const errorResponse = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    vi.mocked(resolveUser).mockResolvedValue({
+      userId: null,
+      isApiKey: false,
+      isAdmin: false,
+      error: errorResponse,
+    });
+
+    const handler = optionalAuthRoute(async (_req, { auth }) => {
+      return NextResponse.json({ userId: auth.userId });
+    });
+
+    const result = await handler(makeRequest(), seg);
+
+    expect(result.status).toBe(200);
+    const body = await result.json();
+    expect(body.userId).toBeNull();
+  });
+
+  it("catches unhandled errors and returns 500", async () => {
+    vi.mocked(resolveUser).mockResolvedValue({
+      userId: null,
+      isApiKey: false,
+      isAdmin: false,
+      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    });
+
+    const handler = optionalAuthRoute(async () => {
+      throw new Error("Handler crashed");
+    });
+
+    const result = await handler(makeRequest(), seg);
+
+    expect(result.status).toBe(500);
+    expect(logServerError).toHaveBeenCalledWith(
+      "optional-auth-route-handler",
+      expect.any(Error),
+      expect.objectContaining({ userId: null })
+    );
+  });
+});
+
+describe("publicRoute", () => {
+  it("calls handler without auth context", async () => {
+    const handler = publicRoute(async () => {
+      return NextResponse.json({ ok: true });
+    });
+
+    const result = await handler(makeRequest(), seg);
+    const body = await result.json();
+
+    expect(result.status).toBe(200);
+    expect(body.ok).toBe(true);
+  });
+
+  it("resolves dynamic params from segment data", async () => {
+    const handler = publicRoute<{ username: string }>(async (_req, { params }) => {
+      return NextResponse.json({ username: params.username });
+    });
+
+    const result = await handler(makeRequest(), {
+      params: Promise.resolve({ username: "testuser" }),
+    });
+    const body = await result.json();
+
+    expect(body.username).toBe("testuser");
+  });
+
+  it("catches unhandled errors and returns 500", async () => {
+    const handler = publicRoute(
+      async () => {
+        throw new Error("Public route crashed");
+      },
+      { route: "/api/public/test" }
+    );
+
+    const result = await handler(makeRequest(), seg);
+
+    expect(result.status).toBe(500);
+    const body = await result.json();
+    expect(body.code).toBe("INTERNAL_ERROR");
+    expect(logServerError).toHaveBeenCalledWith(
+      "public-route-handler",
+      expect.any(Error),
+      { route: "/api/public/test" }
     );
   });
 });
