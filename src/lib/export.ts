@@ -4,6 +4,11 @@
  */
 
 import type { AudioFormat, Mp3Quality, WavBitDepth } from "@/lib/audio-metadata";
+import {
+  triggerBrowserDownload,
+  sanitizeForFilename,
+  detectAudioFormat,
+} from "@/lib/download-primitives";
 
 export type { AudioFormat, Mp3Quality, WavBitDepth };
 
@@ -21,23 +26,9 @@ export interface ZipExportOptions {
   quality?: Mp3Quality | WavBitDepth;
 }
 
-/** Build a safe filename from a song title. */
-function safeName(title: string | null | undefined, index: number): string {
-  const base = (title ?? `song-${index + 1}`)
-    .replace(/[^a-zA-Z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .toLowerCase() || `song-${index + 1}`;
-  return base;
-}
-
-function nativeExtension(url: string): string {
-  return url.toLowerCase().includes(".wav") ? "wav" : "mp3";
-}
-
 function resolveExtension(url: string, format?: AudioFormat | "native"): string {
-  if (!format || format === "native") return nativeExtension(url);
-  return format; // "mp3", "wav", or "flac"
+  if (!format || format === "native") return detectAudioFormat(url);
+  return format;
 }
 
 /**
@@ -58,7 +49,7 @@ export async function exportAsZip(
 
   for (let i = 0; i < downloadable.length; i++) {
     const song = downloadable[i];
-    const name = safeName(song.title, i);
+    const name = sanitizeForFilename(song.title, `song-${i + 1}`);
     const ext = resolveExtension(song.audioUrl, options.format);
 
     // Deduplicate filenames
@@ -87,7 +78,7 @@ export async function exportAsZip(
   }
 
   const content = await zip.generateAsync({ type: "blob" });
-  triggerDownload(content, "sunoflow-library.zip");
+  triggerBrowserDownload(content, "sunoflow-library.zip");
 }
 
 /**
@@ -107,16 +98,6 @@ export function exportAsM3U(songs: ExportableSong[]): void {
   }
 
   const blob = new Blob([lines.join("\n") + "\n"], { type: "audio/x-mpegurl" });
-  triggerDownload(blob, "sunoflow-library.m3u");
+  triggerBrowserDownload(blob, "sunoflow-library.m3u");
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
