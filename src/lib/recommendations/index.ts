@@ -1,5 +1,4 @@
-import { gatherSignalIds, computeTasteProfile } from "./taste-profile";
-import { rankCandidates, coldStartFallback } from "./rank";
+import { gatherSignalIds, computeTasteProfile, rankCandidates, coldStartFallback } from "./rank";
 
 // --- Barrel re-exports (preserve all existing import paths) ---
 
