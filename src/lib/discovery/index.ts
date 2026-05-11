@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
-import { buildDiscoverableFilter } from "@/lib/songs";
+import { buildDiscoverableFilter, SongSelect } from "@/lib/songs";
 import { trendingScore } from "@/lib/feed";
 import { cached, cacheKey, CacheTTL } from "@/lib/cache";
 
@@ -28,25 +28,11 @@ export interface TrendingSongsQuery {
   offset: number;
 }
 
-const SONG_TRENDING_SELECT = {
-  id: true,
-  title: true,
-  tags: true,
-  imageUrl: true,
-  audioUrl: true,
-  duration: true,
-  playCount: true,
-  downloadCount: true,
-  publicSlug: true,
-  createdAt: true,
-  user: { select: { name: true, username: true } },
-} as const;
-
-type TrendingSongRow = Prisma.SongGetPayload<{
-  select: typeof SONG_TRENDING_SELECT;
+type SongPublicRow = Prisma.SongGetPayload<{
+  select: typeof SongSelect.public;
 }>;
 
-function formatTrendingSong(s: TrendingSongRow, score: number) {
+function formatTrendingSong(s: SongPublicRow, score: number) {
   return {
     id: s.id,
     title: s.title,
@@ -85,7 +71,7 @@ export async function trendingSongs(q: TrendingSongsQuery) {
             orderBy: { playCount: "desc" },
             skip: q.offset,
             take: q.limit,
-            select: SONG_TRENDING_SELECT,
+            select: SongSelect.public,
           }),
           prisma.song.count({ where: baseWhere }),
         ]);
@@ -105,7 +91,7 @@ export async function trendingSongs(q: TrendingSongsQuery) {
           where: trendingWhere,
           orderBy: { playCount: "desc" },
           take: TRENDING_POOL_SIZE,
-          select: SONG_TRENDING_SELECT,
+          select: SongSelect.public,
         }),
         prisma.song.count({ where: trendingWhere }),
       ]);
@@ -146,20 +132,6 @@ export interface DiscoverSongsQuery {
   tempoMax?: number | null;
   page: number;
 }
-
-const SONG_DISCOVER_SELECT = {
-  id: true,
-  title: true,
-  tags: true,
-  imageUrl: true,
-  audioUrl: true,
-  duration: true,
-  rating: true,
-  playCount: true,
-  publicSlug: true,
-  createdAt: true,
-  user: { select: { id: true, name: true, username: true } },
-} as const;
 
 export async function discoverSongs(q: DiscoverSongsQuery) {
   const skip = pageSkip(q.page, DEFAULT_PAGE_SIZE);
@@ -204,7 +176,7 @@ export async function discoverSongs(q: DiscoverSongsQuery) {
           orderBy,
           skip,
           take: DEFAULT_PAGE_SIZE,
-          select: SONG_DISCOVER_SELECT,
+          select: SongSelect.public,
         }),
         prisma.song.count({ where }),
       ]);
