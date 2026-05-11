@@ -75,7 +75,7 @@ export type {
 } from "./types";
 
 // Mappers & predicates
-export { isTerminalFailure } from "./mappers";
+export { isTerminalFailure, mapRawSong, taskStatusToSongStatus } from "./mappers";
 
 // Error classes
 export { SunoApiError, type SunoApiErrorCode } from "./errors";

@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { uploadFileBase64, uploadFileFromUrl } from "@/lib/sunoapi";
-import { getTaskStatus } from "@/lib/sunoapi/status";
+import { uploadFileBase64, uploadFileFromUrl, getTaskStatus } from "@/lib/sunoapi";
 
 const EXPIRY_BUFFER_MS = 60 * 60 * 1000;
 const MAX_BASE64_SIZE = 10 * 1024 * 1024;
