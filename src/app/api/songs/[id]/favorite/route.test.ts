@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 vi.mock("@/lib/env", () => ({
   get DATABASE_URL() { return "postgres://test:test@localhost:5432/test"; },
   get AUTH_SECRET() { return "test-secret"; },
   get NEXTAUTH_URL() { return "http://localhost:3000"; },
+  get SUNOAPI_KEY() { return "test-key"; },
+  get SUNO_API_TIMEOUT_MS() { return 30000; },
+  get RATE_LIMIT_MAX_GENERATIONS() { return 10; },
   env: {},
 }));
 
@@ -30,7 +33,7 @@ const SONG_ID = "song-abc";
 const USER_ID = "user-1";
 
 function makeRequest(method: string) {
-  return new Request(`http://localhost/api/songs/${SONG_ID}/favorite`, { method });
+  return new NextRequest(`http://localhost/api/songs/${SONG_ID}/favorite`, { method });
 }
 
 const seg = { params: Promise.resolve({ id: SONG_ID }) };
