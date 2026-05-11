@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { queryPublicActivities, type ActivityFeedResult } from "./query";
 
 export { queryPublicActivities } from "./query";
 export type { ActivityFeedItem, ActivityFeedResult } from "./query";
@@ -23,4 +24,17 @@ export async function recordActivity(params: {
   } catch {
     // Non-fatal — activity recording failure should not break the main flow
   }
+}
+
+export async function buildActivityFeed(
+  userId: string,
+  page: number,
+): Promise<ActivityFeedResult> {
+  const following = await prisma.follow.findMany({
+    where: { followerId: userId },
+    select: { followingId: true },
+  });
+
+  const followingIds = following.map((f) => f.followingId);
+  return queryPublicActivities(followingIds, page);
 }

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { authRoute } from "@/lib/route-handler";
-import { buildActivityFeed } from "@/lib/feed";
+import { buildActivityFeed } from "@/lib/activity";
 import { zPageParam } from "@/lib/query-params";
 
 const feedQuery = z.object({
