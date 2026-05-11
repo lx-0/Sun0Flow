@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { existsSync, readdirSync, statSync } from "fs";
 import { join } from "path";
-import { requireAdmin, logAdminAction } from "@/lib/auth";
+import { adminRoute } from "@/lib/route-handler";
+import { logAdminAction } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const AUDIO_CACHE_DIR = process.env.AUDIO_CACHE_DIR || join(process.cwd(), ".audio-cache");
@@ -37,10 +38,7 @@ function scanCacheDir(dir: string, extensions: string[]): { files: Set<string>; 
   return { files, totalBytes };
 }
 
-export async function GET() {
-  const { error, user } = await requireAdmin();
-  if (error) return error;
-
+export const GET = adminRoute(async (_request, { admin }) => {
   const songs = await prisma.song.findMany({
     select: { id: true, title: true },
   });
@@ -67,7 +65,7 @@ export async function GET() {
       ? Math.round(((audioCached + imagesCached) / (totalSongs * 2)) * 1000) / 10
       : 100;
 
-  await logAdminAction(user!.id, "mirror_health_check", undefined, `${totalSongs} songs, ${audioPercent}% audio, ${coversPercent}% covers`);
+  await logAdminAction(admin.adminId, "mirror_health_check", undefined, `${totalSongs} songs, ${audioPercent}% audio, ${coversPercent}% covers`);
 
   return NextResponse.json({
     totalSongs,
@@ -92,4 +90,4 @@ export async function GET() {
     overallHealthPercent,
     lastCheckedAt: new Date().toISOString(),
   });
-}
+}, { route: "/api/admin/mirror-health" });

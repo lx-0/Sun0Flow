@@ -1,17 +1,13 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { offsetPagination, pageSkip } from "@/lib/pagination";
-import type { NextRequest } from "next/server";
 
-export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
+export const GET = adminRoute(async (request: NextRequest) => {
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
-  const filter = searchParams.get("filter") ?? "all"; // all | flagged | public
+  const filter = searchParams.get("filter") ?? "all";
 
   const where =
     filter === "flagged"
@@ -55,4 +51,4 @@ export async function GET(request: NextRequest) {
     songs: result,
     ...offsetPagination(page, limit, total),
   });
-}
+}, { route: "/api/admin/content" });

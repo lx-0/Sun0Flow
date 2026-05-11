@@ -1,13 +1,9 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { offsetPagination, pageSkip } from "@/lib/pagination";
-import type { NextRequest } from "next/server";
 
-export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
+export const GET = adminRoute(async (request: NextRequest) => {
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
@@ -28,4 +24,4 @@ export async function GET(request: NextRequest) {
     logs,
     ...offsetPagination(page, limit, total),
   });
-}
+}, { route: "/api/admin/logs" });

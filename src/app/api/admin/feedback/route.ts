@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
 
-export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
+export const GET = adminRoute(async (request: NextRequest) => {
   const params = request.nextUrl.searchParams;
   const category = params.get("category");
   const scoreParam = params.get("score");
@@ -37,4 +34,4 @@ export async function GET(request: NextRequest) {
     feedbacks,
     ...offsetPagination(page, DEFAULT_PAGE_SIZE, total),
   });
-}
+}, { route: "/api/admin/feedback" });

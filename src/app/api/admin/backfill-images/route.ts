@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { imageCache } from "@/lib/cache";
 import { logger } from "@/lib/logger";
 
-export async function POST() {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
+export const POST = adminRoute(async () => {
   const songs = await prisma.song.findMany({
     where: {
       imageUrl: { not: null },
@@ -44,4 +41,4 @@ export async function POST() {
     failed,
     totalCached: imageCache.count(),
   });
-}
+}, { route: "/api/admin/backfill-images" });

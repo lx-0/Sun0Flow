@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
+export const GET = adminRoute(async (request: NextRequest) => {
   const searchParams = request.nextUrl.searchParams;
   const limit = Math.min(Number(searchParams.get("limit")) || 50, 100);
   const page = Math.max(Number(searchParams.get("page")) || 1, 1);
@@ -21,4 +18,4 @@ export async function GET(request: NextRequest) {
   ]);
 
   return NextResponse.json({ errors, total, page, limit });
-}
+}, { route: "/api/admin/errors" });

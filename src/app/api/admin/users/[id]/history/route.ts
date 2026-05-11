@@ -1,21 +1,16 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { offsetPagination, pageSkip } from "@/lib/pagination";
-import type { NextRequest } from "next/server";
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
-  const { id } = await params;
+export const GET = adminRoute<{ id: string }>(async (request: NextRequest, { params }) => {
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
 
   const [songs, total] = await Promise.all([
     prisma.song.findMany({
-      where: { userId: id },
+      where: { userId: params.id },
       orderBy: { createdAt: "desc" },
       skip: pageSkip(page, limit),
       take: limit,
@@ -29,11 +24,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         createdAt: true,
       },
     }),
-    prisma.song.count({ where: { userId: id } }),
+    prisma.song.count({ where: { userId: params.id } }),
   ]);
 
   return NextResponse.json({
     songs,
     ...offsetPagination(page, limit, total),
   });
-}
+}, { route: "/api/admin/users/[id]/history" });

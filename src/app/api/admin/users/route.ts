@@ -1,14 +1,10 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { offsetPagination, pageSkip } from "@/lib/pagination";
-import type { NextRequest } from "next/server";
 import { TIER_LIMITS } from "@/lib/billing";
 
-export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
+export const GET = adminRoute(async (request: NextRequest) => {
   const { searchParams } = request.nextUrl;
   const search = searchParams.get("search") ?? "";
   const sortBy = searchParams.get("sortBy") ?? "createdAt";
@@ -98,4 +94,4 @@ export async function GET(request: NextRequest) {
     users: result,
     ...offsetPagination(page, limit, total),
   });
-}
+}, { route: "/api/admin/users" });
