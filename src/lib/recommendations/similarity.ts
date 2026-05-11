@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { collectSongTokens, tagOverlapScore } from "@/lib/tags";
-import { cosineSimilarity, parseEmbeddingVector } from "@/lib/embeddings";
+import { parseEmbeddingVector } from "@/lib/embeddings";
 import { formatBaseSong, BASE_SONG_SELECT, type BaseSongResult } from "./format";
+import { scoreByEmbedding } from "./embedding-search";
 
 export interface SimilarSong extends BaseSongResult {
   score: number;
@@ -11,8 +12,6 @@ export interface EmbeddingSimilarityResult {
   songs: SimilarSong[];
   total: number;
 }
-
-const EMBEDDING_CANDIDATES_LIMIT = 500;
 
 export async function getSimilarSongs(
   songId: string,
@@ -64,36 +63,18 @@ export async function findSimilarByEmbedding(
   const queryVector = parseEmbeddingVector(targetEmbedding.embedding);
   if (!queryVector) return null;
 
-  const candidateEmbeddings = await prisma.songEmbedding.findMany({
-    where: {
+  const scored = await scoreByEmbedding(
+    queryVector,
+    {
       songId: { not: songId },
-      song: {
-        userId,
-        generationStatus: "ready",
-        archivedAt: null,
-      },
+      song: { userId, generationStatus: "ready", archivedAt: null },
     },
-    select: {
-      songId: true,
-      embedding: true,
-    },
-    take: EMBEDDING_CANDIDATES_LIMIT,
-  });
+    limit,
+  );
 
-  if (candidateEmbeddings.length === 0) {
+  if (scored.length === 0) {
     return { songs: [], total: 0 };
   }
-
-  const scored = candidateEmbeddings
-    .map((e) => {
-      const vec = parseEmbeddingVector(e.embedding);
-      return {
-        songId: e.songId,
-        score: vec ? cosineSimilarity(queryVector, vec) : 0,
-      };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
 
   const topIds = scored.map((s) => s.songId);
   const scoreMap = new Map(scored.map((s) => [s.songId, s.score]));
