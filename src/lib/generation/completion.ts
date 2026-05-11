@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { getTaskStatus, isTerminalFailure } from "@/lib/sunoapi";
 import type { SunoSong } from "@/lib/sunoapi";
 import { logServerError } from "@/lib/error-logger";
-import { handleSongSuccess, handleSongFailure } from "@/lib/song-completion";
-import type { SongRecord } from "@/lib/song-completion";
+import { handleSongSuccess, handleSongFailure } from "./song-completion";
+import type { SongRecord } from "./song-completion";
 
 const POLL_INTERVAL_MS = 4000;
 export const MAX_POLL_ATTEMPTS = 60;
