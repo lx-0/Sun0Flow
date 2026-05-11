@@ -8,6 +8,9 @@ import { resolveRootId } from "./variations";
 export { prepareSongDownload } from "./download";
 export type { DownloadFormat, DownloadSong, DownloadRequest, DownloadResult } from "./download";
 
+export { findAccessibleSong, checkFavorite, addFavorite, removeFavorite, listFavorites } from "./favorites";
+export type { FavoriteStatus, FavoriteToggleResult, FavoriteSort, FavoritesQuery, FavoriteSong, FavoritesResult } from "./favorites";
+
 export { getTopGenres, getTopMoods } from "./taxonomy";
 export type { TagCount } from "./taxonomy";
 
