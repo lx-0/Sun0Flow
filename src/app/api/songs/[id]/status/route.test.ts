@@ -46,8 +46,15 @@ vi.mock("@/lib/sunoapi", async () => {
   const actual = await vi.importActual<typeof import("@/lib/sunoapi")>("@/lib/sunoapi");
   return {
     ...actual,
-    getTaskStatus: vi.fn(),
     resolveUserApiKey: vi.fn(),
+  };
+});
+
+vi.mock("@/lib/generation/completion", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/generation/completion")>("@/lib/generation/completion");
+  return {
+    ...actual,
+    pollOnce: vi.fn(),
   };
 });
 
@@ -64,15 +71,16 @@ vi.mock("@/lib/cache", () => ({
 }));
 
 vi.mock("@/lib/song-completion", () => ({
-  handleSongSuccess: vi.fn().mockResolvedValue(undefined),
+  handleSongSuccess: vi.fn().mockResolvedValue({ persisted: true, sideEffectErrors: [] }),
   handleSongFailure: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { auth, resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTaskStatus } from "@/lib/sunoapi";
 import { resolveUserApiKey } from "@/lib/sunoapi";
 import { logServerError } from "@/lib/error-logger";
+import { pollOnce } from "@/lib/generation/completion";
+import { handleSongSuccess, handleSongFailure } from "@/lib/song-completion";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -118,34 +126,28 @@ afterEach(() => {
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe("GET /api/songs/[id]/status", () => {
-  it("marks song as failed when poll count exceeds max (timeout)", async () => {
-    vi.mocked(prisma.song.findUnique).mockResolvedValue({
-      ...baseSong,
-      pollCount: 60, // At max
-    } as never);
-    vi.mocked(prisma.song.update).mockResolvedValue({
-      ...baseSong,
-      generationStatus: "failed",
-      errorMessage: "Generation timed out",
-      pollCount: 61,
-    } as never);
+  it("delegates to handleSongFailure when poll count exceeds max (timeout)", async () => {
+    vi.mocked(prisma.song.findUnique)
+      .mockResolvedValueOnce({ ...baseSong, pollCount: 60 } as never)
+      .mockResolvedValueOnce({
+        ...baseSong,
+        generationStatus: "failed",
+        errorMessage: "Generation timed out",
+        pollCount: 61,
+      } as never);
 
     const res = await GET(makeRequest(), makeParams());
     const data = await res.json();
 
     expect(data.song.generationStatus).toBe("failed");
     expect(data.song.errorMessage).toBe("Generation timed out");
-    expect(prisma.song.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          generationStatus: "failed",
-          errorMessage: "Generation timed out",
-        }),
-      })
+    expect(handleSongFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "song-1" }),
+      "Generation timed out",
     );
   });
 
-  it("marks song as failed on Suno API task failure (GENERATE_AUDIO_FAILED)", async () => {
+  it("delegates to handleSongFailure on terminal poll outcome", async () => {
     vi.mocked(prisma.song.findUnique)
       .mockResolvedValueOnce({ ...baseSong } as never)
       .mockResolvedValueOnce({
@@ -153,10 +155,8 @@ describe("GET /api/songs/[id]/status", () => {
         generationStatus: "failed",
         errorMessage: "Audio generation failed due to content policy",
       } as never);
-    vi.mocked(getTaskStatus).mockResolvedValue({
-      taskId: "task-abc",
-      status: "GENERATE_AUDIO_FAILED",
-      songs: [],
+    vi.mocked(pollOnce).mockResolvedValue({
+      kind: "failed",
       errorMessage: "Audio generation failed due to content policy",
     });
 
@@ -165,9 +165,13 @@ describe("GET /api/songs/[id]/status", () => {
 
     expect(data.song.generationStatus).toBe("failed");
     expect(data.song.errorMessage).toContain("content policy");
+    expect(handleSongFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "song-1" }),
+      "Audio generation failed due to content policy",
+    );
   });
 
-  it("marks song as failed on SENSITIVE_WORD_ERROR", async () => {
+  it("delegates to handleSongFailure on SENSITIVE_WORD_ERROR outcome", async () => {
     vi.mocked(prisma.song.findUnique)
       .mockResolvedValueOnce({ ...baseSong } as never)
       .mockResolvedValueOnce({
@@ -175,10 +179,8 @@ describe("GET /api/songs/[id]/status", () => {
         generationStatus: "failed",
         errorMessage: "Prompt contains sensitive content",
       } as never);
-    vi.mocked(getTaskStatus).mockResolvedValue({
-      taskId: "task-abc",
-      status: "SENSITIVE_WORD_ERROR",
-      songs: [],
+    vi.mocked(pollOnce).mockResolvedValue({
+      kind: "failed",
       errorMessage: "Prompt contains sensitive content",
     });
 
@@ -188,10 +190,10 @@ describe("GET /api/songs/[id]/status", () => {
     expect(data.song.generationStatus).toBe("failed");
   });
 
-  it("increments poll count on transient API error and logs it", async () => {
+  it("increments poll count on poll_error and logs it", async () => {
     vi.mocked(prisma.song.findUnique).mockResolvedValue({ ...baseSong } as never);
     const transientError = new Error("Connection reset");
-    vi.mocked(getTaskStatus).mockRejectedValue(transientError);
+    vi.mocked(pollOnce).mockResolvedValue({ kind: "poll_error", error: transientError });
     vi.mocked(prisma.song.update).mockResolvedValue({
       ...baseSong,
       pollCount: 1,
@@ -200,11 +202,9 @@ describe("GET /api/songs/[id]/status", () => {
     const res = await GET(makeRequest(), makeParams());
     const data = await res.json();
 
-    // Should NOT mark as failed — just increment poll count
     expect(data.song.pollCount).toBe(1);
     expect(data.song.generationStatus).toBe("pending");
 
-    // Should log the error with context
     expect(logServerError).toHaveBeenCalledWith(
       "status-poll",
       transientError,
@@ -245,12 +245,25 @@ describe("GET /api/songs/[id]/status", () => {
     const data = await res.json();
 
     expect(data.song.generationStatus).toBe("ready");
-    // Should NOT call getTaskStatus or update
-    expect(getTaskStatus).not.toHaveBeenCalled();
+    expect(pollOnce).not.toHaveBeenCalled();
     expect(prisma.song.update).not.toHaveBeenCalled();
   });
 
-  it("updates song to ready when task succeeds", async () => {
+  it("delegates to handleSongSuccess on ready outcome", async () => {
+    const songs = [
+      {
+        id: "suno-1",
+        title: "Generated Song",
+        prompt: "upbeat pop",
+        audioUrl: "https://cdn.suno.com/audio.mp3",
+        imageUrl: "https://cdn.suno.com/img.jpg",
+        duration: 180,
+        status: "complete" as const,
+        model: "V5",
+        lyrics: "la la la",
+        createdAt: "2026-03-21T00:00:00Z",
+      },
+    ];
     vi.mocked(prisma.song.findUnique)
       .mockResolvedValueOnce({ ...baseSong } as never)
       .mockResolvedValueOnce({
@@ -258,29 +271,34 @@ describe("GET /api/songs/[id]/status", () => {
         generationStatus: "ready",
         audioUrl: "https://cdn.suno.com/audio.mp3",
       } as never);
-    vi.mocked(getTaskStatus).mockResolvedValue({
-      taskId: "task-abc",
-      status: "SUCCESS",
-      songs: [
-        {
-          id: "suno-1",
-          title: "Generated Song",
-          prompt: "upbeat pop",
-          audioUrl: "https://cdn.suno.com/audio.mp3",
-          imageUrl: "https://cdn.suno.com/img.jpg",
-          duration: 180,
-          status: "complete",
-          model: "V5",
-          lyrics: "la la la",
-          createdAt: "2026-03-21T00:00:00Z",
-        },
-      ],
-      errorMessage: null,
-    });
+    vi.mocked(pollOnce).mockResolvedValue({ kind: "ready", songs });
 
     const res = await GET(makeRequest(), makeParams());
     const data = await res.json();
 
     expect(data.song.generationStatus).toBe("ready");
+    expect(handleSongSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "song-1" }),
+      songs,
+    );
+  });
+
+  it("increments poll count on processing outcome", async () => {
+    vi.mocked(prisma.song.findUnique).mockResolvedValue({ ...baseSong } as never);
+    vi.mocked(pollOnce).mockResolvedValue({ kind: "processing" });
+    vi.mocked(prisma.song.update).mockResolvedValue({
+      ...baseSong,
+      pollCount: 1,
+    } as never);
+
+    const res = await GET(makeRequest(), makeParams());
+    const data = await res.json();
+
+    expect(data.song.pollCount).toBe(1);
+    expect(prisma.song.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { pollCount: 1 },
+      })
+    );
   });
 });
