@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
+import { NextResponse } from "next/server";
 import { authRoute } from "@/lib/route-handler";
-import { cached, cacheKey, CacheTTL } from "@/lib/cache";
 import { getSimilarSongs } from "@/lib/recommendations";
 import { zLimitParam } from "@/lib/query-params";
 
@@ -11,17 +10,10 @@ const similarQuery = z.object({
 
 export const GET = authRoute<{ id: string }, undefined, z.infer<typeof similarQuery>>(
   async (_request, { auth, params, query }) => {
-    const key = cacheKey("similar-songs", auth.userId, params.id, String(query.limit));
-    const result = await cached(
-      key,
-      () => getSimilarSongs(params.id, auth.userId, query.limit),
-      CacheTTL.RECOMMENDATIONS,
-    );
-
+    const result = await getSimilarSongs(params.id, auth.userId, query.limit);
     if (result === null) {
       return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
     }
-
     return NextResponse.json({ songs: result, total: result.length });
   },
   { route: "/api/songs/[id]/similar", query: similarQuery },
