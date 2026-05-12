@@ -4,7 +4,6 @@ const mockSongCount = vi.fn();
 const mockSongAggregate = vi.fn();
 const mockSongFindMany = vi.fn();
 const mockPlaylistCount = vi.fn();
-const mockQueryRaw = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -16,7 +15,6 @@ vi.mock("@/lib/prisma", () => ({
     playlist: {
       count: (...args: unknown[]) => mockPlaylistCount(...args),
     },
-    $queryRaw: (...args: unknown[]) => mockQueryRaw(...args),
   },
 }));
 
@@ -38,13 +36,25 @@ describe("getDashboardStats", () => {
       _avg: { rating: 4.27 },
       _count: { rating: 15 },
     });
-    mockQueryRaw.mockResolvedValueOnce([
-      { tag: "jazz", count: BigInt(8) },
-      { tag: "chill", count: BigInt(5) },
-    ]);
-    mockSongFindMany.mockResolvedValueOnce([
-      { id: "s1", title: "Song A", imageUrl: null, tags: "jazz", duration: 180, createdAt: new Date() },
-    ]);
+    mockSongFindMany
+      .mockResolvedValueOnce([
+        { tags: "jazz" },
+        { tags: "jazz" },
+        { tags: "jazz" },
+        { tags: "jazz" },
+        { tags: "jazz" },
+        { tags: "jazz" },
+        { tags: "jazz" },
+        { tags: "jazz" },
+        { tags: "chill" },
+        { tags: "chill" },
+        { tags: "chill" },
+        { tags: "chill" },
+        { tags: "chill" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "s1", title: "Song A", imageUrl: null, tags: "jazz", duration: 180, createdAt: new Date() },
+      ]);
 
     const result = await getDashboardStats("user-1");
 
@@ -69,8 +79,9 @@ describe("getDashboardStats", () => {
       _avg: { rating: null },
       _count: { rating: 0 },
     });
-    mockQueryRaw.mockResolvedValueOnce([]);
-    mockSongFindMany.mockResolvedValueOnce([]);
+    mockSongFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
 
     const result = await getDashboardStats("user-2");
 
@@ -78,18 +89,19 @@ describe("getDashboardStats", () => {
     expect(result.ratedSongsCount).toBe(0);
   });
 
-  it("filters out empty tags from raw SQL results", async () => {
+  it("counts tags from song records via countGenres", async () => {
     mockSongCount.mockResolvedValue(1);
     mockPlaylistCount.mockResolvedValueOnce(0);
     mockSongAggregate.mockResolvedValueOnce({
       _avg: { rating: null },
       _count: { rating: 0 },
     });
-    mockQueryRaw.mockResolvedValueOnce([
-      { tag: "", count: BigInt(3) },
-      { tag: "rock", count: BigInt(2) },
-    ]);
-    mockSongFindMany.mockResolvedValueOnce([]);
+    mockSongFindMany
+      .mockResolvedValueOnce([
+        { tags: "rock" },
+        { tags: "rock" },
+      ])
+      .mockResolvedValueOnce([]);
 
     const result = await getDashboardStats("user-3");
 

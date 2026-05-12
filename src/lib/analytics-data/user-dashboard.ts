@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { fillDailySeries } from "@/lib/date-series";
+import { countGenres } from "@/lib/tags";
 
 export interface DashboardStats {
   totalSongs: number;
@@ -46,7 +47,7 @@ export async function getDashboardStats(
     songsThisWeek,
     songsThisMonth,
     ratingAgg,
-    topTags,
+    tagSongs,
     recentSongs,
   ] = await Promise.all([
     prisma.song.count({ where: { userId } }),
@@ -63,14 +64,10 @@ export async function getDashboardStats(
       _avg: { rating: true },
       _count: { rating: true },
     }),
-    prisma.$queryRaw<Array<{ tag: string; count: bigint }>>`
-      SELECT trim(lower(unnest(string_to_array(tags, ',')))) AS tag, COUNT(*)::bigint AS count
-      FROM "Song"
-      WHERE "userId" = ${userId} AND tags IS NOT NULL AND tags <> ''
-      GROUP BY 1
-      ORDER BY count DESC
-      LIMIT 5
-    `,
+    prisma.song.findMany({
+      where: { userId, tags: { not: null } },
+      select: { tags: true },
+    }),
     prisma.song.findMany({
       where: { userId, generationStatus: "ready" },
       orderBy: { createdAt: "desc" },
@@ -96,9 +93,7 @@ export async function getDashboardStats(
       ? Math.round(ratingAgg._avg.rating * 10) / 10
       : null,
     ratedSongsCount: ratingAgg._count.rating,
-    topTags: topTags
-      .filter((r) => r.tag)
-      .map((r) => ({ tag: r.tag, count: Number(r.count) })),
+    topTags: countGenres(tagSongs, 5).map((r) => ({ tag: r.genre, count: r.count })),
     recentSongs,
   };
 }
@@ -132,7 +127,7 @@ export async function getUserDashboardStats(userId: string): Promise<UserDashboa
     totalPlaylists,
     ratingAgg,
     userRatingAgg,
-    genreRows,
+    allTagSongs,
     topSongs,
     dailyGenerations,
   ] = await Promise.all([
@@ -158,14 +153,10 @@ export async function getUserDashboardStats(userId: string): Promise<UserDashboa
       _count: { value: true },
     }),
 
-    prisma.$queryRaw<Array<{ genre: string; count: bigint }>>`
-      SELECT trim(lower(unnest(string_to_array(tags, ',')))) AS genre, COUNT(*)::bigint AS count
-      FROM "Song"
-      WHERE "userId" = ${userId} AND tags IS NOT NULL AND tags <> ''
-      GROUP BY 1
-      ORDER BY count DESC
-      LIMIT 10
-    `,
+    prisma.song.findMany({
+      where: { userId, tags: { not: null } },
+      select: { tags: true },
+    }),
 
     prisma.song.findMany({
       where: { userId, generationStatus: "ready" },
@@ -191,10 +182,6 @@ export async function getUserDashboardStats(userId: string): Promise<UserDashboa
     `,
   ]);
 
-  const genreBreakdown = genreRows
-    .filter((r) => r.genre)
-    .map((r) => ({ genre: r.genre, count: Number(r.count) }));
-
   return {
     totalGenerations,
     completedGenerations,
@@ -208,7 +195,7 @@ export async function getUserDashboardStats(userId: string): Promise<UserDashboa
       ? Math.round(userRatingAgg._avg.value * 10) / 10
       : null,
     userRatedSongsCount: userRatingAgg._count.value,
-    genreBreakdown,
+    genreBreakdown: countGenres(allTagSongs, 10),
     topSongs: topSongs.map((s) => ({
       ...s,
       createdAt: s.createdAt.toISOString(),

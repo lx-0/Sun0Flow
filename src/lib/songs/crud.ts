@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { invalidateByPrefix, invalidateKey, cacheKey } from "@/lib/cache";
 import { sanitizeText } from "@/lib/sanitize";
 import { type Result, success, Err } from "@/lib/result";
-import { SongFilters } from "./index";
+import { SongFilters } from "./filters";
 
 function invalidateUserSongs(userId: string) {
   invalidateByPrefix(`dashboard-stats:${userId}`);

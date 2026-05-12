@@ -13,6 +13,12 @@ export type AuthContext = {
   isAdmin: boolean;
 };
 
+export type OptionalAuthContext = {
+  userId: string | null;
+  isApiKey: boolean;
+  isAdmin: boolean;
+};
+
 export type AdminContext = {
   adminId: string;
 };
@@ -131,6 +137,57 @@ export function authRoute<
           auth: { userId: result.userId, isApiKey: result.isApiKey, isAdmin: result.isAdmin },
           params, body, query,
         }),
+    );
+  };
+}
+
+export function optionalAuthRoute<
+  P extends Record<string, string> = Record<string, never>,
+  B = undefined,
+  Q = undefined,
+>(
+  handler: (
+    request: NextRequest,
+    ctx: { auth: OptionalAuthContext; params: P; body: B; query: Q }
+  ) => Promise<NextResponse>,
+  options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
+) {
+  return async (
+    request: NextRequest,
+    segmentData: SegmentData<P>
+  ): Promise<NextResponse> => {
+    const result = await resolveUser(request);
+    const auth: OptionalAuthContext = result.error
+      ? { userId: null, isApiKey: false, isAdmin: false }
+      : { userId: result.userId, isApiKey: result.isApiKey, isAdmin: result.isAdmin };
+
+    return runPipeline(
+      request, segmentData, options, "optional-auth-route-handler", { userId: auth.userId },
+      ({ params, body, query }) =>
+        handler(request, { auth, params, body, query }),
+    );
+  };
+}
+
+export function publicRoute<
+  P extends Record<string, string> = Record<string, never>,
+  B = undefined,
+  Q = undefined,
+>(
+  handler: (
+    request: NextRequest,
+    ctx: { params: P; body: B; query: Q }
+  ) => Promise<NextResponse>,
+  options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
+) {
+  return async (
+    request: NextRequest,
+    segmentData: SegmentData<P>
+  ): Promise<NextResponse> => {
+    return runPipeline(
+      request, segmentData, options, "public-route-handler", {},
+      ({ params, body, query }) =>
+        handler(request, { params, body, query }),
     );
   };
 }
