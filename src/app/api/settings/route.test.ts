@@ -78,6 +78,9 @@ describe("GET /api/settings", () => {
 
     expect(res.status).toBe(200);
     expect(data.connectedProviders).toEqual(["google", "github"]);
+    expect(data.id).toBe("user-1");
+    expect(data.email).toBe("a@example.com");
+    expect(data.name).toBe("Alice");
     expect(data.emailDigestFrequency).toBe("weekly");
   });
 });

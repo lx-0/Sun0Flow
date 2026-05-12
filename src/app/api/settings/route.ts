@@ -7,7 +7,6 @@ import { notFound } from "@/lib/api-error";
 import {
   buildEmailPreferencesUpdateData,
   EMAIL_PREFERENCES_SELECT,
-  toEmailPreferencesResponse,
 } from "@/lib/profile/email-preferences";
 
 const SETTINGS_SELECT = {
@@ -34,7 +33,7 @@ export const GET = authRoute(async (_request, { auth }) => {
 
   const { accounts, ...rest } = user;
   return NextResponse.json({
-    ...toEmailPreferencesResponse(rest),
+    ...rest,
     connectedProviders: accounts.map((a: { provider: string; type: string }) => a.provider),
   });
 }, { route: "/api/settings" });
