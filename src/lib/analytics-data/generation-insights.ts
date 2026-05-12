@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { countGenres } from "@/lib/tags";
 import { mondayOfWeeksAgo } from "@/lib/date-series";
+import {
+  songCount,
+  completedSongCount,
+  favoriteCount,
+  tagSongs,
+} from "./queries";
 
 export interface GenerationInsights {
   totalSongs: number;
@@ -28,20 +34,17 @@ export async function getGenerationInsights(userId: string): Promise<GenerationI
     weeklyRaw,
     bestPromptSongs,
   ] = await Promise.all([
-    prisma.song.count({ where: { userId } }),
-    prisma.song.count({ where: { userId, generationStatus: "ready" } }),
+    songCount(userId),
+    completedSongCount(userId),
     prisma.song.count({ where: { userId, generationStatus: "failed" } }),
-    prisma.favorite.count({ where: { userId } }),
+    favoriteCount(userId),
 
     prisma.song.aggregate({
       where: { userId, generationStatus: "ready", duration: { not: null } },
       _sum: { duration: true },
     }),
 
-    prisma.song.findMany({
-      where: { userId, tags: { not: null } },
-      select: { tags: true },
-    }),
+    tagSongs(userId),
 
     prisma.$queryRaw<Array<{ week: Date; count: bigint }>>`
       SELECT
