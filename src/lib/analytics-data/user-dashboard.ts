@@ -1,6 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { fillDailySeries } from "@/lib/date-series";
 import { countGenres } from "@/lib/tags";
+import {
+  songCount,
+  completedSongCount,
+  playlistCount,
+  favoriteCount,
+  songRatingAgg,
+  tagSongs,
+  roundToOneDecimal,
+} from "./queries";
 
 export interface DashboardStats {
   totalSongs: number;
@@ -47,27 +56,20 @@ export async function getDashboardStats(
     songsThisWeek,
     songsThisMonth,
     ratingAgg,
-    tagSongs,
+    tagSongRows,
     recentSongs,
   ] = await Promise.all([
-    prisma.song.count({ where: { userId } }),
+    songCount(userId),
     prisma.song.count({ where: { userId, isFavorite: true } }),
-    prisma.playlist.count({ where: { userId } }),
+    playlistCount(userId),
     prisma.song.count({
       where: { userId, createdAt: { gte: weekStart } },
     }),
     prisma.song.count({
       where: { userId, createdAt: { gte: monthStart } },
     }),
-    prisma.song.aggregate({
-      where: { userId, rating: { not: null } },
-      _avg: { rating: true },
-      _count: { rating: true },
-    }),
-    prisma.song.findMany({
-      where: { userId, tags: { not: null } },
-      select: { tags: true },
-    }),
+    songRatingAgg(userId),
+    tagSongs(userId),
     prisma.song.findMany({
       where: { userId, generationStatus: "ready" },
       orderBy: { createdAt: "desc" },
@@ -89,11 +91,9 @@ export async function getDashboardStats(
     totalPlaylists,
     songsThisWeek,
     songsThisMonth,
-    averageRating: ratingAgg._avg.rating
-      ? Math.round(ratingAgg._avg.rating * 10) / 10
-      : null,
+    averageRating: roundToOneDecimal(ratingAgg._avg.rating),
     ratedSongsCount: ratingAgg._count.rating,
-    topTags: countGenres(tagSongs, 5).map((r) => ({ tag: r.genre, count: r.count })),
+    topTags: countGenres(tagSongRows, 5).map((r) => ({ tag: r.genre, count: r.count })),
     recentSongs,
   };
 }
@@ -131,21 +131,11 @@ export async function getUserDashboardStats(userId: string): Promise<UserDashboa
     topSongs,
     dailyGenerations,
   ] = await Promise.all([
-    prisma.song.count({ where: { userId } }),
-
-    prisma.song.count({
-      where: { userId, generationStatus: "ready" },
-    }),
-
-    prisma.favorite.count({ where: { userId } }),
-
-    prisma.playlist.count({ where: { userId } }),
-
-    prisma.song.aggregate({
-      where: { userId, rating: { not: null } },
-      _avg: { rating: true },
-      _count: { rating: true },
-    }),
+    songCount(userId),
+    completedSongCount(userId),
+    favoriteCount(userId),
+    playlistCount(userId),
+    songRatingAgg(userId),
 
     prisma.rating.aggregate({
       where: { userId },
@@ -153,10 +143,7 @@ export async function getUserDashboardStats(userId: string): Promise<UserDashboa
       _count: { value: true },
     }),
 
-    prisma.song.findMany({
-      where: { userId, tags: { not: null } },
-      select: { tags: true },
-    }),
+    tagSongs(userId),
 
     prisma.song.findMany({
       where: { userId, generationStatus: "ready" },
@@ -187,13 +174,9 @@ export async function getUserDashboardStats(userId: string): Promise<UserDashboa
     completedGenerations,
     totalFavorites,
     totalPlaylists,
-    averageRating: ratingAgg._avg.rating
-      ? Math.round(ratingAgg._avg.rating * 10) / 10
-      : null,
+    averageRating: roundToOneDecimal(ratingAgg._avg.rating),
     ratedSongsCount: ratingAgg._count.rating,
-    userRatingAverage: userRatingAgg._avg.value
-      ? Math.round(userRatingAgg._avg.value * 10) / 10
-      : null,
+    userRatingAverage: roundToOneDecimal(userRatingAgg._avg.value),
     userRatedSongsCount: userRatingAgg._count.value,
     genreBreakdown: countGenres(allTagSongs, 10),
     topSongs: topSongs.map((s) => ({
