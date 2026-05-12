@@ -10,10 +10,22 @@ interface LogContext {
   params?: Record<string, unknown>;
 }
 
-export function respondToGeneration(
+interface ResponseOptions {
+  /** Return `{ songs: [song] }` instead of `{ song }`. */
+  arrayFormat?: boolean;
+  /** Called on payment-related failures (e.g. 402) to include remaining balance. */
+  creditBalanceLookup?: () => Promise<number | undefined>;
+}
+
+function songPayload(song: unknown, arrayFormat?: boolean) {
+  return arrayFormat ? { songs: [song] } : { song };
+}
+
+export async function respondToGeneration(
   outcome: GenerationOutcome,
   ctx: LogContext,
-): NextResponse {
+  options?: ResponseOptions,
+): Promise<NextResponse> {
   if (outcome.status === "denied") return outcome.response as NextResponse;
 
   if (outcome.status === "queued") {
@@ -24,19 +36,31 @@ export function respondToGeneration(
   }
 
   if (outcome.status === "failed") {
-    logServerError(ctx.label, outcome.rawError, {
+    const correlationId = logServerError(ctx.label, outcome.rawError, {
       userId: ctx.userId,
       route: ctx.route,
       params: ctx.params,
     });
+
+    let creditBalance: number | undefined;
+    if (options?.creditBalanceLookup) {
+      creditBalance = await options.creditBalanceLookup().catch(() => undefined);
+    }
+
     return NextResponse.json(
-      { song: outcome.song, error: outcome.error, rateLimit: outcome.rateLimitStatus },
+      {
+        ...songPayload(outcome.song, options?.arrayFormat),
+        error: outcome.error,
+        ...(creditBalance !== undefined && { creditBalance }),
+        rateLimit: outcome.rateLimitStatus,
+        correlationId,
+      },
       { status: 201 },
     );
   }
 
   return NextResponse.json(
-    { song: outcome.song, rateLimit: outcome.rateLimitStatus },
+    { ...songPayload(outcome.song, options?.arrayFormat), rateLimit: outcome.rateLimitStatus },
     { status: 201 },
   );
 }

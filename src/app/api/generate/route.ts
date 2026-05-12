@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import {
   generateSong,
@@ -7,15 +6,14 @@ import {
   mockSongs,
   resolveUserApiKeyWithMode,
 } from "@/lib/sunoapi";
-import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
 import { SUNOAPI_KEY } from "@/lib/env";
-import { badRequest, ErrorCode } from "@/lib/api-error";
+import { badRequest } from "@/lib/api-error";
 import { stripHtml } from "@/lib/sanitize";
-import { executeGeneration } from "@/lib/generation";
+import { executeGeneration, respondToGeneration } from "@/lib/generation";
 import { authRoute } from "@/lib/route-handler";
 
-export const POST = authRoute(async (_request, { auth }): Promise<NextResponse> => {
+export const POST = authRoute(async (_request, { auth }) => {
   const { userId, isAdmin } = auth;
 
   const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
@@ -83,42 +81,14 @@ export const POST = authRoute(async (_request, { auth }): Promise<NextResponse> 
     },
   });
 
-  if (outcome.status === "denied") return outcome.response as NextResponse;
-
-  if (outcome.status === "queued") {
-    return NextResponse.json(
-      { queued: true, message: outcome.message, code: ErrorCode.SERVICE_UNAVAILABLE },
-      { status: 503 }
-    );
-  }
-
-  if (outcome.status === "created") {
-    return NextResponse.json(
-      { songs: [outcome.song], rateLimit: outcome.rateLimitStatus },
-      { status: 201 }
-    );
-  }
-
-  // status === "failed"
-  const correlationId = logServerError("generate-api", outcome.rawError, {
-    userId,
-    route: "/api/generate",
-    params: generationParams,
-  });
-
-  let creditBalance: number | undefined;
-  if (outcome.rawError instanceof SunoApiError && outcome.rawError.status === 402) {
-    creditBalance = await getRemainingCredits().catch(() => undefined);
-  }
-
-  return NextResponse.json(
+  return respondToGeneration(
+    outcome,
+    { label: "generate-api", userId, route: "/api/generate", params: generationParams },
     {
-      songs: [outcome.song],
-      error: outcome.error,
-      ...(creditBalance !== undefined && { creditBalance }),
-      rateLimit: outcome.rateLimitStatus,
-      correlationId,
+      arrayFormat: true,
+      creditBalanceLookup: outcome.status === "failed" && outcome.rawError instanceof SunoApiError && outcome.rawError.status === 402
+        ? () => getRemainingCredits().catch(() => undefined)
+        : undefined,
     },
-    { status: 201 }
   );
 }, { route: "/api/generate" });

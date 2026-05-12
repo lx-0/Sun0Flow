@@ -8,7 +8,7 @@ import {
   resolveUserApiKey,
 } from "@/lib/sunoapi";
 import { logServerError } from "@/lib/error-logger";
-import { executeGeneration } from "@/lib/generation";
+import { executeGeneration, respondToGeneration } from "@/lib/generation";
 
 const MAX_BASE64_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -119,30 +119,10 @@ export async function POST(request: Request) {
       },
     });
 
-    if (outcome.status === "denied") return outcome.response;
-
-    if (outcome.status === "queued") {
-      return NextResponse.json(
-        { queued: true, message: outcome.message },
-        { status: 503 }
-      );
-    }
-
-    if (outcome.status === "failed") {
-      logServerError("upload-api", outcome.rawError, {
-        userId,
-        route: "/api/upload",
-        params: { mode, hasBase64: !!base64Data, hasUrl: !!fileUrl },
-      });
-      return NextResponse.json(
-        { songs: [outcome.song], error: outcome.error, rateLimit: outcome.rateLimitStatus },
-        { status: 201 }
-      );
-    }
-
-    return NextResponse.json(
-      { songs: [outcome.song], rateLimit: outcome.rateLimitStatus },
-      { status: 201 }
+    return respondToGeneration(
+      outcome,
+      { label: "upload-api", userId, route: "/api/upload", params: { mode, hasBase64: !!base64Data, hasUrl: !!fileUrl } },
+      { arrayFormat: true },
     );
   } catch (error) {
     logServerError("upload-route", error, { route: "/api/upload" });
