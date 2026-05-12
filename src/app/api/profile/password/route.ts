@@ -1,29 +1,46 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
+import { badRequest, notFound, unauthorized } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
+
+const bodySchema = z.object({
+  currentPassword: z.string().trim().min(1),
+  newPassword: z.string().trim().min(1),
+  confirmPassword: z.string().trim().min(1),
+});
+
+async function parseBody(request: Request) {
+  try {
+    const raw = await request.json();
+    const parsed = bodySchema.safeParse(raw);
+    if (!parsed.success) return { error: badRequest("All fields are required") } as const;
+    return { data: parsed.data } as const;
+  } catch {
+    return { error: badRequest("Invalid JSON body") } as const;
+  }
+}
 
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
+    return unauthorized();
   }
 
-  const { currentPassword, newPassword, confirmPassword } = await request.json();
-
-  if (!currentPassword || !newPassword || !confirmPassword) {
-    return NextResponse.json({ error: "All fields are required", code: "VALIDATION_ERROR" }, { status: 400 });
+  const parsedBody = await parseBody(request);
+  if (parsedBody.error) {
+    return parsedBody.error;
   }
+
+  const { currentPassword, newPassword, confirmPassword } = parsedBody.data;
 
   if (newPassword.length < 8) {
-    return NextResponse.json(
-      { error: "New password must be at least 8 characters", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
+    return badRequest("New password must be at least 8 characters");
   }
 
   if (newPassword !== confirmPassword) {
-    return NextResponse.json({ error: "Passwords do not match", code: "VALIDATION_ERROR" }, { status: 400 });
+    return badRequest("Passwords do not match");
   }
 
   const user = await prisma.user.findUnique({
@@ -32,12 +49,12 @@ export async function POST(request: Request) {
   });
 
   if (!user?.passwordHash) {
-    return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 });
+    return notFound("User not found");
   }
 
   const valid = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!valid) {
-    return NextResponse.json({ error: "Current password is incorrect", code: "VALIDATION_ERROR" }, { status: 400 });
+    return badRequest("Current password is incorrect");
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 12);

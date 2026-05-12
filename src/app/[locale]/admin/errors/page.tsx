@@ -19,6 +19,32 @@ interface ErrorsResponse {
   limit: number;
 }
 
+function isErrorReportItem(value: unknown): value is ErrorReportItem {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.id === "string" &&
+    typeof item.message === "string" &&
+    (typeof item.stack === "string" || item.stack === null) &&
+    typeof item.url === "string" &&
+    (typeof item.userAgent === "string" || item.userAgent === null) &&
+    typeof item.source === "string" &&
+    typeof item.createdAt === "string"
+  );
+}
+
+function isErrorsResponse(value: unknown): value is ErrorsResponse {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    Array.isArray(obj.errors) &&
+    obj.errors.every(isErrorReportItem) &&
+    typeof obj.total === "number" &&
+    typeof obj.page === "number" &&
+    typeof obj.limit === "number"
+  );
+}
+
 const SOURCE_COLORS: Record<string, string> = {
   "error-boundary": "bg-red-900/30 text-red-400",
   "unhandled-error": "bg-orange-900/30 text-orange-400",
@@ -28,16 +54,43 @@ const SOURCE_COLORS: Record<string, string> = {
 export default function AdminErrorsPage() {
   const [data, setData] = useState<ErrorsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
     setLoading(true);
-    fetch(`/api/admin/errors?page=${page}&limit=50`)
-      .then((r) => r.json())
-      .then(setData)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    setError(null);
+
+    fetch(`/api/admin/errors?page=${page}&limit=50`, { signal: controller.signal })
+      .then(async (r) => {
+        const payload: unknown = await r.json().catch(() => null);
+        if (!r.ok || !isErrorsResponse(payload)) {
+          throw new Error("Invalid admin errors response");
+        }
+        return payload;
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setData(payload);
+      })
+      .catch((err) => {
+        if (cancelled || (err instanceof DOMException && err.name === "AbortError")) return;
+        console.error(err);
+        setData(null);
+        setError("Failed to load error reports");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [page]);
 
   if (loading && !data) {
@@ -49,7 +102,7 @@ export default function AdminErrorsPage() {
   }
 
   if (!data) {
-    return <p className="text-red-400">Failed to load error reports</p>;
+    return <p className="text-red-400">{error ?? "Failed to load error reports"}</p>;
   }
 
   const totalPages = Math.ceil(data.total / data.limit);

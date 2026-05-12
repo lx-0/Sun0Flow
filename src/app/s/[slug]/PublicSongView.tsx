@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { PlayIcon, PauseIcon, MusicalNoteIcon, FlagIcon, SparklesIcon, SpeakerWaveIcon, SpeakerXMarkIcon, CodeBracketIcon, HeartIcon } from "@heroicons/react/24/solid";
 import { ChatBubbleLeftIcon, HeartIcon as HeartOutlineIcon } from "@heroicons/react/24/outline";
-import dynamic from "next/dynamic";
 import { useToast } from "@/components/Toast";
 import { useSession } from "next-auth/react";
 import { FollowButton } from "@/components/FollowButton";
@@ -13,14 +12,12 @@ import type { ReactionItem } from "@/components/ReactionTimeline";
 import { track } from "@/lib/analytics";
 import { RelatedSongs } from "@/components/RelatedSongs";
 import { ShareMenu } from "@/components/ShareMenu";
+import { ReportModal } from "@/components/ReportModal";
+import { CommentsSection } from "@/components/CommentsSection";
+import { EmojiReactionPicker } from "@/components/EmojiReactionPicker";
+import { ReactionTimeline } from "@/components/ReactionTimeline";
+import { PlayerWaveform } from "@/components/PlayerWaveform";
 import * as Sentry from "@sentry/nextjs";
-
-// Lazy-load below-fold and conditional components to reduce initial bundle
-const ReportModal = dynamic(() => import("@/components/ReportModal").then((m) => m.ReportModal), { ssr: false });
-const CommentsSection = dynamic(() => import("@/components/CommentsSection").then((m) => m.CommentsSection), { ssr: false });
-const EmojiReactionPicker = dynamic(() => import("@/components/EmojiReactionPicker").then((m) => m.EmojiReactionPicker), { ssr: false });
-const ReactionTimeline = dynamic(() => import("@/components/ReactionTimeline").then((m) => m.ReactionTimeline), { ssr: false });
-const PlayerWaveform = dynamic(() => import("@/components/PlayerWaveform").then((m) => m.PlayerWaveform), { ssr: false });
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";

@@ -1,21 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { authRoute } from "@/lib/route-handler";
+import { logServerError } from "@/lib/error-logger";
+import { internalError } from "@/lib/api-error";
 import { generatePromptsFromFeeds } from "@/lib/prompts";
 
-export async function POST(req: NextRequest) {
+export const POST = authRoute(async (req, { auth }) => {
+  let boost = false;
   try {
-    const { userId, error: authError } = await resolveUser(req);
-    if (authError) return authError;
+    const body = await req.json();
+    boost = Boolean(body?.boost);
+  } catch {
+    // No body or invalid JSON — defaults apply
+  }
 
-    let boost = false;
-    try {
-      const body = await req.json();
-      boost = Boolean(body?.boost);
-    } catch {
-      // No body or invalid JSON — defaults apply
-    }
-
-    const result = await generatePromptsFromFeeds(userId!, { boost });
+  try {
+    const result = await generatePromptsFromFeeds(auth.userId, { boost });
 
     if (!result.ok) {
       return NextResponse.json(
@@ -25,10 +24,10 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ prompts: result.prompts });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 },
-    );
+  } catch (error) {
+    logServerError("prompts-generate", error, { route: "/api/prompts/generate", userId: auth.userId });
+    return internalError();
   }
-}
+}, {
+  route: "/api/prompts/generate",
+});

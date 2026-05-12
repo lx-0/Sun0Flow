@@ -15,7 +15,7 @@ import { GenerationQueue } from "./GenerationQueue";
 import { BatchGeneratePanel } from "./BatchGeneratePanel";
 import dynamic from "next/dynamic";
 // Lazy-load confetti — only shown after generation success, not needed on initial render
-const Confetti = dynamic(() => import("./Confetti").then((m) => m.Confetti), { ssr: false });
+const Confetti = dynamic(() => import("./Confetti").then((m) => m.Confetti));
 import { UpgradeModal, shouldShowUpgradeModal } from "./UpgradeModal";
 import { InAppFeedbackWidget, hasFeedbackBeenSubmitted } from "./InAppFeedbackWidget";
 
