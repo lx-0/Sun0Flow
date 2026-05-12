@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { collectSongTokens, tagOverlapScore } from "@/lib/tags";
 import { parseEmbeddingVector } from "@/lib/embeddings";
 import { formatBaseSong, BASE_SONG_SELECT, type BaseSongResult } from "./format";
-import { scoreByEmbedding } from "./embedding-search";
+import { scoreByEmbedding } from "./rank";
 
 export interface SimilarSong extends BaseSongResult {
   score: number;
