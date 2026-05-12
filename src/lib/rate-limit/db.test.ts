@@ -19,7 +19,7 @@ vi.mock("@/lib/billing", () => ({
   },
 }));
 
-import { checkRateLimit, recordRateLimitHit, acquireRateLimitSlot } from "./db";
+import { getRateLimitStatus, acquireRateLimitSlot } from "./db";
 
 // ─── Mock Prisma ────────────────────────────────────────────────────────────
 
@@ -69,11 +69,11 @@ describe("rate-limit", () => {
     vi.useRealTimers();
   });
 
-  describe("checkRateLimit", () => {
+  describe("getRateLimitStatus", () => {
     it("allows requests when under the limit", async () => {
       mockFindMany.mockResolvedValue([makeEntry(30), makeEntry(15)]);
 
-      const result = await checkRateLimit("user-1");
+      const result = await getRateLimitStatus("user-1");
 
       expect(result.allowed).toBe(true);
       expect(result.status.remaining).toBe(3); // free tier: 5 - 2
@@ -86,7 +86,7 @@ describe("rate-limit", () => {
       );
       mockFindMany.mockResolvedValue(entries);
 
-      const result = await checkRateLimit("user-1");
+      const result = await getRateLimitStatus("user-1");
 
       expect(result.allowed).toBe(false);
       expect(result.status.remaining).toBe(0);
@@ -98,7 +98,7 @@ describe("rate-limit", () => {
       );
       mockFindMany.mockResolvedValue(entries);
 
-      const result = await checkRateLimit("user-1");
+      const result = await getRateLimitStatus("user-1");
 
       expect(result.allowed).toBe(false);
       expect(result.status.remaining).toBe(0);
@@ -107,7 +107,7 @@ describe("rate-limit", () => {
     it("returns full remaining when no entries exist", async () => {
       mockFindMany.mockResolvedValue([]);
 
-      const result = await checkRateLimit("user-1");
+      const result = await getRateLimitStatus("user-1");
 
       expect(result.allowed).toBe(true);
       expect(result.status.remaining).toBe(5);
@@ -119,7 +119,7 @@ describe("rate-limit", () => {
       mockSubscriptionFindUnique.mockResolvedValue({ tier: "pro", status: "active" });
       mockFindMany.mockResolvedValue([makeEntry(30), makeEntry(15)]);
 
-      const result = await checkRateLimit("user-1");
+      const result = await getRateLimitStatus("user-1");
 
       expect(result.status.limit).toBe(50);
       expect(result.status.remaining).toBe(48);
@@ -129,7 +129,7 @@ describe("rate-limit", () => {
       // Oldest entry was 45 minutes ago → resets in 15 minutes
       mockFindMany.mockResolvedValue([makeEntry(45), makeEntry(10)]);
 
-      const result = await checkRateLimit("user-1");
+      const result = await getRateLimitStatus("user-1");
       const resetAt = new Date(result.status.resetAt);
       const expectedReset = new Date(Date.now() - 45 * 60 * 1000 + 60 * 60 * 1000);
 
@@ -139,7 +139,7 @@ describe("rate-limit", () => {
     it("sets resetAt to now + 1 hour when no entries exist", async () => {
       mockFindMany.mockResolvedValue([]);
 
-      const result = await checkRateLimit("user-1");
+      const result = await getRateLimitStatus("user-1");
       const resetAt = new Date(result.status.resetAt);
       const expectedReset = new Date(Date.now() + 60 * 60 * 1000);
 
@@ -149,7 +149,7 @@ describe("rate-limit", () => {
     it("queries with the correct rolling window", async () => {
       mockFindMany.mockResolvedValue([]);
 
-      await checkRateLimit("user-1", "generate");
+      await getRateLimitStatus("user-1", "generate");
 
       expect(mockFindMany).toHaveBeenCalledWith({
         where: {
@@ -169,7 +169,7 @@ describe("rate-limit", () => {
     it("supports custom action parameter (non-generate uses static limits)", async () => {
       mockFindMany.mockResolvedValue([]);
 
-      await checkRateLimit("user-1", "custom_action");
+      await getRateLimitStatus("user-1", "custom_action");
 
       expect(mockFindMany.mock.calls[0][0].where.action).toBe("custom_action");
     });
@@ -181,32 +181,10 @@ describe("rate-limit", () => {
       );
       mockFindMany.mockResolvedValue(entries);
 
-      const result = await checkRateLimit("user-1");
+      const result = await getRateLimitStatus("user-1");
 
       expect(result.allowed).toBe(true);
       expect(result.status.remaining).toBe(1);
-    });
-  });
-
-  describe("recordRateLimitHit", () => {
-    it("creates a rate limit entry", async () => {
-      mockCreate.mockResolvedValue({ id: "entry-1" });
-
-      await recordRateLimitHit("user-1");
-
-      expect(mockCreate).toHaveBeenCalledWith({
-        data: { userId: "user-1", action: "generate" },
-      });
-    });
-
-    it("uses custom action parameter", async () => {
-      mockCreate.mockResolvedValue({ id: "entry-2" });
-
-      await recordRateLimitHit("user-1", "custom_action");
-
-      expect(mockCreate).toHaveBeenCalledWith({
-        data: { userId: "user-1", action: "custom_action" },
-      });
     });
   });
 

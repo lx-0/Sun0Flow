@@ -15,9 +15,6 @@ const ACTION_LIMITS: Record<string, number> = {
   search: 60,
 };
 
-/**
- * Get the hourly generation limit for a user based on their subscription tier.
- */
 export async function getHourlyGenerationLimit(userId: string): Promise<number> {
   const sub = await prisma.subscription.findUnique({
     where: { userId },
@@ -41,10 +38,46 @@ async function resolveLimit(userId: string, action: string): Promise<number> {
 export interface RateLimitStatus {
   remaining: number;
   limit: number;
-  resetAt: string; // ISO timestamp of when the oldest entry in the window expires
+  resetAt: string;
 }
 
-export async function checkRateLimit(
+// ---------------------------------------------------------------------------
+// Shared kernel — concentrates retry, conflict detection, and resetAt math
+// ---------------------------------------------------------------------------
+
+function computeResetAt(entries: { createdAt: Date }[], windowMs: number): string {
+  return entries.length > 0
+    ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
+    : new Date(Date.now() + windowMs).toISOString();
+}
+
+function isPrismaSerializationConflict(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as { code: string }).code === "P2034"
+  );
+}
+
+const MAX_RETRIES = 3;
+
+async function withSerializableRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      if (isPrismaSerializationConflict(error) && attempt < MAX_RETRIES) continue;
+      throw error;
+    }
+  }
+  throw new Error("withSerializableRetry: unreachable");
+}
+
+// ---------------------------------------------------------------------------
+// Read-only status check
+// ---------------------------------------------------------------------------
+
+export async function getRateLimitStatus(
   userId: string,
   action = "generate"
 ): Promise<{ allowed: boolean; status: RateLimitStatus }> {
@@ -58,34 +91,23 @@ export async function checkRateLimit(
   });
 
   const count = entries.length;
-  const remaining = Math.max(0, limit - count);
-
-  // resetAt = when the oldest entry falls out of the window
-  const resetAt =
-    count > 0
-      ? new Date(entries[0].createdAt.getTime() + WINDOW_MS).toISOString()
-      : new Date(Date.now() + WINDOW_MS).toISOString();
-
   return {
     allowed: count < limit,
-    status: { remaining, limit, resetAt },
+    status: {
+      remaining: Math.max(0, limit - count),
+      limit,
+      resetAt: computeResetAt(entries, WINDOW_MS),
+    },
   };
 }
 
-export async function recordRateLimitHit(
-  userId: string,
-  action = "generate"
-): Promise<void> {
-  await prisma.rateLimitEntry.create({
-    data: { userId, action },
-  });
-}
+/** @deprecated Use getRateLimitStatus — identical behaviour, clearer name. */
+export const checkRateLimit = getRateLimitStatus;
 
-/**
- * Release the most recently acquired rate limit slot for a user/action.
- * Call this in catch blocks so a failed generation doesn't consume one of
- * the user's hourly slots.
- */
+// ---------------------------------------------------------------------------
+// Slot release
+// ---------------------------------------------------------------------------
+
 export async function releaseRateLimitSlot(
   userId: string,
   action = "generate"
@@ -103,22 +125,18 @@ export async function releaseRateLimitSlot(
   }
 }
 
-/**
- * Hash a raw key (IP address, email, etc.) so we never store PII in the table.
- */
+// ---------------------------------------------------------------------------
+// PII-safe hashing
+// ---------------------------------------------------------------------------
+
 export function hashRateLimitKey(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
-/**
- * Atomically check-and-increment an anonymous (non-user) rate limit slot.
- * Used for unauthenticated endpoints (e.g., /api/register) where no userId exists.
- *
- * @param rawKey   Raw identifier (IP, email) — will be SHA-256-hashed before storage.
- * @param action   Action label (e.g., "register").
- * @param limit    Maximum number of requests allowed in the window.
- * @param windowMs Window duration in milliseconds.
- */
+// ---------------------------------------------------------------------------
+// Atomic slot acquisition
+// ---------------------------------------------------------------------------
+
 export async function acquireAnonRateLimitSlot(
   rawKey: string,
   action: string,
@@ -127,60 +145,33 @@ export async function acquireAnonRateLimitSlot(
 ): Promise<{ acquired: boolean; status: RateLimitStatus }> {
   const key = hashRateLimitKey(rawKey);
   const windowStart = new Date(Date.now() - windowMs);
-  const MAX_RETRIES = 3;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await prisma.$transaction(
-        async (tx) => {
-          const entries = await tx.anonRateLimitEntry.findMany({
-            where: { key, action, createdAt: { gte: windowStart } },
-            orderBy: { createdAt: "asc" },
-            select: { createdAt: true },
-          });
+  return withSerializableRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        const entries = await tx.anonRateLimitEntry.findMany({
+          where: { key, action, createdAt: { gte: windowStart } },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true },
+        });
+        const count = entries.length;
+        const resetAt = computeResetAt(entries, windowMs);
 
-          const count = entries.length;
-          const resetAt =
-            count > 0
-              ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
-              : new Date(Date.now() + windowMs).toISOString();
+        if (count >= limit) {
+          return { acquired: false, status: { remaining: 0, limit, resetAt } };
+        }
 
-          if (count >= limit) {
-            return { acquired: false, status: { remaining: 0, limit, resetAt } };
-          }
-
-          await tx.anonRateLimitEntry.create({ data: { key, action } });
-
-          return {
-            acquired: true,
-            status: { remaining: Math.max(0, limit - count - 1), limit, resetAt },
-          };
-        },
-        { isolationLevel: "Serializable" }
-      );
-    } catch (error: unknown) {
-      const isPrismaConflict =
-        error instanceof Error &&
-        "code" in error &&
-        (error as { code: string }).code === "P2034";
-      if (isPrismaConflict && attempt < MAX_RETRIES) continue;
-      throw error;
-    }
-  }
-
-  throw new Error("acquireAnonRateLimitSlot: unreachable");
+        await tx.anonRateLimitEntry.create({ data: { key, action } });
+        return {
+          acquired: true,
+          status: { remaining: Math.max(0, limit - count - 1), limit, resetAt },
+        };
+      },
+      { isolationLevel: "Serializable" }
+    )
+  );
 }
 
-/**
- * Atomically check-and-increment the rate limit in a single transaction.
- * Returns { acquired: true, status } if a slot was claimed, or
- * { acquired: false, status } if the limit was already reached.
- *
- * Uses SERIALIZABLE isolation to prevent TOCTOU races: concurrent requests
- * that both read "1 slot remaining" will serialize — only one succeeds.
- *
- * @param windowMsOverride  Override the default 1-hour window (e.g., 60_000 for 1 minute).
- */
 export async function acquireRateLimitSlot(
   userId: string,
   action = "generate",
@@ -190,55 +181,29 @@ export async function acquireRateLimitSlot(
   const limit = limitOverride ?? (await resolveLimit(userId, action));
   const windowMs = windowMsOverride ?? WINDOW_MS;
   const windowStart = new Date(Date.now() - windowMs);
-  const MAX_RETRIES = 3;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await prisma.$transaction(
-        async (tx) => {
-          const entries = await tx.rateLimitEntry.findMany({
-            where: { userId, action, createdAt: { gte: windowStart } },
-            orderBy: { createdAt: "asc" },
-            select: { createdAt: true },
-          });
+  return withSerializableRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        const entries = await tx.rateLimitEntry.findMany({
+          where: { userId, action, createdAt: { gte: windowStart } },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true },
+        });
+        const count = entries.length;
+        const resetAt = computeResetAt(entries, windowMs);
 
-          const count = entries.length;
+        if (count >= limit) {
+          return { acquired: false, status: { remaining: 0, limit, resetAt } };
+        }
 
-          if (count >= limit) {
-            const resetAt =
-              count > 0
-                ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
-                : new Date(Date.now() + windowMs).toISOString();
-            return {
-              acquired: false,
-              status: { remaining: 0, limit, resetAt },
-            };
-          }
-
-          await tx.rateLimitEntry.create({ data: { userId, action } });
-
-          const remaining = Math.max(0, limit - count - 1);
-          const resetAt =
-            count > 0
-              ? new Date(entries[0].createdAt.getTime() + windowMs).toISOString()
-              : new Date(Date.now() + windowMs).toISOString();
-
-          return {
-            acquired: true,
-            status: { remaining, limit, resetAt },
-          };
-        },
-        { isolationLevel: "Serializable" }
-      );
-    } catch (error: unknown) {
-      const isPrismaConflict =
-        error instanceof Error &&
-        "code" in error &&
-        (error as { code: string }).code === "P2034";
-      if (isPrismaConflict && attempt < MAX_RETRIES) continue;
-      throw error;
-    }
-  }
-
-  throw new Error("acquireRateLimitSlot: unreachable");
+        await tx.rateLimitEntry.create({ data: { userId, action } });
+        return {
+          acquired: true,
+          status: { remaining: Math.max(0, limit - count - 1), limit, resetAt },
+        };
+      },
+      { isolationLevel: "Serializable" }
+    )
+  );
 }
