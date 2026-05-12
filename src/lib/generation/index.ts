@@ -12,3 +12,8 @@ export { executeTransform } from "./transform";
 export type { TransformSpec, TransformOutcome } from "./transform";
 export { type GuardPolicy } from "./guards";
 export { executeCore, type SongParams, type MockData } from "./core";
+export {
+  generateSongRequestSchema,
+  sanitizeGenerateSongRequest,
+  type GenerateSongRequest,
+} from "./request";
