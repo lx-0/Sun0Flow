@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveUser } from "@/lib/auth";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { getRateLimitStatus } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const { userId, error: authError } = await resolveUser(request);
 
     if (authError) return authError;
-    const { status } = await checkRateLimit(userId);
+    const { status } = await getRateLimitStatus(userId);
 
     // Usage history: daily generation count for the last 7 days
     const sevenDaysAgo = new Date();

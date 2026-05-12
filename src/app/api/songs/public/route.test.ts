@@ -25,8 +25,8 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/rate-limit", () => ({
   acquireAnonRateLimitSlot: vi.fn().mockResolvedValue({ acquired: true }),
   acquireRateLimitSlot: vi.fn(),
+  getRateLimitStatus: vi.fn(),
   checkRateLimit: vi.fn(),
-  recordRateLimitHit: vi.fn(),
   releaseRateLimitSlot: vi.fn(),
   hashRateLimitKey: vi.fn(),
   getHourlyGenerationLimit: vi.fn(),
