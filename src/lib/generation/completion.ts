@@ -1,11 +1,43 @@
 import { prisma } from "@/lib/prisma";
 import { getTaskStatus, isTerminalFailure } from "@/lib/sunoapi";
+import type { SunoSong } from "@/lib/sunoapi";
 import { logServerError } from "@/lib/error-logger";
 import { handleSongSuccess, handleSongFailure } from "@/lib/song-completion";
 import type { SongRecord } from "@/lib/song-completion";
 
 const POLL_INTERVAL_MS = 4000;
-const MAX_POLL_ATTEMPTS = 60;
+export const MAX_POLL_ATTEMPTS = 60;
+
+// ── Single-poll interpretation ─────────────────────────────────────
+
+export type PollOutcome =
+  | { kind: "ready"; songs: SunoSong[] }
+  | { kind: "failed"; errorMessage: string }
+  | { kind: "processing" }
+  | { kind: "poll_error"; error: unknown };
+
+export async function pollOnce(
+  sunoJobId: string,
+  apiKey: string | undefined,
+): Promise<PollOutcome> {
+  let taskResult;
+  try {
+    taskResult = await getTaskStatus(sunoJobId, apiKey);
+  } catch (error) {
+    return { kind: "poll_error", error };
+  }
+
+  if (taskResult.status === "SUCCESS" && taskResult.songs.length > 0) {
+    return { kind: "ready", songs: taskResult.songs };
+  }
+
+  if (isTerminalFailure(taskResult.status)) {
+    const errorMessage = taskResult.errorMessage || `Generation failed: ${taskResult.status}`;
+    return { kind: "failed", errorMessage };
+  }
+
+  return { kind: "processing" };
+}
 
 export interface CompletionUpdate {
   songId: string;
@@ -73,53 +105,47 @@ export async function* pollToCompletion(
       return;
     }
 
-    let taskResult;
-    try {
-      taskResult = await getTaskStatus(target.sunoJobId, target.apiKey);
-    } catch (pollError) {
-      logServerError("generation-poll", pollError, {
-        userId: target.userId,
-        route: "generation/completion",
-        params: { songId: target.songId, sunoJobId: target.sunoJobId, pollCount },
-      });
-      await prisma.song.update({
-        where: { id: target.songId },
-        data: { pollCount },
-      });
-      yield { songId: target.songId, status: "processing", pollCount };
-      await sleep(POLL_INTERVAL_MS);
-      continue;
-    }
+    const outcome = await pollOnce(target.sunoJobId, target.apiKey);
 
-    if (taskResult.status === "SUCCESS" && taskResult.songs.length > 0) {
-      const songRecord = buildSongRecord(target, pollCount - 1);
-      await handleSongSuccess(songRecord, taskResult.songs);
-      const firstSong = taskResult.songs[0];
-      yield {
-        songId: target.songId,
-        status: "ready",
-        title: firstSong.title || target.existingSong.title,
-        audioUrl: firstSong.audioUrl || target.existingSong.audioUrl,
-        imageUrl: firstSong.imageUrl || target.existingSong.imageUrl,
-        alternateCount: taskResult.songs.length - 1,
-      };
-      return;
+    switch (outcome.kind) {
+      case "ready": {
+        const songRecord = buildSongRecord(target, pollCount - 1);
+        await handleSongSuccess(songRecord, outcome.songs);
+        const firstSong = outcome.songs[0];
+        yield {
+          songId: target.songId,
+          status: "ready",
+          title: firstSong.title || target.existingSong.title,
+          audioUrl: firstSong.audioUrl || target.existingSong.audioUrl,
+          imageUrl: firstSong.imageUrl || target.existingSong.imageUrl,
+          alternateCount: outcome.songs.length - 1,
+        };
+        return;
+      }
+      case "failed": {
+        const songRecord = buildSongRecord(target, pollCount - 1);
+        await handleSongFailure(songRecord, outcome.errorMessage);
+        yield { songId: target.songId, status: "failed", errorMessage: outcome.errorMessage };
+        return;
+      }
+      case "poll_error": {
+        logServerError("generation-poll", outcome.error, {
+          userId: target.userId,
+          route: "generation/completion",
+          params: { songId: target.songId, sunoJobId: target.sunoJobId, pollCount },
+        });
+        await prisma.song.update({ where: { id: target.songId }, data: { pollCount } });
+        yield { songId: target.songId, status: "processing", pollCount };
+        await sleep(POLL_INTERVAL_MS);
+        continue;
+      }
+      case "processing": {
+        await prisma.song.update({ where: { id: target.songId }, data: { pollCount } });
+        yield { songId: target.songId, status: "processing", pollCount };
+        await sleep(POLL_INTERVAL_MS);
+        continue;
+      }
     }
-
-    if (isTerminalFailure(taskResult.status)) {
-      const errorMessage = taskResult.errorMessage || `Generation failed: ${taskResult.status}`;
-      const songRecord = buildSongRecord(target, pollCount - 1);
-      await handleSongFailure(songRecord, errorMessage);
-      yield { songId: target.songId, status: "failed", errorMessage };
-      return;
-    }
-
-    await prisma.song.update({
-      where: { id: target.songId },
-      data: { pollCount },
-    });
-    yield { songId: target.songId, status: "processing", pollCount };
-    await sleep(POLL_INTERVAL_MS);
   }
 }
 
