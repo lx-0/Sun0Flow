@@ -12,6 +12,7 @@ import { useOfflineCache } from "@/hooks/useOfflineCache";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { getCachedSongsMeta, formatBytes } from "@/lib/cache/offline";
 import { canUseFeature, type SubscriptionTier } from "@/lib/feature-gates";
+import { validateProfile } from "@/lib/settings/profile-validation";
 import {
   STYLE_OPTIONS,
   EMAIL_BOOL_NOTIF_TYPES,
@@ -75,21 +76,7 @@ function ProfileTab() {
   }, []);
 
   const validate = useCallback(() => {
-    const errs: Record<string, string> = {};
-    if (!displayName.trim()) errs.displayName = "Display name is required";
-    if (bio.length > 500) errs.bio = `Bio must be 500 characters or less (${bio.length}/500)`;
-    if (avatarUrl && !avatarUrl.startsWith("http://") && !avatarUrl.startsWith("https://")) {
-      errs.avatarUrl = "Must be a valid URL starting with http:// or https://";
-    }
-    if (bannerUrl && !bannerUrl.startsWith("http://") && !bannerUrl.startsWith("https://")) {
-      errs.bannerUrl = "Must be a valid URL starting with http:// or https://";
-    }
-    if (username && !/^[a-z0-9_]+$/.test(username)) {
-      errs.username = "Username may only contain lowercase letters, numbers, and underscores";
-    }
-    if (username && username.length > 30) {
-      errs.username = "Username must be 30 characters or less";
-    }
+    const errs = validateProfile({ displayName, bio, avatarUrl, bannerUrl, username });
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }, [displayName, bio, avatarUrl, bannerUrl, username]);
