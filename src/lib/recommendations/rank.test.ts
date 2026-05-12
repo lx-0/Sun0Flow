@@ -7,7 +7,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { scoreByEmbedding } from "./embedding-search";
+import { scoreByEmbedding } from "./rank";
 
 beforeEach(() => {
   vi.clearAllMocks();
