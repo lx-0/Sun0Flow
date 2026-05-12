@@ -1,5 +1,4 @@
 import { parseTags } from "@/lib/tags";
-import { trendingScore } from "@/lib/scoring";
 
 export type TasteProfile = Map<string, number>;
 
@@ -43,9 +42,10 @@ export type SongRow = {
   user: { id: string; name: string | null; username: string | null };
 };
 
-// --- Scoring strategy weights ---
-// Each bucket gets a base score that determines its priority band.
-// Affinity (tag overlap with taste profile) boosts within and across bands.
+// ── Scoring policy ─────────────────────────────────────────────────────────
+// All scoring constants live here so ranking behaviour can be understood and
+// tuned in one place.
+
 const RANK_WEIGHTS = {
   followedArtist: 1000,
   recommended: 800,
@@ -53,7 +53,23 @@ const RANK_WEIGHTS = {
   newRelease: 100,
   trendingScale: 0.01,
   recommendedAffinityThreshold: 2,
+  trendingDecay: 0.1,
+  secondaryMetricMultiplier: 2,
 } as const;
+
+export function trendingScore(
+  primaryMetric: number,
+  secondaryMetric: number,
+  timestamp: Date,
+): number {
+  const ageDays =
+    (Date.now() - timestamp.getTime()) / (1000 * 60 * 60 * 24);
+  return (
+    (primaryMetric +
+      secondaryMetric * RANK_WEIGHTS.secondaryMetricMultiplier) /
+    (1 + ageDays * RANK_WEIGHTS.trendingDecay)
+  );
+}
 
 export function affinityScore(
   songTags: string[],

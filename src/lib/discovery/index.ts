@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
 import { buildDiscoverableFilter, SongSelect } from "@/lib/songs";
-import { trendingScore } from "@/lib/scoring";
+import { trendingScore } from "@/lib/feed/rank";
 import { cached, cacheKey, CacheTTL } from "@/lib/cache";
 
 const TRENDING_POOL_SIZE = 500;
