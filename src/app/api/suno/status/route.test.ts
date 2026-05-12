@@ -59,7 +59,7 @@ describe("GET /api/suno/status", () => {
   });
 
   it("returns disconnected when no user key exists", async () => {
-    vi.mocked(resolveUserApiKey).mockResolvedValue(null);
+    vi.mocked(resolveUserApiKey).mockResolvedValue(undefined);
 
     const res = await GET(new NextRequest("http://localhost/api/suno/status"), seg);
     const data = await res.json();
@@ -83,7 +83,7 @@ describe("GET /api/suno/status", () => {
 
   it("returns disconnected for invalid key errors", async () => {
     vi.mocked(resolveUserApiKey).mockResolvedValue("bad-key");
-    vi.mocked(getRemainingCredits).mockRejectedValue(new SunoApiError(401));
+    vi.mocked(getRemainingCredits).mockRejectedValue(new SunoApiError(401, "Unauthorized"));
 
     const res = await GET(new NextRequest("http://localhost/api/suno/status"), seg);
     const data = await res.json();

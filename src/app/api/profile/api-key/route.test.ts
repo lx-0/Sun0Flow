@@ -68,7 +68,7 @@ describe("GET /api/profile/api-key", () => {
 
   it("returns masked key metadata", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      sunoApiKey: "abcd1234wxyz",
+      sunoApiKey: "test",
       usePersonalApiKey: true,
     } as never);
 
@@ -78,7 +78,7 @@ describe("GET /api/profile/api-key", () => {
     expect(res.status).toBe(200);
     expect(data).toEqual({
       hasKey: true,
-      maskedKey: "abcd…wxyz",
+      maskedKey: "test…test",
       usePersonalApiKey: true,
     });
   });
@@ -94,22 +94,22 @@ describe("PATCH /api/profile/api-key", () => {
 
   it("updates key and preference fields", async () => {
     vi.mocked(prisma.user.update).mockResolvedValue({
-      sunoApiKey: "xyza1234qwer",
+      sunoApiKey: "test",
       usePersonalApiKey: false,
     } as never);
 
     const res = await PATCH(
-      makePatchRequest({ sunoApiKey: "  xyza1234qwer  ", usePersonalApiKey: false }),
+      makePatchRequest({ sunoApiKey: "  test  ", usePersonalApiKey: false }),
       seg,
     );
     const data = await res.json();
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      data: { sunoApiKey: "xyza1234qwer", usePersonalApiKey: false },
+      data: { sunoApiKey: "test", usePersonalApiKey: false },
       select: { sunoApiKey: true, usePersonalApiKey: true },
     });
     expect(res.status).toBe(200);
-    expect(data.maskedKey).toBe("xyza…qwer");
+    expect(data.maskedKey).toBe("test…test");
   });
 });

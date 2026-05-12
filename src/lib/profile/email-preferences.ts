@@ -16,11 +16,26 @@ export type EmailPreferences = {
   quietHoursEnd: number;
 };
 
-export function toEmailPreferencesResponse(user: EmailPreferences): EmailPreferences {
+const VALID_DIGEST_FREQUENCIES = new Set<EmailPreferences["emailDigestFrequency"]>([
+  "daily",
+  "weekly",
+  "monthly",
+  "off",
+]);
+
+function normalizeDigestFrequency(
+  value: string
+): EmailPreferences["emailDigestFrequency"] {
+  return VALID_DIGEST_FREQUENCIES.has(value as EmailPreferences["emailDigestFrequency"])
+    ? (value as EmailPreferences["emailDigestFrequency"])
+    : "off";
+}
+
+export function toEmailPreferencesResponse(user: Omit<EmailPreferences, "emailDigestFrequency"> & { emailDigestFrequency: string }): EmailPreferences {
   return {
     emailWelcome: user.emailWelcome,
     emailGenerationComplete: user.emailGenerationComplete,
-    emailDigestFrequency: user.emailDigestFrequency,
+    emailDigestFrequency: normalizeDigestFrequency(user.emailDigestFrequency),
     quietHoursEnabled: user.quietHoursEnabled,
     quietHoursStart: user.quietHoursStart,
     quietHoursEnd: user.quietHoursEnd,

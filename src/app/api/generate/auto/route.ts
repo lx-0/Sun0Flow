@@ -22,7 +22,7 @@ Consider the user's musical taste if reference songs are provided. Be creative a
 
 const generateAutoBodySchema = z.object({
   prompt: z
-    .string({ required_error: "A description prompt is required" })
+    .string()
     .trim()
     .min(1, "A description prompt is required")
     .max(1000, "Prompt must be 1000 characters or less"),

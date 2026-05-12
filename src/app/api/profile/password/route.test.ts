@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 import { POST } from "./route";
 
 vi.mock("@/lib/env", () => ({
@@ -36,7 +37,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 function makeRequest(body: Record<string, unknown>) {
-  return new Request("http://localhost/api/profile/password", {
+  return new NextRequest("http://localhost/api/profile/password", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
