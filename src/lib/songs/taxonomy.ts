@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { CacheTTL, cached, cacheKey } from "@/lib/cache";
-import { buildDiscoverableFilter } from "./index";
+import { buildDiscoverableFilter } from "./filters";
 
 export interface TagCount {
   name: string;
