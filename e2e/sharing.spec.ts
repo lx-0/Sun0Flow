@@ -87,11 +87,10 @@ test.describe("Public Song Sharing", () => {
         await makePublicBtn.click();
       }
 
-      // Should show confirmation toast or copied feedback
+      // Assert on the toast content specifically to avoid strict-mode collisions
+      // with unrelated role=alert elements (e.g. Next.js route announcer).
       await expect(
-        page
-          .getByText(/link copied|copied|shared/i)
-          .or(page.getByRole("alert"))
+        page.getByRole("alert").filter({ hasText: /link copied!/i })
       ).toBeVisible({ timeout: 5000 });
     }
   });

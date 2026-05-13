@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveUserApiKey } from "@/lib/sunoapi";
 import { logServerError } from "@/lib/error-logger";
 import { broadcast } from "@/lib/event-bus";
-import { handleSongSuccess, handleSongFailure } from "@/lib/song-completion";
+import { handleSongSuccess, handleSongFailure } from "@/lib/generation";
 import { pollOnce, MAX_POLL_ATTEMPTS } from "@/lib/generation/completion";
 
 export const GET = authRoute<{ id: string }>(
