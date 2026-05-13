@@ -1,22 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { authRoute } from "@/lib/route-handler";
 import { cached, cacheKey, CacheTTL, CacheControl } from "@/lib/cache";
 import { withTiming } from "@/lib/timing";
 import { getDashboardStats } from "@/lib/analytics-data";
 
-async function handleGET(request: NextRequest) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
+const handleGET = authRoute(async (_request, { auth }) => {
   const stats = await cached(
-    cacheKey("dashboard-stats", userId),
-    () => getDashboardStats(userId),
+    cacheKey("dashboard-stats", auth.userId),
+    () => getDashboardStats(auth.userId),
     CacheTTL.DASHBOARD_STATS,
   );
 
   return NextResponse.json(stats, {
     headers: { "Cache-Control": CacheControl.privateShort },
   });
-}
+}, { route: "/api/dashboard/stats" });
 
 export const GET = withTiming("/api/dashboard/stats", handleGET);

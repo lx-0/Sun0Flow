@@ -14,8 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
 const OnboardingTourUI = dynamic(
-  () => import("./OnboardingTourUI").then((m) => m.OnboardingTourUI),
-  { ssr: false }
+  () => import("./OnboardingTourUI").then((m) => m.OnboardingTourUI)
 );
 
 type TourStep = {

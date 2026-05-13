@@ -1,56 +1,32 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import { forbidden, notFound } from "@/lib/api-error";
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string; commentId: string }> }
-) {
-  const { id, commentId } = await params;
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required", code: "UNAUTHORIZED" },
-        { status: 401 }
-      );
-    }
-
+export const DELETE = authRoute<{ id: string; commentId: string }>(async (_request, { auth, params }) => {
     const [comment, song] = await Promise.all([
       prisma.comment.findUnique({
-        where: { id: commentId },
+        where: { id: params.commentId },
         select: { id: true, userId: true, songId: true },
       }),
       prisma.song.findUnique({
-        where: { id },
+        where: { id: params.id },
         select: { userId: true },
       }),
     ]);
 
-    if (!comment || comment.songId !== id) {
-      return NextResponse.json(
-        { error: "Comment not found", code: "NOT_FOUND" },
-        { status: 404 }
-      );
+    if (!comment || comment.songId !== params.id) {
+      return notFound("Comment not found");
     }
 
-    const isCommentOwner = comment.userId === session.user.id;
-    const isSongOwner = song?.userId === session.user.id;
+    const isCommentOwner = comment.userId === auth.userId;
+    const isSongOwner = song?.userId === auth.userId;
 
     if (!isCommentOwner && !isSongOwner) {
-      return NextResponse.json(
-        { error: "Forbidden", code: "FORBIDDEN" },
-        { status: 403 }
-      );
+      return forbidden();
     }
 
-    await prisma.comment.delete({ where: { id: commentId } });
+    await prisma.comment.delete({ where: { id: params.commentId } });
 
     return new NextResponse(null, { status: 204 });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+}, { route: "/api/songs/[id]/comments/[commentId]" });

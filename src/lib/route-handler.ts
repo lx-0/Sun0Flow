@@ -74,8 +74,8 @@ async function runPipeline<
   options: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> } | undefined,
   logLabel: string,
   logContext: Record<string, unknown>,
-  execute: (parsed: { params: P; body: B; query: Q }) => Promise<NextResponse>,
-): Promise<NextResponse> {
+  execute: (parsed: { params: P; body: B; query: Q }) => Promise<Response>,
+): Promise<Response> {
   try {
     const params = segmentData?.params
       ? await segmentData.params
@@ -120,13 +120,13 @@ export function authRoute<
   handler: (
     request: NextRequest,
     ctx: { auth: AuthContext; params: P; body: B; query: Q }
-  ) => Promise<NextResponse>,
+  ) => Promise<Response>,
   options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
 ) {
   return async (
     request: NextRequest,
     segmentData: SegmentData<P>
-  ): Promise<NextResponse> => {
+  ): Promise<Response> => {
     const result = await resolveUser(request);
     if (result.error) return result.error;
 
@@ -149,13 +149,13 @@ export function optionalAuthRoute<
   handler: (
     request: NextRequest,
     ctx: { auth: OptionalAuthContext; params: P; body: B; query: Q }
-  ) => Promise<NextResponse>,
+  ) => Promise<Response>,
   options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
 ) {
   return async (
     request: NextRequest,
     segmentData: SegmentData<P>
-  ): Promise<NextResponse> => {
+  ): Promise<Response> => {
     const result = await resolveUser(request);
     const auth: OptionalAuthContext = result.error
       ? { userId: null, isApiKey: false, isAdmin: false }
@@ -177,13 +177,13 @@ export function publicRoute<
   handler: (
     request: NextRequest,
     ctx: { params: P; body: B; query: Q }
-  ) => Promise<NextResponse>,
+  ) => Promise<Response>,
   options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
 ) {
   return async (
     request: NextRequest,
     segmentData: SegmentData<P>
-  ): Promise<NextResponse> => {
+  ): Promise<Response> => {
     return runPipeline(
       request, segmentData, options, "public-route-handler", {},
       ({ params, body, query }) =>
@@ -200,13 +200,13 @@ export function adminRoute<
   handler: (
     request: NextRequest,
     ctx: { admin: AdminContext; params: P; body: B; query: Q }
-  ) => Promise<NextResponse>,
+  ) => Promise<Response>,
   options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
 ) {
   return async (
     request: NextRequest,
     segmentData: SegmentData<P>
-  ): Promise<NextResponse> => {
+  ): Promise<Response> => {
     const { error, user } = await requireAdmin();
     if (error) return error;
 
@@ -233,13 +233,13 @@ export function anonRoute<
   handler: (
     request: NextRequest,
     ctx: { anon: AnonContext; params: P; query: Q }
-  ) => Promise<NextResponse>,
+  ) => Promise<Response>,
   options: RouteOptions & { rateLimit: RateLimitConfig; query?: z.ZodType<Q> }
 ) {
   return async (
     request: NextRequest,
     segmentData: SegmentData<P>
-  ): Promise<NextResponse> => {
+  ): Promise<Response> => {
     const ip = extractClientIp(request);
 
     const { acquired } = await acquireAnonRateLimitSlot(
@@ -263,10 +263,10 @@ export function anonRoute<
 }
 
 export function cronRoute(
-  handler: (request: NextRequest) => Promise<NextResponse>,
+  handler: (request: NextRequest) => Promise<Response>,
   options?: RouteOptions
 ) {
-  return async (request: NextRequest): Promise<NextResponse> => {
+  return async (request: NextRequest): Promise<Response> => {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 

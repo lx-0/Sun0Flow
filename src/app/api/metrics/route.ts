@@ -8,12 +8,9 @@
  * Protected behind admin auth — not exposed to regular users.
  */
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { adminRoute } from "@/lib/route-handler";
 import { getMetricsSnapshot } from "@/lib/metrics";
 
-export async function GET() {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
+export const GET = adminRoute(async () => {
   return NextResponse.json(getMetricsSnapshot());
-}
+}, { route: "/api/metrics" });

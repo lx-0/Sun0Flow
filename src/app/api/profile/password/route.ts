@@ -1,50 +1,49 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { auth } from "@/lib/auth";
+import { authRoute } from "@/lib/route-handler";
+import { badRequest, notFound } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
-  }
+const bodySchema = z.object({
+  currentPassword: z.string().trim().min(1),
+  newPassword: z.string().trim().min(1),
+  confirmPassword: z.string().trim().min(1),
+});
 
-  const { currentPassword, newPassword, confirmPassword } = await request.json();
-
-  if (!currentPassword || !newPassword || !confirmPassword) {
-    return NextResponse.json({ error: "All fields are required", code: "VALIDATION_ERROR" }, { status: 400 });
-  }
+export const POST = authRoute<Record<string, never>, z.infer<typeof bodySchema>>(async (_request, { auth, body }) => {
+  const { currentPassword, newPassword, confirmPassword } = body;
 
   if (newPassword.length < 8) {
-    return NextResponse.json(
-      { error: "New password must be at least 8 characters", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
+    return badRequest("New password must be at least 8 characters");
   }
 
   if (newPassword !== confirmPassword) {
-    return NextResponse.json({ error: "Passwords do not match", code: "VALIDATION_ERROR" }, { status: 400 });
+    return badRequest("Passwords do not match");
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: auth.userId },
     select: { passwordHash: true },
   });
 
   if (!user?.passwordHash) {
-    return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 });
+    return notFound("User not found");
   }
 
   const valid = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!valid) {
-    return NextResponse.json({ error: "Current password is incorrect", code: "VALIDATION_ERROR" }, { status: 400 });
+    return badRequest("Current password is incorrect");
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: auth.userId },
     data: { passwordHash },
   });
 
   return NextResponse.json({ success: true });
-}
+}, {
+  route: "/api/profile/password",
+  body: bodySchema,
+});

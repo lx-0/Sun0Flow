@@ -39,16 +39,16 @@ import {
 import { useTheme } from "./ThemeProvider";
 import dynamic from "next/dynamic";
 import { ErrorBoundary } from "./ErrorBoundary";
-const GlobalPlayer = dynamic(() => import("./GlobalPlayer").then((m) => m.GlobalPlayer), { ssr: false });
+const GlobalPlayer = dynamic(() => import("./GlobalPlayer").then((m) => m.GlobalPlayer));
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
-const KeyboardShortcutsModal = dynamic(() => import("./KeyboardShortcutsModal").then((m) => m.KeyboardShortcutsModal), { ssr: false });
+const KeyboardShortcutsModal = dynamic(() => import("./KeyboardShortcutsModal").then((m) => m.KeyboardShortcutsModal));
 import { NotificationBell } from "./NotificationBell";
 import { SearchBar } from "./SearchBar";
 import { SubscriptionStatusBadge } from "./SubscriptionStatusBadge";
 import { EmailVerificationBanner } from "./EmailVerificationBanner";
 import { SunoStatusBanner } from "./SunoStatusBanner";
 import { LocaleSwitcher } from "./LocaleSwitcher";
-const FeedbackModal = dynamic(() => import("./FeedbackModal").then((m) => m.FeedbackModal), { ssr: false });
+const FeedbackModal = dynamic(() => import("./FeedbackModal").then((m) => m.FeedbackModal));
 
 // prefetch: true forces eager prefetch even before the link enters the viewport.
 // Critical user-flow routes get this treatment so they load instantly on first click.

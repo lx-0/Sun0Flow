@@ -99,6 +99,14 @@ function makeRequest(body: Record<string, unknown>): Request {
   });
 }
 
+function makeRawJsonRequest(rawBody: string): Request {
+  return new Request("http://localhost/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: rawBody,
+  });
+}
+
 const DEFAULT_BODY = { prompt: "upbeat pop song", title: "Test", tags: "pop", makeInstrumental: false };
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
@@ -171,6 +179,20 @@ describe("POST /api/generate", () => {
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain("prompt is required");
+  });
+
+  it("returns 400 for invalid JSON body", async () => {
+    const res = await POST(makeRawJsonRequest("{") as never, seg);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("Invalid JSON body");
+  });
+
+  it("returns 400 when JSON body is null", async () => {
+    const res = await POST(makeRawJsonRequest("null") as never, seg);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("expected object");
   });
 
   it("saves a failed record on Suno API 5xx error", async () => {
@@ -347,7 +369,7 @@ describe("POST /api/generate", () => {
 });
 
 describe("POST /api/generate — malformed input edge cases", () => {
-  it("returns 500 when request body is malformed JSON", async () => {
+  it("returns 400 when request body is malformed JSON", async () => {
     const req = new Request("http://localhost/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -355,14 +377,13 @@ describe("POST /api/generate — malformed input edge cases", () => {
     });
 
     const res = await POST(req as never, seg);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.code).toBe("INTERNAL_ERROR");
-    // Internal error details must not leak to the client
-    expect(data.error).not.toContain("SyntaxError");
+    expect(data.code).toBe("VALIDATION_ERROR");
+    expect(data.error).toContain("Invalid JSON body");
   });
 
-  it("returns 500 when request body is empty (no JSON)", async () => {
+  it("returns 400 when request body is empty (no JSON)", async () => {
     const req = new Request("http://localhost/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -370,7 +391,9 @@ describe("POST /api/generate — malformed input edge cases", () => {
     });
 
     const res = await POST(req as never, seg);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.code).toBe("VALIDATION_ERROR");
   });
 
   it("sanitizes XSS payload in prompt and proceeds with generation", async () => {
