@@ -1,13 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { NextResponse } from "next/server";
 import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { offsetPagination, pageSkip } from "@/lib/pagination";
+import { zEnumParam, zPaginationQuery } from "@/lib/query-params";
 
-export const GET = adminRoute(async (request: NextRequest) => {
-  const { searchParams } = request.nextUrl;
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
-  const filter = searchParams.get("filter") ?? "all";
+const contentQuery = zPaginationQuery(20, 100).extend({
+  filter: zEnumParam(["all", "flagged", "public"] as const, "all"),
+});
+
+export const GET = adminRoute<Record<string, never>, undefined, z.infer<typeof contentQuery>>(async (_request, { query }) => {
+  const { page, limit, filter } = query;
 
   const where =
     filter === "flagged"
@@ -51,4 +54,4 @@ export const GET = adminRoute(async (request: NextRequest) => {
     songs: result,
     ...offsetPagination(page, limit, total),
   });
-}, { route: "/api/admin/content" });
+}, { route: "/api/admin/content", query: contentQuery });

@@ -1,12 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { NextResponse } from "next/server";
 import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { offsetPagination, pageSkip } from "@/lib/pagination";
+import { zPaginationQuery } from "@/lib/query-params";
 
-export const GET = adminRoute(async (request: NextRequest) => {
-  const { searchParams } = request.nextUrl;
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
+const logsQuery = zPaginationQuery(50, 100);
+
+export const GET = adminRoute<Record<string, never>, undefined, z.infer<typeof logsQuery>>(async (_request, { query }) => {
+  const { page, limit } = query;
 
   const [logs, total] = await Promise.all([
     prisma.adminLog.findMany({
@@ -24,4 +26,4 @@ export const GET = adminRoute(async (request: NextRequest) => {
     logs,
     ...offsetPagination(page, limit, total),
   });
-}, { route: "/api/admin/logs" });
+}, { route: "/api/admin/logs", query: logsQuery });

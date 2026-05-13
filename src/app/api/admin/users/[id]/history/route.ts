@@ -1,12 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { NextResponse } from "next/server";
 import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { offsetPagination, pageSkip } from "@/lib/pagination";
+import { zPaginationQuery } from "@/lib/query-params";
 
-export const GET = adminRoute<{ id: string }>(async (request: NextRequest, { params }) => {
-  const { searchParams } = request.nextUrl;
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
+const historyQuery = zPaginationQuery(20, 100);
+
+export const GET = adminRoute<{ id: string }, undefined, z.infer<typeof historyQuery>>(async (_request, { params, query }) => {
+  const { page, limit } = query;
 
   const [songs, total] = await Promise.all([
     prisma.song.findMany({
@@ -31,4 +33,4 @@ export const GET = adminRoute<{ id: string }>(async (request: NextRequest, { par
     songs,
     ...offsetPagination(page, limit, total),
   });
-}, { route: "/api/admin/users/[id]/history" });
+}, { route: "/api/admin/users/[id]/history", query: historyQuery });

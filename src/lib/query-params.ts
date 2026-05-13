@@ -46,6 +46,13 @@ export function zLimitParam(fallback = 20, max = 100) {
     });
 }
 
+export function zPaginationQuery(fallbackLimit = 20, maxLimit = 100) {
+  return z.object({
+    page: zPageParam(1),
+    limit: zLimitParam(fallbackLimit, maxLimit),
+  });
+}
+
 export const zCursorParam = z
   .string()
   .optional()
