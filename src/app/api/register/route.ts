@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { registerUser } from "@/lib/auth";
-import { rateLimited } from "@/lib/api-error";
+import { errorFromResult, internalError, rateLimited } from "@/lib/api-error";
+import { getClientIp } from "@/lib/network";
 
 export async function POST(request: NextRequest) {
   try {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
+    const ip = getClientIp(request);
 
     const { name, email, password } = await request.json();
 
@@ -26,18 +24,12 @@ export async function POST(request: NextRequest) {
           rateLimit: result.rateLimitStatus,
         });
       }
-      return NextResponse.json(
-        { error: result.error, code: result.code },
-        { status: result.status },
-      );
+      return errorFromResult(result);
     }
 
     return NextResponse.json(result.user, { status: 201 });
   } catch (err) {
     logger.error({ err }, "register: error");
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 },
-    );
+    return internalError();
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { getClientIp } from "@/lib/network";
 
 const MAX_MESSAGE_LENGTH = 500;
 const MAX_STACK_LENGTH = 2048;
@@ -47,7 +48,7 @@ function isValidSource(source: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getClientIp(request);
 
   if (isRateLimited(ip)) {
     return NextResponse.json(

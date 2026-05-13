@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveUser, requireAdmin } from "@/lib/auth";
 import { logServerError } from "@/lib/error-logger";
+import { getClientIp } from "@/lib/network";
 import { badRequest, internalError, notFound, rateLimited } from "@/lib/api-error";
 import { parseQueryParams } from "@/lib/query-params";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
@@ -218,14 +219,6 @@ export function adminRoute<
   };
 }
 
-function extractClientIp(request: NextRequest): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
-}
-
 export function anonRoute<
   P extends Record<string, string> = Record<string, never>,
   Q = undefined,
@@ -240,7 +233,7 @@ export function anonRoute<
     request: NextRequest,
     segmentData: SegmentData<P>
   ): Promise<Response> => {
-    const ip = extractClientIp(request);
+    const ip = getClientIp(request);
 
     const { acquired } = await acquireAnonRateLimitSlot(
       ip,
