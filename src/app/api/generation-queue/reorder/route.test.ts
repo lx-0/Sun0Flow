@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { NextRequest } from "next/server";
 import { POST } from "./route";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -17,6 +18,10 @@ vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
+vi.mock("@/lib/error-logger", () => ({
+  logServerError: vi.fn(),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     generationQueueItem: {
@@ -32,13 +37,14 @@ import { prisma } from "@/lib/prisma";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeRequest(body: Record<string, unknown>): Request {
-  return new Request("http://localhost/api/generation-queue/reorder", {
+function makeRequest(body: Record<string, unknown>): NextRequest {
+  return new NextRequest("http://localhost/api/generation-queue/reorder", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
+const seg = { params: Promise.resolve({}) };
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
@@ -67,27 +73,26 @@ describe("POST /api/generation-queue/reorder", () => {
       isAdmin: false,
       error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
-    const res = await POST(makeRequest({ orderedIds: ["item-1", "item-2"] }));
+    const res = await POST(makeRequest({ orderedIds: ["item-1", "item-2"] }), seg);
     expect(res.status).toBe(401);
   });
 
   it("returns 400 when orderedIds is not an array", async () => {
-    const res = await POST(makeRequest({ orderedIds: "not-an-array" }));
+    const res = await POST(makeRequest({ orderedIds: "not-an-array" }), seg);
     expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.error).toContain("orderedIds must be an array");
     expect(data.code).toBe("VALIDATION_ERROR");
   });
 
   it("returns 400 when orderedIds is missing", async () => {
-    const res = await POST(makeRequest({}));
+    const res = await POST(makeRequest({}), seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.code).toBe("VALIDATION_ERROR");
   });
 
   it("reorders items that belong to the user", async () => {
-    const res = await POST(makeRequest({ orderedIds: ["item-2", "item-1", "item-3"] }));
+    const res = await POST(makeRequest({ orderedIds: ["item-2", "item-1", "item-3"] }), seg);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.success).toBe(true);
@@ -103,7 +108,7 @@ describe("POST /api/generation-queue/reorder", () => {
       { id: "item-2" },
     ] as never);
 
-    await POST(makeRequest({ orderedIds: ["item-4", "item-1", "item-2"] }));
+    await POST(makeRequest({ orderedIds: ["item-4", "item-1", "item-2"] }), seg);
 
     // Should query only pending items owned by the user
     expect(prisma.generationQueueItem.findMany).toHaveBeenCalledWith(
@@ -117,7 +122,7 @@ describe("POST /api/generation-queue/reorder", () => {
   });
 
   it("returns success true on valid reorder", async () => {
-    const res = await POST(makeRequest({ orderedIds: ["item-3", "item-1", "item-2"] }));
+    const res = await POST(makeRequest({ orderedIds: ["item-3", "item-1", "item-2"] }), seg);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.success).toBe(true);

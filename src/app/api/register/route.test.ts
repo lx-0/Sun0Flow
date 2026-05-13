@@ -145,6 +145,7 @@ describe("POST /api/register — malformed input and XSS edge cases", () => {
       body: "{ invalid json ;;; }",
     });
 
+<<<<<<< HEAD
     const res = await POST(req, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
@@ -161,6 +162,8 @@ describe("POST /api/register — malformed input and XSS edge cases", () => {
 
     const res = await POST(req, seg);
     expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.code).toBe("VALIDATION_ERROR");
   });
 
   it("sanitizes XSS in name field and creates user successfully", async () => {

@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
-import { logger } from "@/lib/logger";
+import { z } from "zod";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { publicRoute } from "@/lib/route-handler";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { sendPasswordResetEmail } from "@/lib/email";
 
-export async function POST(request: Request) {
-  try {
-    const { email } = await request.json();
+const forgotPasswordBody = z.object({
+  email: z.string().trim().min(1, "Email is required"),
+});
 
-    if (!email) {
-      return NextResponse.json(
-        { error: "Email is required", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
+export const POST = publicRoute<Record<string, never>, z.infer<typeof forgotPasswordBody>>(
+  async (_request, { body }) => {
+    const { email } = body;
 
     // Always return success to prevent email enumeration
     const successResponse = NextResponse.json({
@@ -44,11 +42,9 @@ export async function POST(request: Request) {
     await sendPasswordResetEmail(email, resetToken);
 
     return successResponse;
-  } catch (err) {
-    logger.error({ err }, "forgot-password: error");
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
+  },
+  {
+    body: forgotPasswordBody,
+    route: "/api/auth/forgot-password",
   }
-}
+);

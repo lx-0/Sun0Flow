@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
 import { reorderItems } from "@/lib/generation-queue";
 
-export async function POST(request: Request) {
-  const { userId, error } = await resolveUser(request);
-  if (error) return error;
+const reorderBody = z.object({
+  orderedIds: z.array(z.string()),
+});
 
-  const { orderedIds } = await request.json();
+export const POST = authRoute<Record<string, never>, z.infer<typeof reorderBody>>(
+  async (_request, { auth, body }) => {
+    const { orderedIds } = body;
 
-  if (!Array.isArray(orderedIds)) {
-    return NextResponse.json(
-      { error: "orderedIds must be an array", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
+    await reorderItems(auth.userId, orderedIds);
+    return NextResponse.json({ success: true });
+  },
+  {
+    body: reorderBody,
+    route: "/api/generation-queue/reorder",
   }
-
-  await reorderItems(userId, orderedIds);
-  return NextResponse.json({ success: true });
-}
+);
