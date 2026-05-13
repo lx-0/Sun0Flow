@@ -3,6 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { publicRoute } from "@/lib/route-handler";
+import { badRequest } from "@/lib/api-error";
 
 const resetPasswordBody = z.object({
   token: z.string().trim().min(1, "Token is required"),
