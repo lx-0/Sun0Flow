@@ -173,6 +173,7 @@ describe("POST /api/register — malformed input and XSS edge cases", () => {
       body: "{ invalid json ;;; }",
     });
 
+<<<<<<< HEAD
     const res = await POST(req, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
