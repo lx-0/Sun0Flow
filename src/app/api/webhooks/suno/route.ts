@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { SUNO_WEBHOOK_SECRET } from "@/lib/env";
-import { mapRawSong, taskStatusToSongStatus, isTerminalFailure, type TaskStatus } from "@/lib/sunoapi";
-import { handleSongSuccess, handleSongFailure } from "@/lib/song-completion";
+import { mapRawSong, taskStatusToSongStatus, isTerminalFailure } from "@/lib/sunoapi/mappers";
+import { handleSongSuccess, handleSongFailure } from "@/lib/generation";
+import type { TaskStatus } from "@/lib/sunoapi/types";
 
 export const dynamic = "force-dynamic";
 
