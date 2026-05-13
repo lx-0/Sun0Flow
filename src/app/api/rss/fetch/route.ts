@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
 import { fetchFeed } from "@/lib/rss";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
-import { rateLimited } from "@/lib/api-error";
+import { badRequest, rateLimited } from "@/lib/api-error";
 
 // Block SSRF by rejecting private/loopback/link-local IP ranges and
 // non-HTTP(S) schemes. Only public HTTPS URLs are allowed.
@@ -41,9 +42,12 @@ function isSsrfUrl(raw: string): boolean {
 const RSS_RATE_LIMIT = 20;
 const MINUTE_MS = 60_000;
 
-export async function POST(req: NextRequest) {
-  const { userId, isAdmin, error: authError } = await resolveUser(req);
-  if (authError) return authError;
+const fetchFeedsBody = z.object({
+  urls: z.array(z.string()).min(1, "urls array required"),
+});
+
+export const POST = authRoute(async (_req, { auth, body }) => {
+  const { userId, isAdmin } = auth;
 
   if (!isAdmin) {
     const { acquired, status } = await acquireRateLimitSlot(userId, "rss_fetch", RSS_RATE_LIMIT, MINUTE_MS);
@@ -54,32 +58,18 @@ export async function POST(req: NextRequest) {
       );
     }
   }
-
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON", code: "VALIDATION_ERROR" }, { status: 400 });
-  }
-
-  const { urls } = body as { urls?: unknown };
-  if (!Array.isArray(urls) || urls.length === 0) {
-    return NextResponse.json({ error: "urls array required", code: "VALIDATION_ERROR" }, { status: 400 });
-  }
-
-  const validUrls = (urls as unknown[])
+  const validUrls = body.urls
     .filter(
-      (u): u is string =>
-        typeof u === "string" &&
+      (u) =>
         (u.startsWith("http://") || u.startsWith("https://")) &&
         !isSsrfUrl(u)
     )
     .slice(0, 10);
 
   if (validUrls.length === 0) {
-    return NextResponse.json({ error: "No valid URLs provided", code: "VALIDATION_ERROR" }, { status: 400 });
+    return badRequest("No valid URLs provided");
   }
 
   const feeds = await Promise.all(validUrls.map(fetchFeed));
   return NextResponse.json({ feeds });
-}
+}, { route: "/api/rss/fetch", body: fetchFeedsBody });

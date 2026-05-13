@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicRoute } from "@/lib/route-handler";
 import { openApiSpec } from "@/lib/openapi";
 
 /**
@@ -29,7 +30,7 @@ function buildV1Spec() {
   };
 }
 
-export async function GET() {
+export const GET = publicRoute(async () => {
   return NextResponse.json(buildV1Spec(), {
     headers: {
       "X-API-Version": "1",
@@ -37,4 +38,4 @@ export async function GET() {
       "Access-Control-Allow-Origin": "*",
     },
   });
-}
+}, { route: "/api/v1/openapi.json" });
