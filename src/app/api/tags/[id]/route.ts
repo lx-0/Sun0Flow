@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { authRoute, resultResponse } from "@/lib/route-handler";
 import { Tags } from "@/lib/tags";
+import { z } from "zod";
 
-export const PATCH = authRoute<{ id: string }>(async (request, { auth, params }) => {
-  const body = await request.json();
+const updateTagBody = z.object({
+  name: z.string().optional(),
+  color: z.string().optional(),
+});
+
+export const PATCH = authRoute<{ id: string }, z.infer<typeof updateTagBody>>(async (_request, { auth, params, body }) => {
   const result = await Tags.update(auth.userId, params.id, {
-    name: typeof body.name === "string" ? body.name : undefined,
-    color: typeof body.color === "string" ? body.color : undefined,
+    name: body.name,
+    color: body.color,
   });
   if (!result.ok) return resultResponse(result);
   return NextResponse.json({ tag: result.data });
-}, { route: "/api/tags/[id]" });
+}, { route: "/api/tags/[id]", body: updateTagBody });
 
 export const DELETE = authRoute<{ id: string }>(async (_request, { auth, params }) => {
   const result = await Tags.remove(auth.userId, params.id);

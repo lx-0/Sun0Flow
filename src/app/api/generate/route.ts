@@ -8,41 +8,18 @@ import {
 } from "@/lib/sunoapi";
 import { logger } from "@/lib/logger";
 import { SUNOAPI_KEY } from "@/lib/env";
-import { badRequest } from "@/lib/api-error";
-import { stripHtml } from "@/lib/sanitize";
 import { executeGeneration, respondToGeneration } from "@/lib/generation";
+import {
+  generateSongRequestSchema,
+  sanitizeGenerateSongRequest,
+} from "@/lib/generation/request";
 import { authRoute } from "@/lib/route-handler";
 
-export const POST = authRoute(async (_request, { auth }) => {
+export const POST = authRoute(async (_request, { auth, body }) => {
   const { userId, isAdmin } = auth;
 
   const { apiKey: userApiKey, usingPersonalKey } = await resolveUserApiKeyWithMode(userId);
-
-  const body = await _request.json();
-  const { prompt, title, tags, makeInstrumental, personaId, parentSongId } = body;
-
-  if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
-    return badRequest("A style/genre prompt is required");
-  }
-
-  if (prompt.length > 3000) {
-    return badRequest("Prompt must be 3000 characters or less");
-  }
-
-  if (title && (typeof title !== "string" || title.length > 200)) {
-    return badRequest("Title must be 200 characters or less");
-  }
-
-  if (tags && (typeof tags !== "string" || tags.length > 500)) {
-    return badRequest("Tags must be 500 characters or less");
-  }
-
-  const generationParams = {
-    prompt: stripHtml(prompt).trim(),
-    title: title ? stripHtml(title).trim() || undefined : undefined,
-    style: tags ? stripHtml(tags).trim() || undefined : undefined,
-    instrumental: Boolean(makeInstrumental),
-  };
+  const generationParams = sanitizeGenerateSongRequest(body);
 
   const hasApiKey = !!(userApiKey || SUNOAPI_KEY);
 
@@ -53,9 +30,9 @@ export const POST = authRoute(async (_request, { auth }) => {
       title: generationParams.title || null,
       prompt: generationParams.prompt,
       tags: generationParams.style || null,
-      isInstrumental: Boolean(makeInstrumental),
-      parentSongId: typeof parentSongId === "string" && parentSongId ? parentSongId : null,
-      personaId: typeof personaId === "string" ? personaId : null,
+      isInstrumental: generationParams.instrumental,
+      parentSongId: generationParams.parentSongId ?? null,
+      personaId: generationParams.personaId ?? null,
     },
     hasApiKey,
     mockFallback: mockSongs[0],
@@ -73,7 +50,7 @@ export const POST = authRoute(async (_request, { auth }) => {
             title: generationParams.title,
             style: generationParams.style,
             instrumental: generationParams.instrumental,
-            personaId: personaId || undefined,
+            personaId: generationParams.personaId,
           },
           userApiKey
         )
@@ -91,4 +68,4 @@ export const POST = authRoute(async (_request, { auth }) => {
         : undefined,
     },
   );
-}, { route: "/api/generate" });
+}, { body: generateSongRequestSchema, route: "/api/generate" });

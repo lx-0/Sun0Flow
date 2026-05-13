@@ -1,22 +1,19 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-// These components require browser APIs and must not be SSR'd.
-// This Client Component wrapper lets layout.tsx (a Server Component) include
-// them without triggering the "ssr: false not allowed in Server Components" error.
-
-const PwaInstallPrompt = dynamic(
-  () => import("@/components/PwaInstallPrompt").then((m) => m.PwaInstallPrompt),
-  { ssr: false }
-);
-
-const PushNotificationPrompt = dynamic(
-  () => import("@/components/PushNotificationPrompt").then((m) => m.PushNotificationPrompt),
-  { ssr: false }
-);
+import { useEffect, useState } from "react";
+import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
+import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 
 export function ClientOnlyComponents() {
+  // Keep prompt components client-only without next/dynamic SSR bailouts.
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
   return (
     <>
       <PwaInstallPrompt />

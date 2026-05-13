@@ -1,54 +1,36 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
+const subscribeBody = z.object({
+  endpoint: z.string().min(1),
+  keys: z.object({
+    p256dh: z.string(),
+    auth: z.string(),
+  }),
+});
+
+const unsubscribeBody = z.object({
+  endpoint: z.string().min(1, "endpoint is required"),
+});
+
 // POST /api/push/subscribe — save or refresh a push subscription
-export async function POST(request: NextRequest) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
-  const body = await request.json();
-  const { endpoint, keys } = body ?? {};
-
-  if (
-    typeof endpoint !== "string" ||
-    !endpoint ||
-    typeof keys?.p256dh !== "string" ||
-    typeof keys?.auth !== "string"
-  ) {
-    return NextResponse.json(
-      { error: "Invalid subscription object", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
-  }
-
+export const POST = authRoute(async (_request, { auth, body }) => {
   await prisma.pushSubscription.upsert({
-    where: { endpoint },
-    update: { userId, p256dh: keys.p256dh, auth: keys.auth },
-    create: { userId, endpoint, p256dh: keys.p256dh, auth: keys.auth },
+    where: { endpoint: body.endpoint },
+    update: { userId: auth.userId, p256dh: body.keys.p256dh, auth: body.keys.auth },
+    create: { userId: auth.userId, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth },
   });
 
   return NextResponse.json({ ok: true }, { status: 201 });
-}
+}, { route: "/api/push/subscribe", body: subscribeBody });
 
 // DELETE /api/push/subscribe — remove a push subscription
-export async function DELETE(request: NextRequest) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
-  const body = await request.json();
-  const { endpoint } = body ?? {};
-
-  if (typeof endpoint !== "string" || !endpoint) {
-    return NextResponse.json(
-      { error: "endpoint is required", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
-  }
-
+export const DELETE = authRoute(async (_request, { auth, body }) => {
   await prisma.pushSubscription.deleteMany({
-    where: { userId, endpoint },
+    where: { userId: auth.userId, endpoint: body.endpoint },
   });
 
   return NextResponse.json({ ok: true });
-}
+}, { route: "/api/push/subscribe", body: unsubscribeBody });

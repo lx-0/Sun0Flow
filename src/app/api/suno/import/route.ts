@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
 import { resolveUserApiKey, getSongById, SunoApiError } from "@/lib/sunoapi";
 import { prisma } from "@/lib/prisma";
 import { logServerError } from "@/lib/error-logger";
@@ -7,48 +8,19 @@ import { apiError, internalError, ErrorCode } from "@/lib/api-error";
 
 const MAX_BATCH_SIZE = 20;
 
-export async function POST(request: NextRequest) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
+const importSongsBodySchema = z.object({
+  songIds: z.array(z.string()).min(1, "songIds must not be empty").max(MAX_BATCH_SIZE, `Batch size exceeds limit of ${MAX_BATCH_SIZE}`),
+});
 
-    const apiKey = await resolveUserApiKey(userId!);
+export const POST = authRoute(async (_request, { auth, body }) => {
+  try {
+    const apiKey = await resolveUserApiKey(auth.userId);
     if (!apiKey) {
       return apiError("No Suno API key configured", ErrorCode.VALIDATION_ERROR, 400);
     }
 
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return apiError("Invalid JSON body", ErrorCode.VALIDATION_ERROR, 400);
-    }
-
-    if (
-      !body ||
-      typeof body !== "object" ||
-      !Array.isArray((body as Record<string, unknown>).songIds)
-    ) {
-      return apiError("Request body must include a songIds array", ErrorCode.VALIDATION_ERROR, 400);
-    }
-
-    const { songIds } = body as { songIds: string[] };
-
-    if (songIds.length === 0) {
-      return apiError("songIds must not be empty", ErrorCode.VALIDATION_ERROR, 400);
-    }
-
-    if (songIds.length > MAX_BATCH_SIZE) {
-      return apiError(
-        `Batch size exceeds limit of ${MAX_BATCH_SIZE}`,
-        ErrorCode.VALIDATION_ERROR,
-        400
-      );
-    }
-
-    // Find which songs are already imported for this user
     const existing = await prisma.song.findMany({
-      where: { userId: userId!, sunoJobId: { in: songIds } },
+      where: { userId: auth.userId, sunoJobId: { in: body.songIds } },
       select: { sunoJobId: true, id: true },
     });
     const existingMap = new Map(existing.map((s) => [s.sunoJobId!, s.id]));
@@ -57,7 +29,7 @@ export async function POST(request: NextRequest) {
     const skipped: Array<{ sunoId: string; reason: string }> = [];
     const errors: Array<{ id: string; error: string }> = [];
 
-    for (const songId of songIds) {
+    for (const songId of body.songIds) {
       if (existingMap.has(songId)) {
         skipped.push({ sunoId: songId, reason: "already imported" });
         continue;
@@ -67,7 +39,7 @@ export async function POST(request: NextRequest) {
         const song = await getSongById(songId, apiKey);
         const created = await prisma.song.create({
           data: {
-            userId: userId!,
+            userId: auth.userId,
             sunoJobId: song.id,
             title: song.title ?? null,
             audioUrl: song.audioUrl ?? null,
@@ -112,4 +84,4 @@ export async function POST(request: NextRequest) {
     logServerError("suno-import", error, { route: "/api/suno/import" });
     return internalError();
   }
-}
+}, { body: importSongsBodySchema, route: "/api/suno/import" });

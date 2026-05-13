@@ -1,33 +1,26 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { publicRoute } from "@/lib/route-handler";
+import { notFound } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
 import { queryPublicActivities } from "@/lib/activity";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  try {
-    const { searchParams } = new URL(request.url);
-    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+const activityQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+});
 
+export const GET = publicRoute<{ id: string }, undefined, z.infer<typeof activityQuery>>(
+  async (_request, { params, query }) => {
     const user = await prisma.user.findUnique({
-      where: { id },
+      where: { id: params.id },
       select: { id: true },
     });
     if (!user) {
-      return NextResponse.json(
-        { error: "User not found", code: "NOT_FOUND" },
-        { status: 404 }
-      );
+      return notFound("User not found");
     }
 
-    const result = await queryPublicActivities([id], page);
+    const result = await queryPublicActivities([params.id], query.page);
     return NextResponse.json(result);
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+  },
+  { route: "/api/users/[id]/activity", query: activityQuery },
+);

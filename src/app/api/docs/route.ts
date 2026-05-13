@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { publicRoute } from "@/lib/route-handler";
+import { notFound } from "@/lib/api-error";
 
 /**
  * GET /api/docs
@@ -9,9 +11,9 @@ import { NextResponse } from "next/server";
  * In production: returns 404 — the interactive docs are a development-only
  * aid and should not be publicly exposed.
  */
-export async function GET() {
+export const GET = publicRoute(async () => {
   if (process.env.NODE_ENV !== "development") {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFound();
   }
 
   const html = `<!DOCTYPE html>
@@ -41,4 +43,4 @@ export async function GET() {
   return new NextResponse(html, {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
-}
+}, { route: "/api/docs" });

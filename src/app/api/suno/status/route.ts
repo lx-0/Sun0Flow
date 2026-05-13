@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { authRoute } from "@/lib/route-handler";
 import { resolveUserApiKey, getRemainingCredits, SunoApiError } from "@/lib/sunoapi";
 
-export async function GET(request: Request) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
-  const apiKey = await resolveUserApiKey(userId);
+export const GET = authRoute(async (_request, { auth }) => {
+  const apiKey = await resolveUserApiKey(auth.userId);
 
   if (!apiKey) {
     return NextResponse.json({ connected: false });
@@ -28,4 +25,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-}
+}, { route: "/api/suno/status" });

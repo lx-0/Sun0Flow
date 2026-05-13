@@ -1,71 +1,57 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { z } from "zod";
+import { badRequest, notFound } from "@/lib/api-error";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
 const MAX_TEMPLATES = 50;
+const createTemplateSchema = z.object({
+  name: z.string()
+    .trim()
+    .min(1, "Name is required")
+    .max(100, "Name must be 100 characters or less"),
+  tags: z.string()
+    .trim()
+    .min(1, "Tags are required")
+    .max(500, "Tags must be 500 characters or less"),
+  sourceSongId: z.string().optional(),
+});
 
-export async function GET(request: Request) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
+export const GET = authRoute(async (_request, { auth }) => {
+  const templates = await prisma.styleTemplate.findMany({
+    where: { userId: auth.userId },
+    orderBy: { createdAt: "desc" },
+  });
 
-    const templates = await prisma.styleTemplate.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
+  return NextResponse.json({ templates });
+}, { route: "/api/style-templates" });
 
-    return NextResponse.json({ templates });
-  } catch {
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
+export const POST = authRoute(async (_request, { auth, body }) => {
+  const sourceSongId = body.sourceSongId?.trim() || null;
+
+  if (sourceSongId) {
+    const song = await prisma.song.findFirst({ where: { id: sourceSongId, userId: auth.userId } });
+    if (!song) {
+      return notFound("Source song not found");
+    }
   }
-}
 
-export async function POST(request: Request) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const { name, tags, sourceSongId } = await request.json();
-
-    if (!name || typeof name !== "string" || !name.trim()) {
-      return NextResponse.json({ error: "Name is required", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (name.length > 100) {
-      return NextResponse.json({ error: "Name must be 100 characters or less", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (!tags || typeof tags !== "string" || !tags.trim()) {
-      return NextResponse.json({ error: "Tags are required", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (tags.length > 500) {
-      return NextResponse.json({ error: "Tags must be 500 characters or less", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-
-    if (sourceSongId) {
-      const song = await prisma.song.findFirst({ where: { id: sourceSongId, userId } });
-      if (!song) {
-        return NextResponse.json({ error: "Source song not found", code: "NOT_FOUND" }, { status: 404 });
-      }
-    }
-
-    const count = await prisma.styleTemplate.count({ where: { userId } });
-    if (count >= MAX_TEMPLATES) {
-      return NextResponse.json(
-        { error: `Maximum of ${MAX_TEMPLATES} style templates reached. Delete one to create a new one.`, code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    const template = await prisma.styleTemplate.create({
-      data: {
-        userId,
-        name: name.trim(),
-        tags: tags.trim(),
-        sourceSongId: sourceSongId || null,
-      },
-    });
-
-    return NextResponse.json({ template }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
+  const count = await prisma.styleTemplate.count({ where: { userId: auth.userId } });
+  if (count >= MAX_TEMPLATES) {
+    return badRequest(`Maximum of ${MAX_TEMPLATES} style templates reached. Delete one to create a new one.`);
   }
-}
+
+  const template = await prisma.styleTemplate.create({
+    data: {
+      userId: auth.userId,
+      name: body.name,
+      tags: body.tags,
+      sourceSongId,
+    },
+  });
+
+  return NextResponse.json({ template }, { status: 201 });
+}, {
+  route: "/api/style-templates",
+  body: createTemplateSchema,
+});

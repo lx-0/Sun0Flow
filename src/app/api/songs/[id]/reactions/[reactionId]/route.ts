@@ -1,19 +1,11 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import { forbidden, notFound } from "@/lib/api-error";
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string; reactionId: string }> }
-) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const { id, reactionId } = await params;
-
+export const DELETE = authRoute<{ id: string; reactionId: string }>(async (_request, { auth, params }) => {
     const reaction = await prisma.songReaction.findUnique({
-      where: { id: reactionId },
+      where: { id: params.reactionId },
       select: {
         id: true,
         songId: true,
@@ -22,28 +14,16 @@ export async function DELETE(
       },
     });
 
-    if (!reaction || reaction.songId !== id) {
-      return NextResponse.json(
-        { error: "Reaction not found", code: "NOT_FOUND" },
-        { status: 404 }
-      );
+    if (!reaction || reaction.songId !== params.id) {
+      return notFound("Reaction not found");
     }
 
     // Only reaction owner or song owner can delete
-    if (reaction.userId !== userId && reaction.song.userId !== userId) {
-      return NextResponse.json(
-        { error: "Forbidden", code: "FORBIDDEN" },
-        { status: 403 }
-      );
+    if (reaction.userId !== auth.userId && reaction.song.userId !== auth.userId) {
+      return forbidden();
     }
 
-    await prisma.songReaction.delete({ where: { id: reactionId } });
+    await prisma.songReaction.delete({ where: { id: params.reactionId } });
 
     return new NextResponse(null, { status: 204 });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+}, { route: "/api/songs/[id]/reactions/[reactionId]" });

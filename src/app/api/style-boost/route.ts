@@ -1,32 +1,21 @@
+import { z } from "zod";
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { ErrorCode, apiError, serviceUnavailable } from "@/lib/api-error";
+import { authRoute } from "@/lib/route-handler";
 import { boostStyle, SunoApiError, resolveUserApiKey } from "@/lib/sunoapi";
 import { logServerError } from "@/lib/error-logger";
 
-export async function POST(request: Request) {
+const bodySchema = z.object({
+  content: z.string()
+    .trim()
+    .min(1, "A style description is required")
+    .max(500, "Style description must be 500 characters or less"),
+});
+
+export const POST = authRoute(async (_request, { auth, body }) => {
   try {
-    const { userId, error: authError } = await resolveUser(request);
-
-    if (authError) return authError;
-
-    const { content } = await request.json();
-
-    if (!content || typeof content !== "string" || !content.trim()) {
-      return NextResponse.json(
-        { error: "A style description is required", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    if (content.length > 500) {
-      return NextResponse.json(
-        { error: "Style description must be 500 characters or less", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    const userApiKey = await resolveUserApiKey(userId);
-    const result = await boostStyle(content.trim(), userApiKey);
+    const userApiKey = await resolveUserApiKey(auth.userId);
+    const result = await boostStyle(body.content, userApiKey);
 
     return NextResponse.json({
       result: result.result,
@@ -35,13 +24,15 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof SunoApiError) {
-      logServerError("style-boost-api", error, { route: "/api/style-boost" });
-      return NextResponse.json(
-        { error: "Style boost failed. Please try again." },
-        { status: error.status >= 500 ? 502 : error.status }
-      );
+      logServerError("style-boost-api", error, { route: "/api/style-boost", userId: auth.userId });
+      if (error.status >= 500) {
+        return serviceUnavailable("Style boost failed. Please try again.");
+      }
+      return apiError("Style boost failed. Please try again.", ErrorCode.SUNO_API_ERROR, error.status);
     }
-    logServerError("style-boost", error, { route: "/api/style-boost" });
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
+    throw error;
   }
-}
+}, {
+  route: "/api/style-boost",
+  body: bodySchema,
+});

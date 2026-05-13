@@ -1,68 +1,46 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import { badRequest, notFound } from "@/lib/api-error";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
+const bodySchema = z.object({
+  rating: z.enum(["thumbs_up", "thumbs_down"]),
+});
 
+export const GET = authRoute<{ id: string }>(async (_request, { auth, params }) => {
     const feedback = await prisma.generationFeedback.findUnique({
-      where: { songId_userId: { songId: id, userId } },
+      where: { songId_userId: { songId: params.id, userId: auth.userId } },
       select: { rating: true },
     });
 
     return NextResponse.json({ rating: feedback?.rating ?? null });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+}, { route: "/api/songs/[id]/feedback" });
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
+export const POST = authRoute<{ id: string }>(async (request, { auth, params }) => {
     const song = await prisma.song.findFirst({
-      where: { id },
+      where: { id: params.id },
       select: { id: true },
     });
     if (!song) {
-      return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
+      return notFound();
     }
 
-    const body = await request.json();
-    const { rating } = body;
-
-    if (rating !== "thumbs_up" && rating !== "thumbs_down") {
-      return NextResponse.json(
-        { error: "rating must be thumbs_up or thumbs_down", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return badRequest("Invalid JSON body");
     }
+    const parsedBody = bodySchema.safeParse(rawBody);
+    if (!parsedBody.success) return badRequest("rating must be thumbs_up or thumbs_down");
+    const { rating } = parsedBody.data;
 
     const feedback = await prisma.generationFeedback.upsert({
-      where: { songId_userId: { songId: id, userId } },
+      where: { songId_userId: { songId: params.id, userId: auth.userId } },
       update: { rating },
-      create: { songId: id, userId, rating },
+      create: { songId: params.id, userId: auth.userId, rating },
     });
 
     return NextResponse.json({ rating: feedback.rating });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+}, { route: "/api/songs/[id]/feedback" });

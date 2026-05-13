@@ -1,19 +1,38 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
 import { generateText } from "@/lib/llm";
 
-export async function POST(request: Request) {
-  const { userId, error: authError } = await resolveUser(request);
+const requestSchema = z.object({
+  currentGenres: z.array(z.string()),
+  partial: z.string().optional(),
+});
 
-  if (authError) return authError;
-  void userId;
+function normalizeSuggestions(raw: unknown, currentGenres: string[]): string[] {
+  if (!Array.isArray(raw)) return [];
+  const excluded = new Set(currentGenres.map((genre) => genre.toLowerCase()));
+  return raw
+    .filter((g): g is string => typeof g === "string" && Boolean(g.trim()))
+    .map((g) => g.trim().toLowerCase().slice(0, 50))
+    .filter((g) => !excluded.has(g));
+}
 
-  const body = await request.json();
-  const { currentGenres, partial } = body;
-
-  if (!Array.isArray(currentGenres)) {
-    return NextResponse.json({ error: "currentGenres must be an array", code: "VALIDATION_ERROR" }, { status: 400 });
+function extractSuggestions(result: string, currentGenres: string[]): string[] {
+  try {
+    return normalizeSuggestions(JSON.parse(result.trim()), currentGenres);
+  } catch {
+    const match = result.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    try {
+      return normalizeSuggestions(JSON.parse(match[0]), currentGenres);
+    } catch {
+      return [];
+    }
   }
+}
+
+export const POST = authRoute(async (_request, { body }) => {
+  const { currentGenres, partial } = body;
 
   const systemPrompt = `You are a music genre expert. Given a list of music genres a user already likes, suggest related genres they might also enjoy. Return ONLY a JSON array of 5-8 genre name strings, nothing else. Each genre should be short (1-4 words), lowercase. Do not repeat genres already in the user's list.`;
 
@@ -27,29 +46,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ suggestions: [] });
   }
 
-  try {
-    const parsed = JSON.parse(result.trim());
-    if (!Array.isArray(parsed)) throw new Error("Not an array");
-    const suggestions = parsed
-      .filter((g: unknown) => typeof g === "string" && g.trim())
-      .map((g: string) => g.trim().toLowerCase().slice(0, 50))
-      .filter((g: string) => !currentGenres.map((c: string) => c.toLowerCase()).includes(g));
-    return NextResponse.json({ suggestions });
-  } catch {
-    // Try to extract JSON array from response
-    const match = result.match(/\[[\s\S]*\]/);
-    if (match) {
-      try {
-        const parsed = JSON.parse(match[0]);
-        const suggestions = parsed
-          .filter((g: unknown) => typeof g === "string" && g.trim())
-          .map((g: string) => g.trim().toLowerCase().slice(0, 50))
-          .filter((g: string) => !currentGenres.map((c: string) => c.toLowerCase()).includes(g));
-        return NextResponse.json({ suggestions });
-      } catch {
-        // fall through
-      }
-    }
-    return NextResponse.json({ suggestions: [] });
-  }
-}
+  return NextResponse.json({ suggestions: extractSuggestions(result, currentGenres) });
+}, {
+  route: "/api/profile/genres/suggest",
+  body: requestSchema,
+});

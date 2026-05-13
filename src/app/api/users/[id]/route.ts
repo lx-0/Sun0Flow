@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { cached, cacheKey, CacheTTL, CacheControl } from "@/lib/cache";
 import { withTiming } from "@/lib/timing";
 import { isFollowing } from "@/lib/follows";
+import { optionalAuthRoute } from "@/lib/route-handler";
+import { notFound } from "@/lib/api-error";
 
 async function getPublicUserData(userId: string) {
   return cached(
@@ -29,45 +30,29 @@ async function getPublicUserData(userId: string) {
   );
 }
 
-async function handleGET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  try {
-    const session = await auth();
-    const viewerId = session?.user?.id ?? null;
-
-    const user = await getPublicUserData(id);
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found", code: "NOT_FOUND" },
-        { status: 404 }
-      );
-    }
-
-    const viewerFollowing = viewerId ? await isFollowing(viewerId, id) : false;
-
-    return NextResponse.json(
-      {
-        id: user.id,
-        name: user.name,
-        image: user.image,
-        createdAt: user.createdAt,
-        followersCount: user._count.followers,
-        followingCount: user._count.following,
-        publicSongsCount: user._count.songs,
-        isFollowing: viewerFollowing,
-      },
-      { headers: { "Cache-Control": CacheControl.privateShort } }
-    );
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
+const handleGET = optionalAuthRoute<{ id: string }>(async (_request, { auth, params }) => {
+  const user = await getPublicUserData(params.id);
+  if (!user) {
+    return notFound("User not found");
   }
-}
+
+  const viewerFollowing = auth.userId
+    ? await isFollowing(auth.userId, params.id)
+    : false;
+
+  return NextResponse.json(
+    {
+      id: user.id,
+      name: user.name,
+      image: user.image,
+      createdAt: user.createdAt,
+      followersCount: user._count.followers,
+      followingCount: user._count.following,
+      publicSongsCount: user._count.songs,
+      isFollowing: viewerFollowing,
+    },
+    { headers: { "Cache-Control": CacheControl.privateShort } }
+  );
+}, { route: "/api/users/[id]" });
 
 export const GET = withTiming("/api/users/[id]", handleGET);

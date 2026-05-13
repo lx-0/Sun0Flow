@@ -1,0 +1,8 @@
+[allowlist]
+description = "Allowlisted false positives in test fixtures introduced in historical PR commits."
+fingerprints = [
+  "b6988aee5d96ec8e7b107b58603918331f3fec97:src/app/api/profile/api-key/route.test.ts:generic-api-key:71",
+  "b6988aee5d96ec8e7b107b58603918331f3fec97:src/app/api/profile/api-key/route.test.ts:generic-api-key:97",
+  "b6988aee5d96ec8e7b107b58603918331f3fec97:src/app/api/profile/api-key/route.test.ts:generic-api-key:102",
+  "b6988aee5d96ec8e7b107b58603918331f3fec97:src/app/api/profile/api-key/route.test.ts:generic-api-key:109",
+]

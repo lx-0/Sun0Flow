@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { publicRoute } from "@/lib/route-handler";
 import { getMetricsSnapshot } from "@/lib/metrics";
 import { getSchedulerStatus } from "@/lib/scheduler";
 
 const startedAt = Date.now();
 
-export async function GET() {
+export const GET = publicRoute(async () => {
   const uptime = Math.floor((Date.now() - startedAt) / 1000);
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -44,4 +45,4 @@ export async function GET() {
       { status: 503 }
     );
   }
-}
+}, { route: "/api/health" });

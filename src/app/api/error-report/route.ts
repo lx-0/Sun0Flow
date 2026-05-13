@@ -34,7 +34,13 @@ setInterval(() => {
   });
 }, 5 * 60_000).unref?.();
 
-const VALID_SOURCE_PREFIXES = ["error-boundary", "global-error-boundary", "unhandled-error", "unhandled-rejection"];
+const VALID_SOURCE_PREFIXES = [
+  "error-boundary",
+  "global-error-boundary",
+  "unhandled-error",
+  "unhandled-rejection",
+  "chunk-load-error",
+];
 
 function isValidSource(source: string): boolean {
   return VALID_SOURCE_PREFIXES.some((prefix) => source === prefix || source.startsWith(prefix + ":"));

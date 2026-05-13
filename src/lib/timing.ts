@@ -6,7 +6,7 @@
  *   - Add X-Response-Time header to every response
  *   - Emit a warning log for requests exceeding SLOW_REQUEST_THRESHOLD_MS
  */
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { recordRequest } from "@/lib/metrics";
 import { logger } from "@/lib/logger";
 
@@ -15,7 +15,7 @@ const SLOW_REQUEST_THRESHOLD_MS = 500;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyArgs = any[];
-type Handler<A extends AnyArgs> = (req: NextRequest, ...args: A) => Promise<NextResponse>;
+type Handler<A extends AnyArgs> = (req: NextRequest, ...args: A) => Promise<Response>;
 
 /**
  * Wrap a Next.js App Router route handler with request timing.
@@ -31,7 +31,7 @@ export function withTiming<A extends AnyArgs>(
   route: string,
   handler: Handler<A>
 ): Handler<A> {
-  return async function timed(req: NextRequest, ...args: A): Promise<NextResponse> {
+  return async function timed(req: NextRequest, ...args: A): Promise<Response> {
     const start = performance.now();
     let status = 500;
     try {

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { SKILL_MARKDOWN } from "@/lib/agent-skill";
+import { getSkillMarkdown } from "@/lib/agent-skill";
 
 export async function GET() {
-  return new NextResponse(SKILL_MARKDOWN, {
+  const skillMarkdown = await getSkillMarkdown();
+
+  return new NextResponse(skillMarkdown, {
     status: 200,
     headers: {
       "Content-Type": "text/markdown; charset=utf-8",
