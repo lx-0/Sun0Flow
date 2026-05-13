@@ -32,24 +32,13 @@ import { useToast } from "./Toast";
 import { useQueue, type QueueSong } from "./QueueContext";
 import { SwipeablePlaylistItem } from "./SwipeablePlaylistItem";
 import { BottomSheet } from "./BottomSheet";
+import { songToQueueSong } from "@/lib/song-mappers";
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function songToQueueSong(song: Song): QueueSong | null {
-  if (!song.audioUrl) return null;
-  return {
-    id: song.id,
-    title: song.title,
-    audioUrl: song.audioUrl,
-    imageUrl: song.imageUrl,
-    duration: song.duration,
-    lyrics: song.lyrics,
-  };
 }
 
 interface CollaboratorUser {

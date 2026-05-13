@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 import { POST } from "./route";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -22,17 +23,27 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/auth", () => ({
+  resolveUser: vi.fn(),
+  requireAdmin: vi.fn(),
+}));
+
+vi.mock("@/lib/error-logger", () => ({
+  logServerError: vi.fn(),
+}));
+
 import { prisma } from "@/lib/prisma";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeRequest(body: Record<string, unknown>): Request {
-  return new Request("http://localhost/api/auth/verify-email", {
+function makeRequest(body: Record<string, unknown>): NextRequest {
+  return new NextRequest("http://localhost/api/auth/verify-email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
+const seg = { params: Promise.resolve({}) };
 
 const UNVERIFIED_USER = { id: "user-1", email: "test@example.com", emailVerified: null };
 const VERIFIED_USER = { id: "user-1", email: "test@example.com", emailVerified: new Date("2025-01-01") };
@@ -49,7 +60,7 @@ beforeEach(() => {
 describe("POST /api/auth/verify-email", () => {
   describe("validation", () => {
     it("returns 400 when token is missing", async () => {
-      const res = await POST(makeRequest({}));
+      const res = await POST(makeRequest({}), seg);
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.code).toBe("VALIDATION_ERROR");
@@ -60,14 +71,14 @@ describe("POST /api/auth/verify-email", () => {
     it("returns 400 when token is invalid (user not found)", async () => {
       vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
 
-      const res = await POST(makeRequest({ token: "invalid-token" }));
+      const res = await POST(makeRequest({ token: "invalid-token" }), seg);
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.error).toContain("Invalid verification token");
     });
 
     it("queries by verificationToken", async () => {
-      await POST(makeRequest({ token: "my-token" }));
+      await POST(makeRequest({ token: "my-token" }), seg);
 
       expect(prisma.user.findFirst).toHaveBeenCalledWith({
         where: { verificationToken: "my-token" },
@@ -79,7 +90,7 @@ describe("POST /api/auth/verify-email", () => {
     it("returns 200 with 'already verified' message when email is already verified", async () => {
       vi.mocked(prisma.user.findFirst).mockResolvedValue(VERIFIED_USER as never);
 
-      const res = await POST(makeRequest({ token: "some-token" }));
+      const res = await POST(makeRequest({ token: "some-token" }), seg);
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.message).toContain("already verified");
@@ -88,21 +99,21 @@ describe("POST /api/auth/verify-email", () => {
     it("does not update the user when already verified", async () => {
       vi.mocked(prisma.user.findFirst).mockResolvedValue(VERIFIED_USER as never);
 
-      await POST(makeRequest({ token: "some-token" }));
+      await POST(makeRequest({ token: "some-token" }), seg);
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 
   describe("success", () => {
     it("returns 200 with success message", async () => {
-      const res = await POST(makeRequest({ token: "valid-token" }));
+      const res = await POST(makeRequest({ token: "valid-token" }), seg);
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.message).toBe("Email verified successfully");
     });
 
     it("sets emailVerified timestamp and clears verificationToken", async () => {
-      await POST(makeRequest({ token: "valid-token" }));
+      await POST(makeRequest({ token: "valid-token" }), seg);
 
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: "user-1" },

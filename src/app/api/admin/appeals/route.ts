@@ -1,12 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { NextResponse } from "next/server";
 import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
+import { zEnumParam, zPageParam } from "@/lib/query-params";
 
-export const GET = adminRoute(async (request: NextRequest) => {
-  const params = request.nextUrl.searchParams;
-  const status = params.get("status") || "pending";
-  const page = Math.max(1, parseInt(params.get("page") || "1", 10));
+const appealsQuery = z.object({
+  status: zEnumParam(["pending", "approved", "rejected", "all"] as const, "pending"),
+  page: zPageParam(1),
+});
+
+export const GET = adminRoute<Record<string, never>, undefined, z.infer<typeof appealsQuery>>(async (_request, { query }) => {
+  const { status, page } = query;
   const skip = pageSkip(page, DEFAULT_PAGE_SIZE);
 
   const where = status === "all" ? {} : { status };
@@ -44,4 +49,4 @@ export const GET = adminRoute(async (request: NextRequest) => {
     appeals,
     ...offsetPagination(page, DEFAULT_PAGE_SIZE, total),
   });
-}, { route: "/api/admin/appeals" });
+}, { route: "/api/admin/appeals", query: appealsQuery });

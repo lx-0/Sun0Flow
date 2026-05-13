@@ -39,6 +39,9 @@ import { useOfflineCache } from "@/hooks/useOfflineCache";
 import { formatBytes } from "@/lib/cache/offline";
 import { SongListItem, type SongListItemProps } from "./SongListItem";
 import { LibraryToolbar } from "./LibraryToolbar";
+import { useDebounce } from "@/hooks/useDebounce";
+import { HighlightText } from "./HighlightText";
+import { songToQueueSong } from "@/lib/song-mappers";
 
 // Re-export SongListItemProps as SongRowProps for SwipableSongRow compatibility
 type SongRowProps = SongListItemProps;
@@ -52,31 +55,6 @@ interface PlaylistOption {
   _count: { songs: number };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function songToQueueSong(song: Song): QueueSong | null {
-  if (!song.audioUrl) return null;
-  return {
-    id: song.id,
-    title: song.title,
-    audioUrl: song.audioUrl,
-    imageUrl: song.imageUrl,
-    duration: song.duration,
-    lyrics: song.lyrics,
-  };
-}
-
-// ─── useDebounce ─────────────────────────────────────────────────────────────
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
-}
-
 // ─── Main LibraryView ─────────────────────────────────────────────────────────
 
 function toDownloadable(song: Song) {
@@ -86,34 +64,6 @@ function toDownloadable(song: Song) {
     audioUrl: song.audioUrl ?? "",
     tags: song.tags ?? undefined,
   };
-}
-
-// ─── Highlight helper (used by SongGridCard) ─────────────────────────────────
-
-/** Highlight matching search terms in text with bold spans. */
-function Highlight({ text, query }: { text: string; query: string }) {
-  if (!query || query.length < 3) return <>{text}</>;
-  const tokens = query
-    .replace(/["']/g, " ")
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2);
-  if (tokens.length === 0) return <>{text}</>;
-  const pattern = new RegExp(`(${tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
-  const parts = text.split(pattern);
-  return (
-    <>
-      {parts.map((part, i) =>
-        pattern.test(part) ? (
-          <mark key={i} className="bg-yellow-200 dark:bg-yellow-800/60 text-inherit rounded-sm px-0.5">
-            {part}
-          </mark>
-        ) : (
-          part
-        )
-      )}
-    </>
-  );
 }
 
 // ─── Compact grid card for grid view ──────────────────────────────────────────
@@ -224,7 +174,7 @@ function SongGridCard({ song, isActive, isPlaying, isSelected, selectionMode, se
       {/* Info row */}
       <div className="px-3 py-2 flex items-center justify-between gap-2">
         <Link href={`/library/${song.id}`} className="text-sm font-medium text-gray-900 dark:text-white truncate hover:text-violet-600 dark:hover:text-violet-400 transition-colors min-w-0">
-          <Highlight text={song.title ?? "Untitled"} query={searchQuery} />
+          <HighlightText text={song.title ?? "Untitled"} query={searchQuery} />
         </Link>
         <div className="flex items-center gap-1 flex-shrink-0">
           <ShareButton

@@ -161,6 +161,8 @@ describe("POST /api/register — malformed input and XSS edge cases", () => {
 
     const res = await POST(req, seg);
     expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.code).toBe("VALIDATION_ERROR");
   });
 
   it("sanitizes XSS in name field and creates user successfully", async () => {
@@ -190,3 +192,5 @@ describe("POST /api/register — malformed input and XSS edge cases", () => {
     expect(typeof data.code).toBe("string");
   });
 });
+
+// CI trigger commit after rebase conflict resolution.

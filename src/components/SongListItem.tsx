@@ -32,6 +32,7 @@ import { TagChip } from "./TagInput";
 import { ShareButton } from "./ShareButton";
 import { AddToPlaylistButton } from "./AddToPlaylistButton";
 import { useRouter } from "next/navigation";
+import { HighlightText } from "./HighlightText";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -40,34 +41,6 @@ interface SongTagRelation {
 }
 
 type SongWithTags = Song & { songTags: SongTagRelation[] };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Highlight matching search terms in text with bold spans. */
-function Highlight({ text, query }: { text: string; query: string }) {
-  if (!query || query.length < 3) return <>{text}</>;
-  const tokens = query
-    .replace(/["']/g, " ")
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2);
-  if (tokens.length === 0) return <>{text}</>;
-  const pattern = new RegExp(`(${tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
-  const parts = text.split(pattern);
-  return (
-    <>
-      {parts.map((part, i) =>
-        pattern.test(part) ? (
-          <mark key={i} className="bg-yellow-200 dark:bg-yellow-800/60 text-inherit rounded-sm px-0.5">
-            {part}
-          </mark>
-        ) : (
-          part
-        )
-      )}
-    </>
-  );
-}
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -616,7 +589,7 @@ export const SongListItem = memo(function SongListItem({
             href={`/library/${song.id}`}
             className="block text-sm font-medium text-gray-900 dark:text-white truncate hover:text-violet-400 transition-colors"
           >
-            <Highlight text={song.title ?? "Untitled"} query={searchQuery} />
+            <HighlightText text={song.title ?? "Untitled"} query={searchQuery} />
           </Link>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {isPending && <GeneratingBadge />}

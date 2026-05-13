@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 import { POST } from "./route";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -22,6 +23,15 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/auth", () => ({
+  resolveUser: vi.fn(),
+  requireAdmin: vi.fn(),
+}));
+
+vi.mock("@/lib/error-logger", () => ({
+  logServerError: vi.fn(),
+}));
+
 vi.mock("@/lib/rate-limit", () => ({
   acquireRateLimitSlot: vi.fn(),
 }));
@@ -36,13 +46,14 @@ import { sendPasswordResetEmail } from "@/lib/email";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeRequest(body: Record<string, unknown>): Request {
-  return new Request("http://localhost/api/auth/forgot-password", {
+function makeRequest(body: Record<string, unknown>): NextRequest {
+  return new NextRequest("http://localhost/api/auth/forgot-password", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
+const seg = { params: Promise.resolve({}) };
 
 const EXISTING_USER = { id: "user-1", email: "test@example.com" };
 
@@ -60,7 +71,7 @@ beforeEach(() => {
 describe("POST /api/auth/forgot-password", () => {
   describe("validation", () => {
     it("returns 400 when email is missing", async () => {
-      const res = await POST(makeRequest({}));
+      const res = await POST(makeRequest({}), seg);
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.code).toBe("VALIDATION_ERROR");
@@ -71,7 +82,7 @@ describe("POST /api/auth/forgot-password", () => {
     it("returns success even when email does not exist", async () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
 
-      const res = await POST(makeRequest({ email: "unknown@example.com" }));
+      const res = await POST(makeRequest({ email: "unknown@example.com" }), seg);
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.message).toContain("reset link");
@@ -80,14 +91,14 @@ describe("POST /api/auth/forgot-password", () => {
     it("returns success when rate limit is exceeded", async () => {
       vi.mocked(acquireRateLimitSlot).mockResolvedValue({ acquired: false, status: { remaining: 0, limit: 3, resetAt: "" } } as never);
 
-      const res = await POST(makeRequest({ email: "test@example.com" }));
+      const res = await POST(makeRequest({ email: "test@example.com" }), seg);
       expect(res.status).toBe(200);
     });
   });
 
   describe("success", () => {
     it("sends reset email and updates user token when user exists", async () => {
-      const res = await POST(makeRequest({ email: "test@example.com" }));
+      const res = await POST(makeRequest({ email: "test@example.com" }), seg);
       expect(res.status).toBe(200);
 
       expect(prisma.user.update).toHaveBeenCalledWith({
@@ -104,7 +115,7 @@ describe("POST /api/auth/forgot-password", () => {
 
     it("sets reset token expiry to ~1 hour from now", async () => {
       const before = Date.now();
-      await POST(makeRequest({ email: "test@example.com" }));
+      await POST(makeRequest({ email: "test@example.com" }), seg);
       const after = Date.now();
 
       const updateCall = vi.mocked(prisma.user.update).mock.calls[0][0];
@@ -115,7 +126,7 @@ describe("POST /api/auth/forgot-password", () => {
     });
 
     it("checks rate limit using the user id", async () => {
-      await POST(makeRequest({ email: "test@example.com" }));
+      await POST(makeRequest({ email: "test@example.com" }), seg);
       expect(acquireRateLimitSlot).toHaveBeenCalledWith("user-1", "password_reset");
     });
   });

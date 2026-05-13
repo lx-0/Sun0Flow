@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "test:e2e:runner-smoke": "bash scripts/run-e2e-runner-smoke.sh e2e/smoke.spec.ts",
     "prepare": "husky",
     "mcp": "tsx mcp/server.ts",
     "analyze": "ANALYZE=true pnpm build",

@@ -1,22 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { invalidateByPrefix } from "@/lib/cache";
 import { recordActivity } from "@/lib/activity";
 import { cursorPaginate } from "@/lib/pagination";
 import { type Result, success, Err } from "@/lib/result";
+import { findAccessibleSong, invalidateSongDashboardCache } from "./access";
 
 // ---------------------------------------------------------------------------
 // Accessible-song resolution — shared by favorites and other song routes
 // ---------------------------------------------------------------------------
 
-export async function findAccessibleSong(songId: string, userId: string) {
-  return prisma.song.findFirst({
-    where: {
-      id: songId,
-      OR: [{ userId }, { isPublic: true }],
-    },
-  });
-}
+export { findAccessibleSong } from "./access";
 
 // ---------------------------------------------------------------------------
 // Check / Add / Remove
@@ -54,7 +47,7 @@ export async function addFavorite(
 
   const count = await prisma.favorite.count({ where: { songId: song.id } });
 
-  invalidateByPrefix(`dashboard-stats:${userId}`);
+  invalidateSongDashboardCache(userId);
   recordActivity({ userId, type: "song_favorited", songId: song.id });
 
   return success({ isFavorite: true, favoriteCount: count, favoriteId: favorite.id });
@@ -73,7 +66,7 @@ export async function removeFavorite(
 
   const count = await prisma.favorite.count({ where: { songId: song.id } });
 
-  invalidateByPrefix(`dashboard-stats:${userId}`);
+  invalidateSongDashboardCache(userId);
 
   return success({ isFavorite: false, favoriteCount: count });
 }

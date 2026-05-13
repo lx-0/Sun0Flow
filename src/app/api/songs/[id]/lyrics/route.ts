@@ -1,5 +1,5 @@
 import { authRoute, resultResponse } from "@/lib/route-handler";
-import { getSongLyrics, updateSongLyrics } from "@/lib/songs/crud";
+import { getSongLyrics, updateSongLyrics } from "@/lib/songs";
 
 export const GET = authRoute<{ id: string }>(async (_request, { auth, params }) => {
   return resultResponse(await getSongLyrics(params.id, auth.userId));

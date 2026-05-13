@@ -1,27 +1,23 @@
 import { NextResponse } from "next/server";
-import { logger } from "@/lib/logger";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { publicRoute } from "@/lib/route-handler";
+import { badRequest } from "@/lib/api-error";
 
-export async function POST(request: Request) {
-  try {
-    const { token } = await request.json();
+const verifyEmailBody = z.object({
+  token: z.string().trim().min(1, "Token is required"),
+});
 
-    if (!token) {
-      return NextResponse.json(
-        { error: "Token is required", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
+export const POST = publicRoute<Record<string, never>, z.infer<typeof verifyEmailBody>>(
+  async (_request, { body }) => {
+    const { token } = body;
 
     const user = await prisma.user.findFirst({
       where: { verificationToken: token },
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Invalid verification token", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
+      return badRequest("Invalid verification token");
     }
 
     if (user.emailVerified) {
@@ -37,11 +33,9 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ message: "Email verified successfully" });
-  } catch (err) {
-    logger.error({ err }, "verify-email: error");
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
+  },
+  {
+    body: verifyEmailBody,
+    route: "/api/auth/verify-email",
   }
-}
+);

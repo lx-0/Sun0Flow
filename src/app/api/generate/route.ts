@@ -60,7 +60,7 @@ export const POST = authRoute(async (_request, { auth, body }) => {
 
   return respondToGeneration(
     outcome,
-    { label: "generate-api", userId, route: "/api/generate", params: generationParams },
+    { label: "generate-api", userId, route: "/api/generate", params: { ...generationParams } },
     {
       arrayFormat: true,
       creditBalanceLookup: outcome.status === "failed" && outcome.rawError instanceof SunoApiError && outcome.rawError.status === 402

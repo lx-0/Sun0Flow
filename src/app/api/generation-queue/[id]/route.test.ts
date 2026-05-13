@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { NextRequest } from "next/server";
 import { DELETE } from "./route";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -17,6 +18,10 @@ vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
+vi.mock("@/lib/error-logger", () => ({
+  logServerError: vi.fn(),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     generationQueueItem: {
@@ -32,8 +37,8 @@ import { prisma } from "@/lib/prisma";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeRequest(): Request {
-  return new Request("http://localhost/api/generation-queue/item-1", {
+function makeRequest(): NextRequest {
+  return new NextRequest("http://localhost/api/generation-queue/item-1", {
     method: "DELETE",
   });
 }

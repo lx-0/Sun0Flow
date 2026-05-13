@@ -1,17 +1,16 @@
-import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { invalidateByPrefix, invalidateKey, cacheKey } from "@/lib/cache";
 import { sanitizeText } from "@/lib/sanitize";
 import { type Result, success, Err } from "@/lib/result";
-import { SongFilters } from "./filters";
-
-function invalidateUserSongs(userId: string) {
-  invalidateByPrefix(`dashboard-stats:${userId}`);
-}
+import {
+  ensurePublicSlug,
+  findOwnedSong,
+  invalidatePublicSongCache,
+  invalidateSongDashboardCache,
+} from "./access";
 
 export async function getSongRating(songId: string, userId: string) {
   const song = await prisma.song.findFirst({
-    where: SongFilters.ownedBy(userId, songId),
+    where: { id: songId, userId },
     select: { rating: true, ratingNote: true },
   });
   if (!song) return Err.notFound();
@@ -23,9 +22,7 @@ export async function updateSongRating(
   userId: string,
   input: { stars: number; note?: string | null },
 ) {
-  const song = await prisma.song.findFirst({
-    where: SongFilters.ownedBy(userId, songId),
-  });
+  const song = await findOwnedSong(userId, songId);
   if (!song) return Err.notFound();
 
   if (
@@ -57,13 +54,13 @@ export async function updateSongRating(
     },
   });
 
-  invalidateUserSongs(userId);
+  invalidateSongDashboardCache(userId);
   return success({ rating: updated.rating, ratingNote: updated.ratingNote });
 }
 
 export async function getSongLyrics(songId: string, userId: string) {
   const song = await prisma.song.findFirst({
-    where: SongFilters.ownedBy(userId, songId),
+    where: { id: songId, userId },
     select: { lyrics: true, lyricsEdited: true },
   });
   if (!song) return Err.notFound();
@@ -78,9 +75,7 @@ export async function updateSongLyrics(
   userId: string,
   input: { edited?: string | null },
 ) {
-  const song = await prisma.song.findFirst({
-    where: SongFilters.ownedBy(userId, songId),
-  });
+  const song = await findOwnedSong(userId, songId);
   if (!song) return Err.notFound();
 
   let edited: string | null = null;
@@ -111,15 +106,13 @@ export async function updateSongVisibility(
     return Err.validation("visibility must be 'public' or 'private'");
   }
 
-  const song = await prisma.song.findFirst({
-    where: SongFilters.ownedBy(userId, songId),
-  });
+  const song = await findOwnedSong(userId, songId);
   if (!song) return Err.notFound();
 
   const isPublic = visibility === "public";
   const data: Record<string, unknown> = { isPublic };
   if (isPublic && !song.publicSlug) {
-    data.publicSlug = randomBytes(6).toString("hex");
+    data.publicSlug = ensurePublicSlug(song.publicSlug);
   }
 
   const updated = await prisma.song.update({
@@ -127,9 +120,7 @@ export async function updateSongVisibility(
     data,
   });
 
-  if (updated.publicSlug) {
-    invalidateKey(cacheKey("public-song", updated.publicSlug));
-  }
+  invalidatePublicSongCache(updated.publicSlug);
 
   return success({
     visibility: updated.isPublic ? "public" : "private",
@@ -139,14 +130,12 @@ export async function updateSongVisibility(
 }
 
 export async function toggleSongShare(songId: string, userId: string) {
-  const song = await prisma.song.findFirst({
-    where: SongFilters.ownedBy(userId, songId),
-  });
+  const song = await findOwnedSong(userId, songId);
   if (!song) return Err.notFound();
 
   const newIsPublic = !song.isPublic;
   const publicSlug = newIsPublic
-    ? song.publicSlug ?? randomBytes(6).toString("hex")
+    ? ensurePublicSlug(song.publicSlug)
     : song.publicSlug;
 
   const updated = await prisma.song.update({
@@ -154,9 +143,7 @@ export async function toggleSongShare(songId: string, userId: string) {
     data: { isPublic: newIsPublic, publicSlug },
   });
 
-  if (updated.publicSlug) {
-    invalidateKey(cacheKey("public-song", updated.publicSlug));
-  }
+  invalidatePublicSongCache(updated.publicSlug);
 
   return success({
     isPublic: updated.isPublic,
@@ -165,9 +152,7 @@ export async function toggleSongShare(songId: string, userId: string) {
 }
 
 export async function archiveSong(songId: string, userId: string) {
-  const song = await prisma.song.findFirst({
-    where: SongFilters.ownedBy(userId, songId),
-  });
+  const song = await findOwnedSong(userId, songId);
   if (!song) return Err.notFound();
 
   if (song.archivedAt) {
@@ -219,9 +204,7 @@ export async function archiveSong(songId: string, userId: string) {
 }
 
 export async function restoreSong(songId: string, userId: string) {
-  const song = await prisma.song.findFirst({
-    where: { ...SongFilters.ownedBy(userId, songId), archivedAt: { not: null } },
-  });
+  const song = await findOwnedSong(userId, songId, { archivedAt: { not: null } });
   if (!song) return Err.notFound();
 
   const updated = await prisma.$transaction(async (tx) => {

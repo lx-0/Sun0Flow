@@ -5,12 +5,9 @@ import { logServerError } from "@/lib/error-logger";
 import { logger } from "@/lib/logger";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { checkCredits, getCreditCost } from "@/lib/credits";
-import { stripHtml } from "@/lib/sanitize";
 import { type Result, success, fail } from "@/lib/result";
 import { executeGeneration, type GenerationOutcome } from "./execute";
-
-const MIN_BATCH = 2;
-const MAX_BATCH = 5;
+import { validateAndSanitizeBatchGenerationConfigs } from "./params";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -41,46 +38,13 @@ export interface BatchGenerationData {
   };
 }
 
-// ── Validation ──────────────────────────────────────────────────────────
-
-function validateConfigs(configs: unknown): Result<BatchConfig[]> {
-  if (!Array.isArray(configs)) {
-    return fail("configs must be an array of generation configurations", "VALIDATION_ERROR", 400);
-  }
-  if (configs.length < MIN_BATCH || configs.length > MAX_BATCH) {
-    return fail(
-      `Batch size must be between ${MIN_BATCH} and ${MAX_BATCH} (got ${configs.length})`,
-      "VALIDATION_ERROR",
-      400,
-    );
-  }
-
-  for (let i = 0; i < configs.length; i++) {
-    const c = configs[i] as BatchConfig;
-    if (!c.prompt || typeof c.prompt !== "string" || !c.prompt.trim()) {
-      return fail(`Config ${i + 1}: prompt is required`, "VALIDATION_ERROR", 400);
-    }
-    if (c.prompt.length > 3000) {
-      return fail(`Config ${i + 1}: prompt must be 3000 characters or less`, "VALIDATION_ERROR", 400);
-    }
-    if (c.title && (typeof c.title !== "string" || c.title.length > 200)) {
-      return fail(`Config ${i + 1}: title must be 200 characters or less`, "VALIDATION_ERROR", 400);
-    }
-    if (c.style && (typeof c.style !== "string" || c.style.length > 500)) {
-      return fail(`Config ${i + 1}: style must be 500 characters or less`, "VALIDATION_ERROR", 400);
-    }
-  }
-
-  return success(configs as BatchConfig[]);
-}
-
 // ── Orchestration ───────────────────────────────────────────────────────
 
 export async function executeBatchGeneration(
   userId: string,
   rawConfigs: unknown,
 ): Promise<Result<BatchGenerationData>> {
-  const validated = validateConfigs(rawConfigs);
+  const validated = validateAndSanitizeBatchGenerationConfigs(rawConfigs);
   if (!validated.ok) return validated;
   const configs = validated.data;
 
@@ -106,27 +70,21 @@ export async function executeBatchGeneration(
 
   for (let i = 0; i < configs.length; i++) {
     const c = configs[i];
-    const genParams = {
-      prompt: stripHtml(c.prompt).trim(),
-      title: c.title ? stripHtml(c.title).trim() || undefined : undefined,
-      style: c.style ? stripHtml(c.style).trim() || undefined : undefined,
-      instrumental: Boolean(c.makeInstrumental),
-    };
 
     const outcome: GenerationOutcome = await executeGeneration({
       userId,
       action: "generate",
       songParams: {
-        title: genParams.title || null,
-        prompt: genParams.prompt,
-        tags: genParams.style || null,
-        isInstrumental: genParams.instrumental,
+        title: c.title || null,
+        prompt: c.prompt,
+        tags: c.style || null,
+        isInstrumental: c.instrumental,
         batchId,
       },
       hasApiKey,
       mockFallback: mockSongs[i % mockSongs.length],
       guards: usingPersonalKey ? "personal-key" : "pre-authorized",
-      description: `Batch generation ${i + 1}/${configs.length}: ${genParams.title || "Untitled"}`,
+      description: `Batch generation ${i + 1}/${configs.length}: ${c.title || "Untitled"}`,
       apiCall: () =>
         Sentry.startSpan(
           {
@@ -136,11 +94,11 @@ export async function executeBatchGeneration(
           },
           () =>
             generateSong(
-              genParams.prompt,
+              c.prompt,
               {
-                title: genParams.title,
-                style: genParams.style,
-                instrumental: genParams.instrumental,
+                title: c.title,
+                style: c.style,
+                instrumental: c.instrumental,
                 model: (c.model as never) || undefined,
               },
               userApiKey,

@@ -1,19 +1,31 @@
+import { z } from "zod";
 import { NextResponse } from "next/server";
 import { authRoute } from "@/lib/route-handler";
 import { queryGenerations } from "@/lib/songs";
+import { zEnumParam, zTrimmedParam } from "@/lib/query-params";
 
-export const GET = authRoute(async (request, { auth }) => {
-  const params = request.nextUrl.searchParams;
+const generationsQuery = z.object({
+  status: zTrimmedParam,
+  source: zTrimmedParam,
+  q: zTrimmedParam,
+  dateFrom: zTrimmedParam,
+  dateTo: zTrimmedParam,
+  sortBy: zEnumParam(["newest", "oldest"] as const, "newest"),
+  cursor: zTrimmedParam,
+});
+
+export const GET = authRoute<Record<string, never>, undefined, z.infer<typeof generationsQuery>>(async (_request, { auth, query }) => {
+  const { status, source, q, dateFrom, dateTo, sortBy, cursor } = query;
 
   const result = await queryGenerations(auth.userId, {
-    status: params.get("status") || "",
-    source: params.get("source") || "",
-    q: params.get("q")?.trim() || "",
-    dateFrom: params.get("dateFrom") || "",
-    dateTo: params.get("dateTo") || "",
-    sortBy: params.get("sortBy") || "newest",
-    cursor: params.get("cursor") || "",
+    status: status ?? "",
+    source: source ?? "",
+    q: q ?? "",
+    dateFrom: dateFrom ?? "",
+    dateTo: dateTo ?? "",
+    sortBy,
+    cursor: cursor ?? "",
   });
 
   return NextResponse.json(result);
-}, { route: "/api/generations" });
+}, { route: "/api/generations", query: generationsQuery });
