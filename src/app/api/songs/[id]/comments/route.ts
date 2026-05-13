@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authRoute, resultResponse } from "@/lib/route-handler";
+import { authRoute, publicRoute, resultResponse } from "@/lib/route-handler";
 import { listComments, createComment } from "@/lib/comments";
 import { zPageParam } from "@/lib/query-params";
 
@@ -8,11 +8,11 @@ const listCommentsQuery = z.object({
 });
 
 const createCommentBody = z.object({
-  body: z.unknown(),
+  body: z.string().min(1, "Comment body must be 1–500 characters").max(500),
   timestamp: z.unknown().optional(),
 });
 
-export const GET = authRoute<{ id: string }, undefined, z.infer<typeof listCommentsQuery>>(
+export const GET = publicRoute<{ id: string }, undefined, z.infer<typeof listCommentsQuery>>(
   async (_request, { params, query }) => {
     return resultResponse(await listComments(params.id, query.page));
   },

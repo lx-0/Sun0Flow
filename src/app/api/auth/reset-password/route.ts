@@ -3,20 +3,15 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { publicRoute } from "@/lib/route-handler";
-import { badRequest } from "@/lib/api-error";
 
 const resetPasswordBody = z.object({
   token: z.string().trim().min(1, "Token is required"),
-  password: z.string().min(1, "Password is required"),
+  password: z.string().trim().min(8, "Password must be at least 8 characters"),
 });
 
 export const POST = publicRoute<Record<string, never>, z.infer<typeof resetPasswordBody>>(
   async (_request, { body }) => {
     const { token, password } = body;
-
-    if (password.length < 8) {
-      return badRequest("Password must be at least 8 characters");
-    }
 
     const user = await prisma.user.findFirst({
       where: {
