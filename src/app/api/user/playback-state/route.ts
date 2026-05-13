@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 const putPlaybackStateBody = z.object({
   songId: z.string().min(1, "songId is required"),
   position: z.number().min(0, "position must be a non-negative number"),
-  queue: z.array(z.any()),
+  queue: z.array(z.unknown(), "queue must be an array"),
   volume: z.number().optional(),
   shuffleVersions: z.boolean().optional(),
   shuffle: z.boolean().optional(),
