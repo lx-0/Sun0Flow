@@ -50,3 +50,14 @@ export type { DiscoverableFilterOptions } from "./discoverable-filter";
 
 export { getVariantFamily, findUserSong } from "./lookups";
 export type { PublicVariant } from "./lookups";
+
+export {
+  getSongRating,
+  updateSongRating,
+  getSongLyrics,
+  updateSongLyrics,
+  updateSongVisibility,
+  toggleSongShare,
+  archiveSong,
+  restoreSong,
+} from "./crud";

@@ -110,9 +110,6 @@ describe("PUT /api/user/playback-state", () => {
         position: 5,
         queue: ["song-1"],
         volume: 3,
-        eqGains: [1, 2],
-        eqSpeed: 4,
-        eqPitch: 9,
       }),
     }), seg);
 
@@ -121,18 +118,24 @@ describe("PUT /api/user/playback-state", () => {
       expect.objectContaining({
         create: expect.objectContaining({
           userId: USER_ID,
+          songId: "song-1",
+          position: 5,
+          queue: ["song-1"],
           volume: 1,
           repeat: "off",
-          eqGains: [0, 0, 0, 0, 0],
-          eqSpeed: 1,
-          eqPitch: 0,
+          shuffleVersions: false,
+          shuffle: false,
+          muted: false,
         }),
         update: expect.objectContaining({
+          songId: "song-1",
+          position: 5,
+          queue: ["song-1"],
           volume: 1,
           repeat: "off",
-          eqGains: [0, 0, 0, 0, 0],
-          eqSpeed: 1,
-          eqPitch: 0,
+          shuffleVersions: false,
+          shuffle: false,
+          muted: false,
         }),
       })
     );

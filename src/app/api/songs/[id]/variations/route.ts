@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { authRoute, resultResponse } from "@/lib/route-handler";
 import { respondToGeneration } from "@/lib/generation";
-import { getVariationFamily, createVariation } from "@/lib/songs/variations";
+import { getVariationFamily, createVariation } from "@/lib/songs";
 
 export const GET = authRoute<{ id: string }>(async (_request, { auth, params }) => {
   const result = await getVariationFamily(auth.userId, params.id);
