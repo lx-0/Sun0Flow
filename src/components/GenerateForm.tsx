@@ -11,6 +11,16 @@ import { useGenerationQueue } from "@/hooks/useGenerationQueue";
 import { track } from "@/lib/analytics";
 import { fetchWithTimeout, clientFetchErrorMessage } from "@/lib/fetch-client";
 import { getPromptValidationError, getRateLimitMeta, reorderPendingQueueIds } from "./generate-form/helpers";
+import {
+  fetchCreditsSummary,
+  fetchGenerationPresets,
+  fetchPersonasList,
+  fetchPromptSuggestions,
+  fetchPromptTemplates,
+  fetchRateLimitStatus,
+  fetchStyleTemplateList,
+  fetchTrendingStyleCombos,
+} from "./generate-form/api";
 import type { GenerationPreset, PersonaOption, PromptSuggestion, PromptTemplate, RateLimitStatus, StyleTemplate } from "./generate-form/types";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationQueue } from "./GenerationQueue";
@@ -161,15 +171,14 @@ export function GenerateForm() {
 
   const fetchRateLimit = useCallback(async () => {
     try {
-      const res = await fetch("/api/rate-limit");
-      if (res.ok) {
-        const data: RateLimitStatus = await res.json();
-        setRateLimit(data);
-        const used = data.limit - data.remaining;
-        const pct = data.limit > 0 ? used / data.limit : 0;
-        if (pct >= 0.8 && data.remaining > 0 && !shownLimitToast.current) {
+      const status = await fetchRateLimitStatus();
+      if (status) {
+        setRateLimit(status);
+        const used = status.limit - status.remaining;
+        const pct = status.limit > 0 ? used / status.limit : 0;
+        if (pct >= 0.8 && status.remaining > 0 && !shownLimitToast.current) {
           shownLimitToast.current = true;
-          toast(`${data.remaining} generation${data.remaining === 1 ? "" : "s"} remaining this hour`, "info");
+          toast(`${status.remaining} generation${status.remaining === 1 ? "" : "s"} remaining this hour`, "info");
         }
       }
     } catch {
@@ -179,16 +188,8 @@ export function GenerateForm() {
 
   const fetchCredits = useCallback(async () => {
     try {
-      const res = await fetch("/api/credits");
-      if (res.ok) {
-        const data = await res.json();
-        setCreditInfo({
-          creditsRemaining: data.creditsRemaining,
-          budget: data.budget,
-          usagePercent: data.usagePercent,
-          isLow: data.isLow,
-        });
-      }
+      const credits = await fetchCreditsSummary();
+      if (credits) setCreditInfo(credits);
     } catch {
       // Non-critical
     }
@@ -196,11 +197,8 @@ export function GenerateForm() {
 
   const fetchPersonas = useCallback(async () => {
     try {
-      const res = await fetch("/api/personas");
-      if (res.ok) {
-        const data = await res.json();
-        setPersonas(data.personas);
-      }
+      const data = await fetchPersonasList();
+      if (data) setPersonas(data);
     } catch {
       // Non-critical
     }
@@ -208,11 +206,10 @@ export function GenerateForm() {
 
   const fetchTemplates = useCallback(async () => {
     try {
-      const res = await fetch("/api/prompt-templates");
-      if (res.ok) {
-        const data = await res.json();
+      const data = await fetchPromptTemplates();
+      if (data) {
         setTemplates(data.templates);
-        if (data.categories) setCategories(data.categories);
+        setCategories(data.categories);
       }
     } catch {
       // Non-critical
@@ -221,11 +218,8 @@ export function GenerateForm() {
 
   const fetchPresets = useCallback(async () => {
     try {
-      const res = await fetch("/api/presets");
-      if (res.ok) {
-        const data = await res.json();
-        setPresets(data.presets);
-      }
+      const data = await fetchGenerationPresets();
+      if (data) setPresets(data);
     } catch {
       // Non-critical
     }
@@ -233,11 +227,8 @@ export function GenerateForm() {
 
   const fetchStyleTemplates = useCallback(async () => {
     try {
-      const res = await fetch("/api/style-templates");
-      if (res.ok) {
-        const data = await res.json();
-        setStyleTemplates(data.templates);
-      }
+      const data = await fetchStyleTemplateList();
+      if (data) setStyleTemplates(data);
     } catch {
       // Non-critical
     }
@@ -245,11 +236,8 @@ export function GenerateForm() {
 
   const fetchSuggestions = useCallback(async () => {
     try {
-      const res = await fetch("/api/suggestions/prompts");
-      if (res.ok) {
-        const data = await res.json();
-        setSuggestions(data.suggestions);
-      }
+      const data = await fetchPromptSuggestions();
+      if (data) setSuggestions(data);
     } catch {
       // Non-critical
     }
@@ -257,11 +245,8 @@ export function GenerateForm() {
 
   const fetchTrendingCombos = useCallback(async () => {
     try {
-      const res = await fetch("/api/suggestions/trending");
-      if (res.ok) {
-        const data = await res.json();
-        setTrendingCombos(data.trending ?? []);
-      }
+      const data = await fetchTrendingStyleCombos();
+      if (data) setTrendingCombos(data);
     } catch {
       // Non-critical
     }
