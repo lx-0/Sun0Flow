@@ -19,11 +19,17 @@ push or PR to main
 Production deploy (separate workflow, manual gate):
   Actions → "Deploy to Production" → Run workflow (or push a v*.*.* tag)
   → required-reviewer approval on `production` environment
+  → migration safety check (schema validation + destructive SQL guardrail)
   → railway up --service SunoFlow
 ```
 
 The `deploy-production.yml` workflow is the only path to production. CI on `main` does
 not auto-deploy — that bypassed the manual approval gate.
+
+The migration safety step fails deploys when:
+- Prisma schema validation fails (`prisma validate`)
+- any migration directory is missing `migration.sql`
+- migration SQL includes destructive operations (`DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, `DELETE FROM`) without an explicit `-- approved-destructive` marker in that migration file
 
 ## GitHub Secrets & Variables Required
 

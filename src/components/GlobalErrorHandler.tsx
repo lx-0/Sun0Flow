@@ -9,6 +9,10 @@ import { logError } from "@/lib/error-logger";
  * silently logged without surfacing a toast to the user.
  */
 export function isBenignError(error: unknown, message?: string): boolean {
+  // Some browser/library cancellation paths reject promises with no payload.
+  // Treat these as non-actionable to avoid noisy runtime toasts.
+  if (error == null && (message == null || message.trim() === "")) return true;
+
   const msg =
     (error instanceof Error ? error.message : undefined) ?? message ?? "";
   const name = error instanceof Error ? error.name : "";

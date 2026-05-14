@@ -13,6 +13,13 @@ import { useSession } from "next-auth/react";
 import { proxiedAudioUrl } from "@/lib/audio-cdn";
 import { track } from "@/lib/analytics";
 import {
+  buildPlayQueue,
+  insertAfterCurrent,
+  removeFromQueueState,
+  reorderQueueState,
+  toggleShuffleQueue,
+} from "@/components/queue/queue-ops";
+import {
   loadPlaybackState,
   savePlaybackState,
   type QueueSong as PlaybackQueueSong,
@@ -100,17 +107,6 @@ interface QueueActions {
 }
 
 type QueueContextValue = QueueState & QueueActions;
-
-// ─── Fisher-Yates shuffle ─────────────────────────────────────────────────────
-
-function fisherYatesShuffle<T>(arr: T[]): T[] {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -489,19 +485,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       setPlaylistSource(source ?? null);
       originalQueueRef.current = songs;
 
-      let playOrder: QueueSong[];
-      let playIdx: number;
-
-      if (shuffle) {
-        // Shuffle but keep the start song at index 0
-        const startSong = songs[startIndex];
-        const rest = songs.filter((_, i) => i !== startIndex);
-        playOrder = [startSong, ...fisherYatesShuffle(rest)];
-        playIdx = 0;
-      } else {
-        playOrder = songs;
-        playIdx = startIndex;
-      }
+      const { playOrder, playIndex: playIdx } = buildPlayQueue(songs, startIndex, shuffle);
 
       setQueue(playOrder);
       setCurrentIndex(playIdx);
@@ -622,30 +606,14 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const toggleShuffle = useCallback(() => {
     setShuffle((prev) => {
       const next = !prev;
-      const q = queueRef.current;
-      const idx = currentIndexRef.current;
-
-      if (q.length <= 1) return next;
-
-      const currentSong = idx >= 0 ? q[idx] : null;
-
-      if (next) {
-        // Turn shuffle ON — shuffle remaining songs after current
-        const rest = q.filter((_, i) => i !== idx);
-        const shuffled = currentSong
-          ? [currentSong, ...fisherYatesShuffle(rest)]
-          : fisherYatesShuffle(q);
-        setQueue(shuffled);
-        setCurrentIndex(0);
-      } else {
-        // Turn shuffle OFF — restore original order, keep current song playing
-        const original = originalQueueRef.current;
-        if (original.length > 0 && currentSong) {
-          const origIdx = original.findIndex((s) => s.id === currentSong.id);
-          setQueue(original);
-          setCurrentIndex(origIdx >= 0 ? origIdx : 0);
-        }
-      }
+      const result = toggleShuffleQueue(
+        queueRef.current,
+        currentIndexRef.current,
+        next,
+        originalQueueRef.current,
+      );
+      setQueue(result.queue);
+      setCurrentIndex(result.currentIndex);
 
       return next;
     });
@@ -668,12 +636,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const playNext = useCallback((song: QueueSong) => {
-    setQueue((prev) => {
-      const idx = currentIndexRef.current;
-      const next = [...prev];
-      next.splice(idx + 1, 0, song);
-      return next;
-    });
+    setQueue((prev) => insertAfterCurrent(prev, currentIndexRef.current, song));
     originalQueueRef.current = [...originalQueueRef.current, song];
   }, []);
 
@@ -684,39 +647,22 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
   const removeFromQueue = useCallback((index: number) => {
     const audio = audioRef.current;
-    setQueue((prev) => {
-      const next = [...prev];
-      next.splice(index, 1);
-      return next;
-    });
-    setCurrentIndex((prev) => {
-      if (index < prev) return prev - 1;
-      if (index === prev) {
-        // Removing the currently-playing song — stop playback
-        if (audio) { audio.pause(); audio.src = ""; }
-        setIsPlaying(false);
-        setCurrentTime(0);
-        setDuration(0);
-        return -1;
-      }
-      return prev;
-    });
+    const result = removeFromQueueState(queueRef.current, currentIndexRef.current, index);
+    setQueue(result.queue);
+    setCurrentIndex(result.currentIndex);
+    if (result.removedCurrent) {
+      // Removing the currently-playing song — stop playback
+      if (audio) { audio.pause(); audio.src = ""; }
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
+    }
   }, []);
 
   const reorderQueue = useCallback((fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex) return;
-    setQueue((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      return next;
-    });
-    setCurrentIndex((prev) => {
-      if (fromIndex === prev) return toIndex;
-      if (fromIndex < prev && toIndex >= prev) return prev - 1;
-      if (fromIndex > prev && toIndex <= prev) return prev + 1;
-      return prev;
-    });
+    const result = reorderQueueState(queueRef.current, currentIndexRef.current, fromIndex, toIndex);
+    setQueue(result.queue);
+    setCurrentIndex(result.currentIndex);
   }, []);
 
   const clearQueue = useCallback(() => {

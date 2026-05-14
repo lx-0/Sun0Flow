@@ -36,6 +36,9 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Migration safety check
+        run: bash scripts/check-migration-safety.sh
+
       - name: Deploy to production
         id: deploy
         run: railway up --detach --service SunoFlow
