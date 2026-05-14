@@ -1,4 +1,3 @@
-import type { Song } from "@prisma/client";
 import type { GenerationOutcome } from "@/lib/generation";
 import { prisma } from "@/lib/prisma";
 import {
@@ -8,164 +7,38 @@ import {
   addInstrumental as sunoAddInstrumental,
   replaceSection as sunoReplaceSection,
   mockSongs,
-  resolveUserApiKey,
 } from "@/lib/sunoapi";
 import { executeGeneration } from "@/lib/generation";
 import { sanitizeText } from "@/lib/sanitize";
 import { type Result, success, Err } from "@/lib/result";
+import { MAX_VARIATIONS } from "@/lib/songs/variations/constants";
+import { normalizeVariationTags, variationTitle } from "@/lib/songs/variations/helpers";
+import { resolveParent, resolveRootId } from "@/lib/songs/variations/parent-context";
+import { VARIATION_SELECT, toVariationRow } from "@/lib/songs/variations/projection";
+import { validateReplaceSectionRange } from "@/lib/songs/variations/section-validation";
+import type {
+  VariationFamily,
+  VariationInput,
+  AddVocalsInput,
+  AddInstrumentalInput,
+  ReplaceSectionInput,
+  ExtendSongInput,
+  VariationRow,
+} from "@/lib/songs/variations/types";
 
-export const MAX_VARIATIONS = 5;
+export { MAX_VARIATIONS };
+export type {
+  VariationFamily,
+  VariationInput,
+  AddVocalsInput,
+  AddInstrumentalInput,
+  ReplaceSectionInput,
+  ExtendSongInput,
+  VariationRow,
+};
+export { normalizeVariationTags, variationTitle, resolveRootId };
 
-const MIN_SECTION_S = 6;
-const MAX_SECTION_S = 60;
-const MAX_SECTION_RATIO = 0.5;
-
-// ---------------------------------------------------------------------------
-// Projections
-// ---------------------------------------------------------------------------
-
-const VARIATION_SELECT = {
-  id: true,
-  title: true,
-  prompt: true,
-  tags: true,
-  audioUrl: true,
-  imageUrl: true,
-  duration: true,
-  lyrics: true,
-  generationStatus: true,
-  isInstrumental: true,
-  createdAt: true,
-} as const;
-
-type VariationRow = Pick<
-  Song,
-  "id" | "title" | "prompt" | "tags" | "audioUrl" | "imageUrl" | "duration" | "lyrics" | "generationStatus" | "isInstrumental" | "createdAt"
->;
-
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
-export interface VariationFamily {
-  root: VariationRow | null;
-  variations: VariationRow[];
-  variationCount: number;
-  maxVariations: number;
-}
-
-export interface VariationInput {
-  prompt?: string;
-  tags?: string;
-  title?: string;
-  makeInstrumental?: boolean;
-}
-
-export interface AddVocalsInput {
-  prompt: string;
-  style?: string;
-  title?: string;
-}
-
-export interface AddInstrumentalInput {
-  tags?: string;
-  title?: string;
-}
-
-export interface ReplaceSectionInput {
-  prompt: string;
-  tags?: string;
-  title?: string;
-  infillStartS: number;
-  infillEndS: number;
-  negativeTags?: string;
-}
-
-export interface ExtendSongInput {
-  prompt?: string;
-  style?: string;
-  title?: string;
-  continueAt?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Pure helpers — testable without Prisma
-// ---------------------------------------------------------------------------
-
-export function normalizeVariationTags(rawTags: string): string {
-  if (!rawTags) return "remix";
-  return rawTags.toLowerCase().includes("remix") ? rawTags : `${rawTags}, remix`;
-}
-
-export function variationTitle(
-  parentTitle: string | null,
-  explicitTitle?: string,
-): string | null {
-  if (explicitTitle?.trim()) return explicitTitle.trim();
-  if (parentTitle) return `${parentTitle} (variation)`;
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Shared parent resolution — the single place that resolves a parent song,
-// enforces ownership, checks the variation limit, and resolves the API key.
-// ---------------------------------------------------------------------------
-
-export async function resolveRootId(songId: string, parentSongId: string | null): Promise<string> {
-  if (!parentSongId) return songId;
-
-  let rootId = parentSongId;
-  let current = await prisma.song.findUnique({
-    where: { id: rootId },
-    select: { parentSongId: true },
-  });
-  while (current?.parentSongId) {
-    rootId = current.parentSongId;
-    current = await prisma.song.findUnique({
-      where: { id: rootId },
-      select: { parentSongId: true },
-    });
-  }
-  return rootId;
-}
-
-interface ParentContext {
-  parentSong: NonNullable<Awaited<ReturnType<typeof prisma.song.findUnique>>>;
-  rootId: string;
-  userApiKey: string | undefined;
-  hasApiKey: boolean;
-}
-
-async function resolveParent(
-  userId: string,
-  parentSongId: string,
-): Promise<Result<ParentContext>> {
-  const parentSong = await prisma.song.findUnique({ where: { id: parentSongId } });
-  if (!parentSong || parentSong.userId !== userId) {
-    return Err.notFound("Song not found");
-  }
-
-  const rootId = parentSong.parentSongId ?? parentSongId;
-
-  const variationCount = await prisma.song.count({ where: { parentSongId: rootId } });
-  if (variationCount >= MAX_VARIATIONS) {
-    return Err.limitReached(`Maximum ${MAX_VARIATIONS} variations per song reached.`);
-  }
-
-  const userApiKey = await resolveUserApiKey(userId);
-  const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
-
-  return success({ parentSong, rootId, userApiKey, hasApiKey });
-}
-
-// ---------------------------------------------------------------------------
-// GET — return the full variation family for a song
-// ---------------------------------------------------------------------------
-
-export async function getVariationFamily(
-  userId: string,
-  songId: string,
-): Promise<Result<VariationFamily>> {
+export async function getVariationFamily(userId: string, songId: string): Promise<Result<VariationFamily>> {
   const song = await prisma.song.findUnique({ where: { id: songId } });
   if (!song || song.userId !== userId) return Err.notFound("Song not found");
 
@@ -181,33 +54,13 @@ export async function getVariationFamily(
     select: VARIATION_SELECT,
   });
 
-  const rootRow: VariationRow | null = root
-    ? {
-        id: root.id,
-        title: root.title,
-        prompt: root.prompt,
-        tags: root.tags,
-        audioUrl: root.audioUrl,
-        imageUrl: root.imageUrl,
-        duration: root.duration,
-        lyrics: root.lyrics,
-        generationStatus: root.generationStatus,
-        isInstrumental: root.isInstrumental,
-        createdAt: root.createdAt,
-      }
-    : null;
-
   return success({
-    root: rootRow,
+    root: root ? toVariationRow(root) : null,
     variations,
     variationCount: variations.length,
     maxVariations: MAX_VARIATIONS,
   });
 }
-
-// ---------------------------------------------------------------------------
-// Create variation (generic)
-// ---------------------------------------------------------------------------
 
 export async function createVariation(
   userId: string,
@@ -249,10 +102,6 @@ export async function createVariation(
 
   return success(outcome);
 }
-
-// ---------------------------------------------------------------------------
-// Add Vocals
-// ---------------------------------------------------------------------------
 
 export async function addVocals(
   userId: string,
@@ -321,10 +170,6 @@ export async function addVocals(
   return success(outcome);
 }
 
-// ---------------------------------------------------------------------------
-// Add Instrumental
-// ---------------------------------------------------------------------------
-
 export async function addInstrumental(
   userId: string,
   parentSongId: string,
@@ -391,10 +236,6 @@ export async function addInstrumental(
   return success(outcome);
 }
 
-// ---------------------------------------------------------------------------
-// Replace Section
-// ---------------------------------------------------------------------------
-
 export async function replaceSection(
   userId: string,
   parentSongId: string,
@@ -410,21 +251,9 @@ export async function replaceSection(
   const { infillStartS, infillEndS } = input;
   const negativeTags = input.negativeTags?.trim() || undefined;
 
-  if (infillStartS == null || infillEndS == null) {
-    return Err.validation("Start and end times are required.");
-  }
-  if (infillStartS < 0 || infillEndS <= infillStartS) {
-    return Err.validation("Invalid time range. End must be after start.");
-  }
-  const sectionLen = infillEndS - infillStartS;
-  if (sectionLen < MIN_SECTION_S) {
-    return Err.validation(`Section must be at least ${MIN_SECTION_S} seconds.`);
-  }
-  if (sectionLen > MAX_SECTION_S) {
-    return Err.validation(`Section must be at most ${MAX_SECTION_S} seconds.`);
-  }
-  if (parentSong.duration && sectionLen > parentSong.duration * MAX_SECTION_RATIO) {
-    return Err.validation("Section must be at most 50% of the song duration.");
+  const rangeValidationError = validateReplaceSectionRange(infillStartS, infillEndS, parentSong.duration);
+  if (rangeValidationError) {
+    return Err.validation(rangeValidationError);
   }
 
   if (!prompt) {
@@ -478,10 +307,6 @@ export async function replaceSection(
 
   return success(outcome);
 }
-
-// ---------------------------------------------------------------------------
-// Extend Song
-// ---------------------------------------------------------------------------
 
 export async function extendSong(
   userId: string,
