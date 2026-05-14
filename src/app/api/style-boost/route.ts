@@ -4,6 +4,7 @@ import { ErrorCode, apiError, serviceUnavailable } from "@/lib/api-error";
 import { authRoute } from "@/lib/route-handler";
 import { boostStyle, SunoApiError, resolveUserApiKey } from "@/lib/sunoapi";
 import { logServerError } from "@/lib/error-logger";
+import { mapSunoApiError } from "@/lib/suno-api-error";
 
 const bodySchema = z.object({
   content: z.string()
@@ -25,10 +26,16 @@ export const POST = authRoute(async (_request, { auth, body }) => {
   } catch (error) {
     if (error instanceof SunoApiError) {
       logServerError("style-boost-api", error, { route: "/api/style-boost", userId: auth.userId });
-      if (error.status >= 500) {
+      const response = mapSunoApiError(error, {
+        fallbackMessage: "Style boost failed. Please try again.",
+      });
+      if (response.status === 503) {
         return serviceUnavailable("Style boost failed. Please try again.");
       }
-      return apiError("Style boost failed. Please try again.", ErrorCode.SUNO_API_ERROR, error.status);
+      if (response.status !== 401 && response.status !== 429) {
+        return apiError("Style boost failed. Please try again.", ErrorCode.SUNO_API_ERROR, error.status);
+      }
+      return response;
     }
     throw error;
   }

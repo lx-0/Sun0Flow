@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, forwardRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -20,163 +20,28 @@ import {
 import { FollowButton } from "@/components/FollowButton";
 import { AddToPlaylistButton } from "@/components/AddToPlaylistButton";
 
-interface DiscoverSong {
-  id: string;
-  title: string | null;
-  tags: string | null;
-  imageUrl: string | null;
-  audioUrl: string | null;
-  duration: number | null;
-  rating: number | null;
-  playCount: number;
-  publicSlug: string | null;
-  createdAt: string;
-  user: { id: string; name: string | null; username: string | null };
-}
-
-interface TrendingSong {
-  id: string;
-  title: string | null;
-  genre: string | null;
-  albumArtUrl: string | null;
-  audioUrl: string | null;
-  duration: number | null;
-  playCount: number;
-  publicSlug: string | null;
-  createdAt: string;
-  score: number;
-  creatorDisplayName: string;
-  creatorUsername: string | null;
-}
-
-interface PublicSong {
-  id: string;
-  title: string | null;
-  creatorDisplayName: string;
-  creatorUserId: string;
-  creatorUsername: string | null;
-  albumArtUrl: string | null;
-  audioUrl: string | null;
-  publicSlug: string | null;
-  duration: number | null;
-  genre: string | null;
-  playCount: number;
-  createdAt: string;
-}
-
-interface PublicPagination {
-  total: number;
-  limit: number;
-  offset: number;
-  hasMore: boolean;
-}
-
-interface DiscoverPagination {
-  page: number;
-  totalPages: number;
-  total: number;
-  hasMore: boolean;
-}
-
-interface TrendingPagination {
-  total: number;
-  limit: number;
-  offset: number;
-  hasMore: boolean;
-}
-
-type Tab = "for_you" | "browse" | "trending" | "popular" | "collections" | "playlists";
-
-interface FeedSong {
-  id: string;
-  title: string | null;
-  tags: string | null;
-  imageUrl: string | null;
-  audioUrl: string | null;
-  duration: number | null;
-  rating: number | null;
-  playCount: number;
-  publicSlug: string | null;
-  createdAt: string;
-  creatorDisplayName: string;
-  creatorUsername: string | null;
-  creatorUserId: string;
-  reason: "recommended" | "followed_artist" | "trending" | "new_release";
-  reasonLabel: string;
-}
-
-interface FeedPagination {
-  page: number;
-  totalPages: number;
-  total: number;
-  hasMore: boolean;
-}
-
-interface DiscoverPlaylist {
-  id: string;
-  name: string;
-  description: string | null;
-  genre: string | null;
-  slug: string | null;
-  songCount: number;
-  publishedAt: string | null;
-  playCount: number;
-  createdAt: string;
-  creatorDisplayName: string;
-  creatorUsername: string | null;
-  score?: number;
-}
-
-interface PlaylistDiscoverPagination {
-  page: number;
-  limit: number;
-  totalPages: number;
-  total: number;
-  hasMore: boolean;
-}
-
-interface CollectionPreview {
-  id: string;
-  title: string;
-  description: string | null;
-  coverImage: string | null;
-  songCount: number;
-  previewSongs: {
-    id: string;
-    imageUrl: string | null;
-  }[];
-  createdAt: string;
-}
-
-const SORT_OPTIONS = [
-  { value: "newest", label: "Newest" },
-  { value: "highest_rated", label: "Highest Rated" },
-  { value: "most_played", label: "Most Played" },
-] as const;
-
-const TEMPO_PRESETS = [
-  { label: "Slow", min: 0, max: 80 },
-  { label: "Medium", min: 81, max: 120 },
-  { label: "Fast", min: 121, max: 999 },
-] as const;
-
-const FALLBACK_GENRE_TAGS = [
-  "Pop", "Rock", "Hip-Hop", "Electronic", "Jazz",
-  "Classical", "R&B", "Country", "Lo-Fi", "Ambient",
-  "Metal", "Folk", "Indie", "Funk", "Soul",
-];
-
-const FALLBACK_MOOD_TAGS = [
-  "Energetic", "Chill", "Dark", "Uplifting", "Melancholic",
-  "Dreamy", "Epic", "Relaxed", "Happy", "Romantic",
-];
-
-function formatDuration(seconds: number | null): string {
-  if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
+import {
+  FALLBACK_GENRE_TAGS,
+  FALLBACK_MOOD_TAGS,
+  SORT_OPTIONS,
+  TEMPO_PRESETS,
+  formatDuration,
+  parseSongTags,
+} from "./discover-view.utils";
+import type {
+  CollectionPreview,
+  DiscoverPagination,
+  DiscoverPlaylist,
+  DiscoverSong,
+  FeedPagination,
+  FeedSong,
+  PlaylistDiscoverPagination,
+  PublicPagination,
+  PublicSong,
+  Tab,
+  TrendingPagination,
+  TrendingSong,
+} from "./discover-view.types";
 
 function FilterPill({
   label,
@@ -1495,7 +1360,6 @@ function EmptyState({
   );
 }
 
-import { forwardRef } from "react";
 
 const ScrollSentinel = forwardRef<HTMLDivElement, { loading: boolean }>(
   function ScrollSentinel({ loading }, ref) {
@@ -1535,35 +1399,6 @@ const ScrollSentinel = forwardRef<HTMLDivElement, { loading: boolean }>(
     );
   }
 );
-
-// Mood keywords for client-side tag parsing
-const MOOD_KEYWORDS_CLIENT = new Set([
-  "energetic", "chill", "dark", "uplifting", "melancholic", "aggressive",
-  "relaxed", "happy", "sad", "epic", "dreamy", "intense", "romantic",
-  "mysterious", "peaceful", "angry", "nostalgic", "euphoric", "somber",
-  "atmospheric", "hypnotic", "groovy", "emotional", "powerful", "calm",
-]);
-
-function parseSongTags(tagsStr: string | null): {
-  genres: string[];
-  moods: string[];
-} {
-  if (!tagsStr) return { genres: [], moods: [] };
-  const parts = tagsStr
-    .split(/[,;\s]+/)
-    .map((t) => t.trim())
-    .filter(Boolean);
-  const genres: string[] = [];
-  const moods: string[] = [];
-  for (const part of parts) {
-    if (MOOD_KEYWORDS_CLIENT.has(part.toLowerCase())) {
-      moods.push(part.charAt(0).toUpperCase() + part.slice(1).toLowerCase());
-    } else {
-      genres.push(part.charAt(0).toUpperCase() + part.slice(1));
-    }
-  }
-  return { genres: genres.slice(0, 3), moods: moods.slice(0, 2) };
-}
 
 const REASON_STYLES: Record<
   string,

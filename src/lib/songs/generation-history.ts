@@ -51,56 +51,64 @@ const GENERATION_SELECT = {
   updatedAt: true,
 } satisfies Prisma.SongSelect;
 
-function buildWhere(
-  userId: string,
-  filter: GenerationFilter,
-): Prisma.SongWhereInput {
-  const where: Prisma.SongWhereInput = { userId };
-  const and: Prisma.SongWhereInput[] = [];
-
-  if (filter.status && filter.status !== "all") {
-    (where as Record<string, unknown>).generationStatus = filter.status;
-  }
-
-  if (filter.source && filter.source !== "all") {
-    (where as Record<string, unknown>).source = filter.source;
-  }
-
-  if (filter.q && filter.q.length >= 2) {
-    and.push({ prompt: { contains: filter.q, mode: "insensitive" } });
-  }
-
-  if (filter.dateFrom || filter.dateTo) {
-    const createdAt: Record<string, Date> = {};
-    if (filter.dateFrom) createdAt.gte = new Date(filter.dateFrom);
-    if (filter.dateTo) {
-      const end = new Date(filter.dateTo);
-      end.setHours(23, 59, 59, 999);
-      createdAt.lte = end;
-    }
-    and.push({ createdAt });
-  }
-
-  if (filter.cursor) {
-    and.push({ createdAt: { lt: new Date(filter.cursor) } });
-  }
-
-  if (and.length > 0) where.AND = and;
-  return where;
+function parseValidDate(value?: string): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function buildCountWhere(
-  userId: string,
-  filter: GenerationFilter,
-): Prisma.SongWhereInput {
-  return buildWhere(userId, { ...filter, cursor: undefined });
+function buildDateRangeFilter(filter: GenerationFilter): Prisma.SongWhereInput | null {
+  const from = parseValidDate(filter.dateFrom);
+  const to = parseValidDate(filter.dateTo);
+  if (!from && !to) return null;
+
+  const createdAt: Prisma.DateTimeFilter = {};
+  if (from) createdAt.gte = from;
+  if (to) {
+    to.setHours(23, 59, 59, 999);
+    createdAt.lte = to;
+  }
+  return { createdAt };
+}
+
+function buildSearchFilter(filter: GenerationFilter): Prisma.SongWhereInput | null {
+  if (!filter.q || filter.q.length < 2) return null;
+  return { prompt: { contains: filter.q, mode: "insensitive" } };
+}
+
+function buildCursorFilter(filter: GenerationFilter): Prisma.SongWhereInput | null {
+  const cursor = parseValidDate(filter.cursor);
+  if (!cursor) return null;
+  return { createdAt: { lt: cursor } };
+}
+
+export function buildGenerationWhere(userId: string, filter: GenerationFilter): Prisma.SongWhereInput {
+  const and: Prisma.SongWhereInput[] = [];
+  const searchFilter = buildSearchFilter(filter);
+  const dateRangeFilter = buildDateRangeFilter(filter);
+  const cursorFilter = buildCursorFilter(filter);
+
+  if (searchFilter) and.push(searchFilter);
+  if (dateRangeFilter) and.push(dateRangeFilter);
+  if (cursorFilter) and.push(cursorFilter);
+
+  return {
+    userId,
+    ...(filter.status && filter.status !== "all" ? { generationStatus: filter.status } : {}),
+    ...(filter.source && filter.source !== "all" ? { source: filter.source } : {}),
+    ...(and.length > 0 ? { AND: and } : {}),
+  };
+}
+
+function buildCountWhere(userId: string, filter: GenerationFilter): Prisma.SongWhereInput {
+  return buildGenerationWhere(userId, { ...filter, cursor: undefined });
 }
 
 export async function queryGenerations(
   userId: string,
   filter: GenerationFilter,
 ): Promise<GenerationListResult> {
-  const where = buildWhere(userId, filter);
+  const where = buildGenerationWhere(userId, filter);
   const countWhere = buildCountWhere(userId, filter);
   const orderBy: Prisma.SongOrderByWithRelationInput =
     filter.sortBy === "oldest"

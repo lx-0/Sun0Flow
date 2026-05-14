@@ -21,6 +21,9 @@ export function isBenignError(error: unknown, message?: string): boolean {
   // that should not surface as user-visible runtime errors.
   if (name === "AbortError") return true;
   if (msg.includes("The play() request was interrupted")) return true;
+  // Browser cross-origin script errors often omit useful stack/message details.
+  // They are tracked separately and are not actionable from client runtime patrol.
+  if (msg === "Script error.") return true;
 
   return false;
 }

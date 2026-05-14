@@ -7,6 +7,7 @@ import { logServerError } from "@/lib/error-logger";
 import { apiError, internalError, ErrorCode } from "@/lib/api-error";
 import { CacheControl } from "@/lib/cache";
 import { zLimitParam, zPageParam } from "@/lib/query-params";
+import { mapSunoApiError } from "@/lib/suno-api-error";
 
 const sunoSongsQuerySchema = z.object({
   page: zPageParam(1),
@@ -63,25 +64,12 @@ export const GET = authRoute(async (_request, { auth, query }) => {
     );
   } catch (error) {
     if (error instanceof SunoApiError) {
-      if (error.status === 401) {
-        return apiError("Invalid Suno API key", ErrorCode.SUNO_AUTH_ERROR, 401);
-      }
-      if (error.status === 404) {
-        return apiError(
-          "Song listing is not supported by the current API provider (sunoapi.org). This endpoint does not exist in their API.",
-          ErrorCode.SUNO_API_ERROR,
-          501
-        );
-      }
-      if (error.status === 429) {
-        return apiError("Suno API rate limit exceeded. Please try again later.", ErrorCode.SUNO_RATE_LIMIT, 429);
-      }
-      if (error.status >= 500) {
-        return apiError("Suno API is temporarily unavailable. Please try again later.", ErrorCode.SUNO_API_ERROR, 502);
-      }
-      const fallback = "Unable to fetch songs from Suno. Please check your API key and try again.";
-      const msg = error.message && error.message !== "No message available" ? error.message : fallback;
-      return apiError(msg, ErrorCode.SUNO_API_ERROR, 502);
+      return mapSunoApiError(error, {
+        notFoundMessage: "Song listing is not supported by the current API provider (sunoapi.org). This endpoint does not exist in their API.",
+        notFoundStatus: 501,
+        includeRawMessageOnFallback: true,
+        fallbackMessage: "Unable to fetch songs from Suno. Please check your API key and try again.",
+      });
     }
     logServerError("suno-songs-list", error, { route: "/api/suno/songs" });
     return internalError();

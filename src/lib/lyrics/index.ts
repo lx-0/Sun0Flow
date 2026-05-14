@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { generateText } from "@/lib/llm";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
+export {
+  listLyricAnnotations,
+  listLyricTimestamps,
+  replaceLyricTimestamps,
+  upsertLyricAnnotation,
+} from "./crud";
 
 const SYSTEM_PROMPT =
   "Generate original song lyrics inspired by the style of the reference lyrics. " +

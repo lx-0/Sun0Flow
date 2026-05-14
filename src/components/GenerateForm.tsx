@@ -10,6 +10,8 @@ import { useGenerationPoller } from "@/hooks/useGenerationPoller";
 import { useGenerationQueue } from "@/hooks/useGenerationQueue";
 import { track } from "@/lib/analytics";
 import { fetchWithTimeout, clientFetchErrorMessage } from "@/lib/fetch-client";
+import { getPromptValidationError, getRateLimitMeta, reorderPendingQueueIds } from "./generate-form/helpers";
+import type { GenerationPreset, PersonaOption, PromptSuggestion, PromptTemplate, RateLimitStatus, StyleTemplate } from "./generate-form/types";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationQueue } from "./GenerationQueue";
 import { BatchGeneratePanel } from "./BatchGeneratePanel";
@@ -18,58 +20,6 @@ import dynamic from "next/dynamic";
 const Confetti = dynamic(() => import("./Confetti").then((m) => m.Confetti));
 import { UpgradeModal, shouldShowUpgradeModal } from "./UpgradeModal";
 import { InAppFeedbackWidget, hasFeedbackBeenSubmitted } from "./InAppFeedbackWidget";
-
-interface PersonaOption {
-  id: string;
-  personaId: string;
-  name: string;
-  description: string | null;
-  style: string | null;
-}
-
-interface RateLimitStatus {
-  remaining: number;
-  limit: number;
-  resetAt: string;
-}
-
-interface PromptTemplate {
-  id: string;
-  name: string;
-  description: string | null;
-  prompt: string;
-  style: string | null;
-  category: string | null;
-  isInstrumental: boolean;
-  isBuiltIn: boolean;
-}
-
-interface GenerationPreset {
-  id: string;
-  name: string;
-  title: string | null;
-  stylePrompt: string | null;
-  lyricsPrompt: string | null;
-  isInstrumental: boolean;
-  customMode: boolean;
-  createdAt: string;
-}
-
-interface StyleTemplate {
-  id: string;
-  name: string;
-  tags: string;
-  sourceSongId: string | null;
-  createdAt: string;
-}
-
-interface PromptSuggestion {
-  id: string;
-  label: string;
-  stylePrompt: string;
-  isInstrumental: boolean;
-  source: "personal" | "community" | "curated";
-}
 
 export function GenerateForm() {
   const searchParams = useSearchParams();
@@ -558,12 +508,9 @@ export function GenerateForm() {
 
     // Client-side inline validation before hitting the server
     const promptValue = customMode ? lyrics : stylePrompt;
-    if (!promptValue.trim()) {
-      setPromptError(customMode ? "Lyrics are required" : "Style / genre is required");
-      return;
-    }
-    if (promptValue.length > 3000) {
-      setPromptError("Prompt must be 3000 characters or less");
+    const promptValidationError = getPromptValidationError(promptValue, customMode);
+    if (promptValidationError) {
+      setPromptError(promptValidationError);
       return;
     }
     setPromptError(null);
@@ -704,9 +651,11 @@ export function GenerateForm() {
     if (index <= 0) return;
     // Find the pending item at this visual index (skip processing)
     const pendingIndex = index - (activeItems[0]?.status === "processing" ? 1 : 0);
-    if (pendingIndex <= 0) return;
-    const ids = pendingItems.map((i) => i.id);
-    [ids[pendingIndex - 1], ids[pendingIndex]] = [ids[pendingIndex], ids[pendingIndex - 1]];
+    const ids = reorderPendingQueueIds(
+      pendingItems.map((i) => i.id),
+      pendingIndex,
+      "up",
+    );
     reorderQueue(ids);
   }
 
@@ -716,9 +665,11 @@ export function GenerateForm() {
     );
     const pendingItems = activeItems.filter((i) => i.status === "pending");
     const pendingIndex = index - (activeItems[0]?.status === "processing" ? 1 : 0);
-    if (pendingIndex < 0 || pendingIndex >= pendingItems.length - 1) return;
-    const ids = pendingItems.map((i) => i.id);
-    [ids[pendingIndex], ids[pendingIndex + 1]] = [ids[pendingIndex + 1], ids[pendingIndex]];
+    const ids = reorderPendingQueueIds(
+      pendingItems.map((i) => i.id),
+      pendingIndex,
+      "down",
+    );
     reorderQueue(ids);
   }
 
@@ -1474,18 +1425,7 @@ export function GenerateForm() {
 
         {/* Rate limit info panel */}
         {rateLimit && (() => {
-          const used = rateLimit.limit - rateLimit.remaining;
-          const pct = rateLimit.limit > 0 ? Math.round((used / rateLimit.limit) * 100) : 0;
-          const barColor =
-            pct >= 100
-              ? "bg-red-500"
-              : pct >= 80
-                ? "bg-yellow-500"
-                : "bg-green-500";
-          const resetDate = new Date(rateLimit.resetAt);
-          const minsLeft = Math.max(0, Math.ceil((resetDate.getTime() - Date.now()) / 60000));
-          const isAtLimit = rateLimit.remaining === 0;
-          const isNearLimit = pct >= 80 && !isAtLimit;
+          const { used, pct, barColor, minsLeft, isAtLimit, isNearLimit } = getRateLimitMeta(rateLimit);
 
           return (
             <div className="space-y-2">

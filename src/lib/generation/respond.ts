@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { logServerError } from "@/lib/error-logger";
-import { ErrorCode } from "@/lib/api-error";
 import type { GenerationOutcome, TransformOutcome } from "./index";
+import { generationOutcomeToResponse } from "./http-response";
 
 interface LogContext {
   label: string;
@@ -11,14 +11,8 @@ interface LogContext {
 }
 
 interface ResponseOptions {
-  /** Return `{ songs: [song] }` instead of `{ song }`. */
   arrayFormat?: boolean;
-  /** Called on payment-related failures (e.g. 402) to include remaining balance. */
   creditBalanceLookup?: () => Promise<number | undefined>;
-}
-
-function songPayload(song: unknown, arrayFormat?: boolean) {
-  return arrayFormat ? { songs: [song] } : { song };
 }
 
 export async function respondToGeneration(
@@ -26,15 +20,6 @@ export async function respondToGeneration(
   ctx: LogContext,
   options?: ResponseOptions,
 ): Promise<NextResponse> {
-  if (outcome.status === "denied") return outcome.response as NextResponse;
-
-  if (outcome.status === "queued") {
-    return NextResponse.json(
-      { queued: true, message: outcome.message, code: ErrorCode.SERVICE_UNAVAILABLE },
-      { status: 503 },
-    );
-  }
-
   if (outcome.status === "failed") {
     const correlationId = logServerError(ctx.label, outcome.rawError, {
       userId: ctx.userId,
@@ -46,23 +31,16 @@ export async function respondToGeneration(
     if (options?.creditBalanceLookup) {
       creditBalance = await options.creditBalanceLookup().catch(() => undefined);
     }
-
-    return NextResponse.json(
-      {
-        ...songPayload(outcome.song, options?.arrayFormat),
-        error: outcome.error,
-        ...(creditBalance !== undefined && { creditBalance }),
-        rateLimit: outcome.rateLimitStatus,
-        correlationId,
-      },
-      { status: 201 },
-    );
+    return generationOutcomeToResponse(outcome, {
+      arrayFormat: options?.arrayFormat,
+      creditBalance,
+      correlationId,
+    }) as NextResponse;
   }
 
-  return NextResponse.json(
-    { ...songPayload(outcome.song, options?.arrayFormat), rateLimit: outcome.rateLimitStatus },
-    { status: 201 },
-  );
+  return generationOutcomeToResponse(outcome, {
+    arrayFormat: options?.arrayFormat,
+  }) as NextResponse;
 }
 
 interface TransformMeta {

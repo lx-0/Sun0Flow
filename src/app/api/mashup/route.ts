@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { logServerError } from "@/lib/error-logger";
+import { generationOutcomeToResponse } from "@/lib/generation/http-response";
 import { authRoute } from "@/lib/route-handler";
 import { executeMashup, type TrackSource } from "@/lib/mashup";
 
@@ -31,28 +32,15 @@ export const POST = authRoute(async (request, { auth }) => {
     instrumental,
   });
 
-  if (outcome.status === "denied") return outcome.response as NextResponse;
-
-  if (outcome.status === "queued") {
-    return NextResponse.json(
-      { queued: true, message: outcome.message },
-      { status: 503 },
-    );
-  }
-
   if (outcome.status === "failed") {
     logServerError("mashup-api", outcome.rawError, {
       userId: auth.userId,
       route: "/api/mashup",
     });
-    return NextResponse.json(
-      { songs: [outcome.song], error: outcome.error, rateLimit: outcome.rateLimitStatus },
-      { status: 201 },
-    );
   }
 
-  return NextResponse.json(
-    { songs: [outcome.song], rateLimit: outcome.rateLimitStatus },
-    { status: 201 },
-  );
+  return generationOutcomeToResponse(outcome, {
+    arrayFormat: true,
+    includeServiceUnavailableCode: false,
+  }) as NextResponse;
 }, { route: "/api/mashup" });
