@@ -37,6 +37,34 @@ type RateLimitConfig = {
   windowMs: number;
 };
 
+type PipelineCtx<P extends Record<string, string>, B, Q> = {
+  params: P;
+  body: B;
+  query: Q;
+};
+
+function executeWithPipeline<
+  P extends Record<string, string>,
+  B,
+  Q,
+>(
+  request: NextRequest,
+  segmentData: SegmentData<P>,
+  options: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> } | undefined,
+  logLabel: string,
+  logContext: Record<string, unknown>,
+  handler: (ctx: PipelineCtx<P, B, Q>) => Promise<Response>,
+): Promise<Response> {
+  return runRoutePipeline(
+    request,
+    segmentData,
+    options,
+    logLabel,
+    logContext,
+    handler,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Public route wrappers — each handles only its auth strategy, then delegates
 // ---------------------------------------------------------------------------
@@ -59,12 +87,22 @@ export function authRoute<
     const result = await resolveUser(request);
     if (result.error) return result.error;
 
-    return runRoutePipeline(
-      request, segmentData, options, "route-handler", { userId: result.userId },
+    return executeWithPipeline(
+      request,
+      segmentData,
+      options,
+      "route-handler",
+      { userId: result.userId },
       ({ params, body, query }) =>
         handler(request, {
-          auth: { userId: result.userId, isApiKey: result.isApiKey, isAdmin: result.isAdmin },
-          params, body, query,
+          auth: {
+            userId: result.userId,
+            isApiKey: result.isApiKey,
+            isAdmin: result.isAdmin,
+          },
+          params,
+          body,
+          query,
         }),
     );
   };
@@ -90,8 +128,12 @@ export function optionalAuthRoute<
       ? { userId: null, isApiKey: false, isAdmin: false }
       : { userId: result.userId, isApiKey: result.isApiKey, isAdmin: result.isAdmin };
 
-    return runRoutePipeline(
-      request, segmentData, options, "optional-auth-route-handler", { userId: auth.userId },
+    return executeWithPipeline(
+      request,
+      segmentData,
+      options,
+      "optional-auth-route-handler",
+      { userId: auth.userId },
       ({ params, body, query }) =>
         handler(request, { auth, params, body, query }),
     );
@@ -113,8 +155,12 @@ export function publicRoute<
     request: NextRequest,
     segmentData: SegmentData<P>
   ): Promise<Response> => {
-    return runRoutePipeline(
-      request, segmentData, options, "public-route-handler", {},
+    return executeWithPipeline(
+      request,
+      segmentData,
+      options,
+      "public-route-handler",
+      {},
       ({ params, body, query }) =>
         handler(request, { params, body, query }),
     );
@@ -139,8 +185,12 @@ export function adminRoute<
     const { error, user } = await requireAdmin();
     if (error) return error;
 
-    return runRoutePipeline(
-      request, segmentData, options, "admin-route-handler", { userId: user!.id },
+    return executeWithPipeline(
+      request,
+      segmentData,
+      options,
+      "admin-route-handler",
+      { userId: user!.id },
       ({ params, body, query }) =>
         handler(request, { admin: { adminId: user!.id }, params, body, query }),
     );
@@ -175,8 +225,12 @@ export function anonRoute<
       });
     }
 
-    return runRoutePipeline(
-      request, segmentData, options, "anon-route-handler", {},
+    return executeWithPipeline(
+      request,
+      segmentData,
+      options,
+      "anon-route-handler",
+      {},
       ({ params, query }) =>
         handler(request, { anon: { ip }, params, query }),
     );
