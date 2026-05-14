@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveUser, requireAdmin } from "@/lib/auth";
-import { logServerError } from "@/lib/error-logger";
 import { getClientIp } from "@/lib/network";
-import { badRequest, internalError, notFound, rateLimited } from "@/lib/api-error";
-import { parseQueryParams } from "@/lib/query-params";
+import { notFound, rateLimited } from "@/lib/api-error";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
 import type { Result } from "@/lib/result";
+import {
+  runRoutePipeline,
+  type RouteOptions,
+  type SegmentData,
+} from "@/lib/route-pipeline";
 
 export type AuthContext = {
   userId: string;
@@ -34,81 +37,6 @@ type RateLimitConfig = {
   windowMs: number;
 };
 
-type RouteOptions = {
-  route?: string;
-};
-
-type SegmentData<P> = { params: Promise<P> };
-
-// ---------------------------------------------------------------------------
-// Shared pipeline — concentrates params/body/query resolution and error handling
-// ---------------------------------------------------------------------------
-
-async function parseBody<B>(
-  request: NextRequest,
-  schema: z.ZodType<B>
-): Promise<{ data: B; error?: never } | { data?: never; error: NextResponse }> {
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return { error: badRequest("Invalid JSON body") };
-  }
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    const messages = result.error.issues.map((i) => {
-      const path = i.path.join(".");
-      return path ? `${path}: ${i.message}` : i.message;
-    });
-    return { error: badRequest(messages.join("; ")) };
-  }
-  return { data: result.data };
-}
-
-async function runPipeline<
-  P extends Record<string, string>,
-  B,
-  Q,
->(
-  request: NextRequest,
-  segmentData: SegmentData<P> | undefined,
-  options: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> } | undefined,
-  logLabel: string,
-  logContext: Record<string, unknown>,
-  execute: (parsed: { params: P; body: B; query: Q }) => Promise<Response>,
-): Promise<Response> {
-  try {
-    const params = segmentData?.params
-      ? await segmentData.params
-      : ({} as P);
-
-    let body: B = undefined as B;
-    if (options?.body) {
-      const parsed = await parseBody(request, options.body);
-      if (parsed.error) return parsed.error;
-      body = parsed.data;
-    }
-
-    let query: Q = undefined as Q;
-    if (options?.query) {
-      const parsed = parseQueryParams(
-        request.nextUrl.searchParams,
-        options.query,
-      );
-      if (parsed.error) return parsed.error;
-      query = parsed.data;
-    }
-
-    return await execute({ params, body, query });
-  } catch (error) {
-    logServerError(logLabel, error, {
-      ...logContext,
-      route: options?.route ?? new URL(request.url).pathname,
-    });
-    return internalError();
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Public route wrappers — each handles only its auth strategy, then delegates
 // ---------------------------------------------------------------------------
@@ -131,7 +59,7 @@ export function authRoute<
     const result = await resolveUser(request);
     if (result.error) return result.error;
 
-    return runPipeline(
+    return runRoutePipeline(
       request, segmentData, options, "route-handler", { userId: result.userId },
       ({ params, body, query }) =>
         handler(request, {
@@ -162,7 +90,7 @@ export function optionalAuthRoute<
       ? { userId: null, isApiKey: false, isAdmin: false }
       : { userId: result.userId, isApiKey: result.isApiKey, isAdmin: result.isAdmin };
 
-    return runPipeline(
+    return runRoutePipeline(
       request, segmentData, options, "optional-auth-route-handler", { userId: auth.userId },
       ({ params, body, query }) =>
         handler(request, { auth, params, body, query }),
@@ -185,7 +113,7 @@ export function publicRoute<
     request: NextRequest,
     segmentData: SegmentData<P>
   ): Promise<Response> => {
-    return runPipeline(
+    return runRoutePipeline(
       request, segmentData, options, "public-route-handler", {},
       ({ params, body, query }) =>
         handler(request, { params, body, query }),
@@ -211,7 +139,7 @@ export function adminRoute<
     const { error, user } = await requireAdmin();
     if (error) return error;
 
-    return runPipeline(
+    return runRoutePipeline(
       request, segmentData, options, "admin-route-handler", { userId: user!.id },
       ({ params, body, query }) =>
         handler(request, { admin: { adminId: user!.id }, params, body, query }),
@@ -247,7 +175,7 @@ export function anonRoute<
       });
     }
 
-    return runPipeline(
+    return runRoutePipeline(
       request, segmentData, options, "anon-route-handler", {},
       ({ params, query }) =>
         handler(request, { anon: { ip }, params, query }),
@@ -270,7 +198,7 @@ export function cronRoute(
       );
     }
 
-    return runPipeline(
+    return runRoutePipeline(
       request, undefined, options, "cron-route-handler", {},
       () => handler(request),
     );

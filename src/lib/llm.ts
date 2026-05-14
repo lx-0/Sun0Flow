@@ -1,17 +1,7 @@
 import OpenAI from "openai";
 import { logger } from "@/lib/logger";
-
-const DEFAULT_MODEL = "gpt-4o-mini";
-
-function getClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "OPENAI_API_KEY is not set. Add it to your .env file to enable LLM features."
-    );
-  }
-  return new OpenAI({ apiKey });
-}
+import { getOpenAIClient } from "@/lib/openai-client";
+import { OPENAI_MODEL } from "@/lib/env";
 
 /**
  * Generate text using OpenAI's chat completions API.
@@ -32,8 +22,8 @@ export async function generateText(
   systemPrompt: string,
   userPrompt: string
 ): Promise<string | null> {
-  const client = getClient();
-  const model = process.env.OPENAI_MODEL || DEFAULT_MODEL;
+  const client = getOpenAIClient();
+  const model = OPENAI_MODEL;
 
   try {
     const response = await client.chat.completions.create({

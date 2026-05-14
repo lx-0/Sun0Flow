@@ -1,16 +1,9 @@
 import OpenAI from "openai";
 import { logger } from "@/lib/logger";
+import { getOpenAIClient } from "@/lib/openai-client";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 1536;
-
-function getClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not set. Required for embedding-based recommendations.");
-  }
-  return new OpenAI({ apiKey });
-}
 
 /**
  * Build a text representation of a song suitable for embedding.
@@ -50,7 +43,7 @@ export function buildSongEmbeddingText(song: {
  * Returns null on failure rather than throwing.
  */
 export async function generateEmbedding(text: string): Promise<number[] | null> {
-  const client = getClient();
+  const client = getOpenAIClient();
   try {
     const response = await client.embeddings.create({
       model: EMBEDDING_MODEL,
@@ -74,7 +67,7 @@ export async function generateEmbedding(text: string): Promise<number[] | null> 
  */
 export async function generateEmbeddingsBatch(texts: string[]): Promise<(number[] | null)[]> {
   if (texts.length === 0) return [];
-  const client = getClient();
+  const client = getOpenAIClient();
   try {
     const response = await client.embeddings.create({
       model: EMBEDDING_MODEL,

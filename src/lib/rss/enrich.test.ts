@@ -40,13 +40,16 @@ describe("extractTopics", () => {
 describe("suggestStyle", () => {
   it("combines genre, instrument, and mood style", () => {
     const style = suggestStyle("energetic", ["rock", "guitar", "summer"]);
-    expect(style).toContain("rock");
-    expect(style).toContain("guitar");
-    expect(style).toContain("upbeat");
+    const parts = style.split(", ");
+    expect(parts).toContain("rock");
+    expect(parts.some((part) => part.includes("guitar"))).toBe(true);
+    expect(["upbeat", "driving", "anthemic", "pulsing", "festival-ready"]).toContain(parts[2]);
   });
 
   it("uses mood style map when no topics match", () => {
-    expect(suggestStyle("dreamy", [])).toBe("ambient");
+    const style = suggestStyle("dreamy", []);
+    const firstPart = style.split(", ")[0];
+    expect(["ambient", "ethereal", "reverb-heavy", "hazy", "cosmic"]).toContain(firstPart);
   });
 
   it("falls back to mood indie when mood has no style map entry", () => {

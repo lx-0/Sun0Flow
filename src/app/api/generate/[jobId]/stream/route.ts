@@ -1,22 +1,16 @@
-import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveUserApiKey } from "@/lib/sunoapi";
 import { broadcast } from "@/lib/event-bus";
 import { pollToCompletion } from "@/lib/generation/completion";
+import { authRoute } from "@/lib/route-handler";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ jobId: string }> }
-) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
-  const { jobId } = await params;
+export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }) => {
+  const { jobId } = params;
 
   const song = await prisma.song.findUnique({ where: { id: jobId } });
-  if (!song || song.userId !== userId) {
+  if (!song || song.userId !== auth.userId) {
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { "Content-Type": "application/json" },
@@ -64,12 +58,12 @@ export async function GET(
         return;
       }
 
-      const userApiKey = await resolveUserApiKey(userId);
+      const userApiKey = await resolveUserApiKey(auth.userId);
 
       const updates = pollToCompletion(
         {
           songId: jobId,
-          userId,
+          userId: auth.userId,
           sunoJobId: song.sunoJobId,
           apiKey: userApiKey,
           currentPollCount: song.pollCount,
@@ -107,4 +101,4 @@ export async function GET(
       Connection: "keep-alive",
     },
   });
-}
+}, { route: "/api/generate/[jobId]/stream" });
