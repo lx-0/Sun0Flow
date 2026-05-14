@@ -32,6 +32,41 @@ const MOOD_STYLE_MAP: Record<string, string[]> = {
   intense: ["epic", "powerful", "dramatic build"],
 };
 
+const MOOD_STYLE_VARIANTS: Record<string, string[]> = {
+  energetic: ["upbeat", "driving", "anthemic", "festival-ready", "pulsing"],
+  chill: ["lo-fi", "chilled", "downtempo", "gentle", "sunset"],
+  melancholic: ["intimate", "haunting", "wistful", "reflective", "slow burn"],
+  romantic: ["lush", "warm", "intimate", "soulful", "tender"],
+  uplifting: ["anthemic", "radiant", "hopeful", "sunny", "uplifting"],
+  dark: ["brooding", "ominous", "nocturnal", "raw", "tense"],
+  dreamy: ["ethereal", "misty", "cinematic", "hazy", "cosmic"],
+  intense: ["thunderous", "brutal", "raw energy", "dramatic", "ferocious"],
+};
+
+const INSTRUMENT_VARIANTS: Record<string, string[]> = {
+  guitar: ["guitar", "clean guitar", "electric guitar", "strummy guitar"],
+  piano: ["piano", "acoustic piano", "warm piano", "piano-led"],
+  synth: ["synth", "analog synth", "bright synth", "pulsing synth"],
+  drums: ["drums", "tight drums", "live drums", "drum machine"],
+  bass: ["bassline", "deep bass", "growling bass", "grooving bass"],
+  violin: ["violin", "string section", "orchestral strings"],
+  vocal: ["vocals", "layered vocals", "female vocals", "male vocals"],
+};
+
+function stableSeed(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return Math.abs(hash);
+}
+
+function chooseBySeed<T>(items: T[], seed: number, index: number, fallback = ""): T {
+  if (items.length === 0) return fallback as T;
+  return items[(seed + index * 37) % items.length];
+}
+
 export function detectMood(text: string): string {
   const lower = text.toLowerCase();
   let best = "neutral";
@@ -51,7 +86,11 @@ export function extractTopics(text: string): string[] {
   return TOPIC_KEYWORDS.filter((t) => lower.includes(t)).slice(0, 5);
 }
 
-export function suggestStyle(mood: string, topics: string[]): string {
+export function suggestStyle(mood: string, topics: string[], itemKey = ""): string {
+  const seedInput = itemKey
+    ? `${itemKey}|${mood}|${topics.join(",")}`
+    : `${mood}|${topics.join(",")}`;
+  const seed = stableSeed(seedInput);
   const parts: string[] = [];
 
   const genres = [
@@ -59,15 +98,30 @@ export function suggestStyle(mood: string, topics: string[]): string {
     "country", "folk", "metal", "punk", "r&b", "soul", "reggae", "latin",
     "ambient", "lo-fi", "cinematic", "orchestral", "acoustic",
   ];
-  const genrePick = topics.find((t) => genres.includes(t));
-  if (genrePick) parts.push(genrePick);
+  const topicGenres = topics.filter((t) => genres.includes(t));
+  if (topicGenres.length > 0) {
+    parts.push(chooseBySeed(topicGenres, seed, 1, topicGenres[0]));
+  }
 
   const instruments = ["guitar", "piano", "synth", "drums", "bass", "violin", "vocal"];
-  const instrPick = topics.find((t) => instruments.includes(t));
-  if (instrPick) parts.push(instrPick);
+  const topicInstruments = topics.filter((t) => instruments.includes(t));
+  const firstInstrument = topicInstruments[0];
+  if (firstInstrument) {
+    const variants = INSTRUMENT_VARIANTS[firstInstrument];
+    if (variants) {
+      parts.push(chooseBySeed(variants, seed, 2, firstInstrument));
+    } else {
+      parts.push(firstInstrument);
+    }
+  }
 
   const moodStyles = MOOD_STYLE_MAP[mood];
-  if (moodStyles) parts.push(moodStyles[0]);
+  const moodStyleVariants = MOOD_STYLE_VARIANTS[mood] || moodStyles;
+  if (moodStyles) {
+    const fallbackStyle = moodStyles[0] ?? mood;
+    const chosen = chooseBySeed(moodStyleVariants || [fallbackStyle], seed, 3, fallbackStyle);
+    parts.push(chosen);
+  }
 
   if (parts.length === 0) {
     return mood !== "neutral" ? `${mood} indie` : "indie, alternative";
@@ -109,7 +163,7 @@ export function enrichItem(item: RssItem): RssItem {
     ...item,
     mood,
     topics,
-    suggestedStyle: suggestStyle(mood, topics),
+    suggestedStyle: suggestStyle(mood, topics, item.link || item.title || ""),
     excerpt,
   };
 }
