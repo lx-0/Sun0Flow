@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth";
 import {
   uploadFileBase64,
   uploadFileFromUrl,
@@ -7,28 +6,16 @@ import {
   uploadAndExtend,
   resolveUserApiKey,
 } from "@/lib/sunoapi";
-import { logServerError } from "@/lib/error-logger";
 import { executeGeneration, respondToGeneration } from "@/lib/generation";
+import { authRoute } from "@/lib/route-handler";
+import { logServerError } from "@/lib/error-logger";
 
 const MAX_BASE64_SIZE = 10 * 1024 * 1024; // 10MB
 
-export async function POST(request: Request) {
+const postHandler = authRoute(async (request, { auth }) => {
   try {
-    const { userId, error: authError } = await resolveUser(request);
-
-    if (authError) return authError;
-
     const body = await request.json();
-    const {
-      mode,
-      base64Data,
-      fileUrl,
-      title,
-      prompt,
-      style,
-      instrumental,
-      continueAt,
-    } = body;
+    const { mode, base64Data, fileUrl, title, prompt, style, instrumental, continueAt } = body;
 
     if (mode !== "cover" && mode !== "extend") {
       return NextResponse.json(
@@ -61,7 +48,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const userApiKey = await resolveUserApiKey(userId);
+    const userApiKey = await resolveUserApiKey(auth.userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
 
     if (!hasApiKey) {
@@ -72,7 +59,7 @@ export async function POST(request: Request) {
     }
 
     const outcome = await executeGeneration({
-      userId,
+      userId: auth.userId,
       action: "generate",
       songParams: {
         title: title?.trim() || null,
@@ -121,7 +108,12 @@ export async function POST(request: Request) {
 
     return respondToGeneration(
       outcome,
-      { label: "upload-api", userId, route: "/api/upload", params: { mode, hasBase64: !!base64Data, hasUrl: !!fileUrl } },
+      {
+        label: "upload-api",
+        userId: auth.userId,
+        route: "/api/upload",
+        params: { mode, hasBase64: !!base64Data, hasUrl: !!fileUrl },
+      },
       { arrayFormat: true },
     );
   } catch (error) {
@@ -131,4 +123,8 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}, { route: "/api/upload" });
+
+export async function POST(request: Request) {
+  return postHandler(request as never, { params: Promise.resolve({}) });
 }

@@ -243,6 +243,7 @@ describe("POST /api/billing/webhook", () => {
 
     expect(mockPaymentEventFindUnique).toHaveBeenCalledWith({
       where: { stripeEventId: eventId },
+      select: { id: true },
     });
   });
 
