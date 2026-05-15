@@ -1,5 +1,9 @@
 # Sentry Alerting Configuration
 
+> **Backend:** Production points at **GlitchTip** (`errors.yester.cloud`), a self-hosted Sentry-protocol-compatible error tracker. The Sentry SDK (`@sentry/nextjs`) is unchanged — only the DSN host differs. GlitchTip accepts error + performance envelopes but **rejects Session Replay**; `replayIntegration()` is intentionally omitted from `sentry.client.config.ts`. Trace sampling stays at 10%.
+>
+> The Yesterday-internal `glitchtip-mcp` skill (bundled in the private `yesterday-systems-operations` plugin) provides agent-callable triage tools against the same instance.
+
 ## Setup
 
 Set these environment variables to enable Sentry:
