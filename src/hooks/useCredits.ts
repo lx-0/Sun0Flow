@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSSE } from "./useSSE";
 
 export interface CreditsData {
@@ -14,12 +14,17 @@ export interface CreditsData {
   totalGenerationsAllTime: number;
 }
 
+// Burst SSE events from batch generations would otherwise hammer /api/credits
+// once per completed item. Coalesce into a single refetch per window.
+const REFRESH_DEBOUNCE_MS = 400;
+
 /**
  * Fetches the user's current credit balance and refreshes after generation events.
  */
 export function useCredits(enabled = true) {
   const [data, setData] = useState<CreditsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchCredits = useCallback(async () => {
     try {
@@ -34,22 +39,35 @@ export function useCredits(enabled = true) {
     }
   }, []);
 
+  const scheduleRefresh = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      fetchCredits();
+    }, REFRESH_DEBOUNCE_MS);
+  }, [fetchCredits]);
+
   useEffect(() => {
     if (!enabled) return;
     fetchCredits();
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
   }, [enabled, fetchCredits]);
 
-  // Refresh credits after a generation completes
   useSSE({
     enabled,
     handlers: {
       generation_update: (payload) => {
         if (payload.status === "complete" || payload.status === "failed") {
-          fetchCredits();
+          scheduleRefresh();
         }
       },
       queue_item_complete: () => {
-        fetchCredits();
+        scheduleRefresh();
       },
     },
   });

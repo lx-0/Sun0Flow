@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { track } from "@/lib/analytics";
+import {
+  getIsVisible,
+  subscribeVisibility,
+} from "@/lib/realtime/visibility";
 
 export type GenerationStatus = "pending" | "processing" | "ready" | "failed";
 
@@ -86,6 +90,9 @@ export function useGenerationPoller() {
   const pollSong = useCallback(
     async (songId: string) => {
       if (!activeRef.current) return;
+      // Skip network work while the document is hidden — mobile OS would
+      // throttle the timer anyway and a stale fetch on resume adds latency.
+      if (!getIsVisible()) return;
 
       const count = (pollCountRef.current.get(songId) ?? 0) + 1;
       pollCountRef.current.set(songId, count);
@@ -195,8 +202,19 @@ export function useGenerationPoller() {
     const intervals = intervalsRef.current;
     const pollCounts = pollCountRef.current;
     const eventSources = eventSourcesRef.current;
+
+    // Catch up immediately when the tab becomes visible again so the user
+    // doesn't sit on stale "pending" state after returning from lockscreen.
+    const unsubVisibility = subscribeVisibility((visible) => {
+      if (!visible || !activeRef.current) return;
+      for (const songId of intervals.keys()) {
+        pollSong(songId);
+      }
+    });
+
     return () => {
       activeRef.current = false;
+      unsubVisibility();
       Array.from(intervals.values()).forEach((interval) => {
         clearInterval(interval);
       });
@@ -205,7 +223,7 @@ export function useGenerationPoller() {
       Array.from(eventSources.values()).forEach((es) => es.close());
       eventSources.clear();
     };
-  }, []);
+  }, [pollSong]);
 
   const sseConnected = useCallback(
     () => eventSourcesRef.current.size > 0,

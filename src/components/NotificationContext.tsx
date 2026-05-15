@@ -10,6 +10,11 @@ import {
   type ReactNode,
 } from "react";
 import { useSession } from "next-auth/react";
+import { subscribe as subscribeEvents } from "@/lib/realtime/events-stream";
+import {
+  getIsVisible,
+  subscribeVisibility,
+} from "@/lib/realtime/visibility";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -216,8 +221,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (!session?.user) return;
 
     let active = true;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     async function poll() {
+      if (!getIsVisible()) return;
       try {
         // Fetch pending songs
         const pendingRes = await fetch("/api/songs?status=pending");
@@ -304,42 +311,44 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    poll();
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    function startInterval() {
+      if (interval !== null) return;
+      interval = setInterval(poll, POLL_INTERVAL_MS);
+    }
+    function stopInterval() {
+      if (interval === null) return;
+      clearInterval(interval);
+      interval = null;
+    }
+
+    if (getIsVisible()) {
+      poll();
+      startInterval();
+    }
+
+    const unsubVisibility = subscribeVisibility((visible) => {
+      if (!active) return;
+      if (visible) {
+        poll();
+        startInterval();
+      } else {
+        stopInterval();
+      }
+    });
+
     return () => {
       active = false;
-      clearInterval(interval);
+      stopInterval();
+      unsubVisibility();
     };
   }, [session?.user, addNotification, fetchNotifications]);
 
   // ─── SSE subscription for real-time notification delivery ───────────────
   useEffect(() => {
     if (!session?.user) return;
-
-    let es: EventSource | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-    function connect() {
-      es = new EventSource("/api/events");
-
-      es.addEventListener("notification", () => {
-        // A new notification was pushed server-side — refresh from DB
-        fetchNotifications();
-      });
-
-      es.onerror = () => {
-        es?.close();
-        // Reconnect after 5s on error
-        reconnectTimer = setTimeout(connect, 5_000);
-      };
-    }
-
-    connect();
-
-    return () => {
-      es?.close();
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-    };
+    return subscribeEvents("notification", () => {
+      fetchNotifications();
+    });
   }, [session?.user, fetchNotifications]);
 
   const dismissConfetti = useCallback(() => setShowConfetti(false), []);
