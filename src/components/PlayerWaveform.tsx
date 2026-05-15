@@ -1,56 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { proxiedAudioUrl } from "@/lib/audio-cdn";
-
-// ─── Waveform generation ──────────────────────────────────────────────────────
+import { getPeaks } from "@/lib/audio/peaks";
 
 const NUM_BARS = 200;
-
-/** Module-level cache: songId → normalised peak amplitudes */
-const peaksCache = new Map<string, Float32Array>();
-
-async function computePeaks(songId: string): Promise<Float32Array> {
-  const url = proxiedAudioUrl(songId);
-  const res = await fetch(url);
-  const arrayBuffer = await res.arrayBuffer();
-
-  const AudioCtx =
-    window.AudioContext ||
-    (window as unknown as { webkitAudioContext: typeof AudioContext })
-      .webkitAudioContext;
-  const audioCtx = new AudioCtx();
-  let decoded: AudioBuffer;
-  try {
-    decoded = await audioCtx.decodeAudioData(arrayBuffer);
-  } finally {
-    audioCtx.close();
-  }
-
-  const raw = decoded.getChannelData(0);
-  const blockSize = Math.max(1, Math.floor(raw.length / NUM_BARS));
-  const peaks = new Float32Array(NUM_BARS);
-
-  for (let i = 0; i < NUM_BARS; i++) {
-    const start = i * blockSize;
-    const end = Math.min(start + blockSize, raw.length);
-    let max = 0;
-    for (let j = start; j < end; j++) {
-      const v = Math.abs(raw[j]);
-      if (v > max) max = v;
-    }
-    peaks[i] = max;
-  }
-
-  // Normalise so tallest bar fills the full height
-  let maxVal = 0.01;
-  for (let i = 0; i < peaks.length; i++) {
-    if (peaks[i] > maxVal) maxVal = peaks[i];
-  }
-  for (let i = 0; i < peaks.length; i++) peaks[i] /= maxVal;
-
-  return peaks;
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -98,9 +51,7 @@ export function PlayerWaveform({
   reactionsRef.current = reactionTimestamps ?? [];
   commentsRef.current = commentTimestamps ?? [];
 
-  const [peaks, setPeaks] = useState<Float32Array | null>(
-    () => peaksCache.get(songId) ?? null
-  );
+  const [peaks, setPeaks] = useState<Float32Array | null>(null);
   peaksRef.current = peaks;
 
   const [tooltip, setTooltip] = useState<{ x: number; time: number } | null>(
@@ -108,19 +59,14 @@ export function PlayerWaveform({
   );
 
   // ─── Load peaks lazily when song changes ────────────────────────────────────
+  // Decode + peak math live behind getPeaks(); the for-loop runs in a Web
+  // Worker so cover-swiping doesn't jank.
   useEffect(() => {
-    if (peaksCache.has(songId)) {
-      setPeaks(peaksCache.get(songId)!);
-      return;
-    }
     setPeaks(null);
     let cancelled = false;
-    computePeaks(songId)
+    getPeaks(songId, NUM_BARS)
       .then((p) => {
-        if (!cancelled) {
-          peaksCache.set(songId, p);
-          setPeaks(p);
-        }
+        if (!cancelled) setPeaks(p);
       })
       .catch(() => {
         /* silently fall back to placeholder bars */
