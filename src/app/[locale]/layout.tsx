@@ -7,6 +7,7 @@ import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import { SessionProvider } from "@/components/SessionProvider";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { PostHogProvider } from "@/components/PostHogProvider";
+import { QueryProvider } from "@/components/QueryProvider";
 import { ClientOnlyComponents } from "@/components/ClientOnlyComponents";
 import { OnboardingProvider } from "@/components/OnboardingTour";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
@@ -129,17 +130,19 @@ export default async function LocaleLayout({
       </head>
       <body className={`${geistSans.variable} antialiased bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white min-h-screen`}>
         <NextIntlClientProvider messages={messages}>
-          <PostHogProvider>
-            <ServiceWorkerRegistrar />
-            <OfflineIndicator />
-            <RouteAnnouncer />
-            <SessionProvider>
-              <OnboardingProvider>
-                <ClientOnlyComponents />
-                {children}
-              </OnboardingProvider>
-            </SessionProvider>
-          </PostHogProvider>
+          <QueryProvider>
+            <PostHogProvider>
+              <ServiceWorkerRegistrar />
+              <OfflineIndicator />
+              <RouteAnnouncer />
+              <SessionProvider>
+                <OnboardingProvider>
+                  <ClientOnlyComponents />
+                  {children}
+                </OnboardingProvider>
+              </SessionProvider>
+            </PostHogProvider>
+          </QueryProvider>
         </NextIntlClientProvider>
       </body>
     </html>
