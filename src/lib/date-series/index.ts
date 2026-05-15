@@ -57,11 +57,11 @@ export function fillDailySeries(
 
 export function mondayOfWeeksAgo(weeksAgo: number, now: Date = new Date()): string {
   const d = new Date(now);
-  d.setDate(d.getDate() - weeksAgo * 7);
-  const dayOfWeek = d.getDay();
+  d.setUTCDate(d.getUTCDate() - weeksAgo * 7);
+  const dayOfWeek = d.getUTCDay();
   const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  d.setDate(d.getDate() + diffToMon);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + diffToMon);
+  d.setUTCHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
 }
 

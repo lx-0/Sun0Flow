@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("@/lib/env", () => ({
+  get DATABASE_URL() { return "postgres://test:test@localhost:5432/test"; },
+  get OPENAI_API_KEY() { return "test-key"; },
+  env: {},
+}));
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     songEmbedding: {

@@ -1,4 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@/lib/env", () => ({
+  get DATABASE_URL() { return "postgres://test:test@localhost:5432/test"; },
+  get OPENAI_API_KEY() { return "test-key"; },
+  env: {},
+}));
+
 import {
   buildSongEmbeddingText,
   cosineSimilarity,
