@@ -1,47 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { PlayIcon, PauseIcon, MusicalNoteIcon, ClockIcon } from "@heroicons/react/24/solid";
 import Image from "next/image";
 import { useQueue, type QueueSong } from "./QueueContext";
-
-interface RecentSong {
-  id: string;
-  title: string | null;
-  imageUrl: string | null;
-  audioUrl: string | null;
-  duration: number | null;
-  lyrics: string | null;
-  generationStatus: string;
-}
-
-interface HistoryItem {
-  id: string;
-  songId: string;
-  playedAt: string;
-  song: RecentSong;
-}
+import { useRecentlyPlayed, type RecentSong } from "@/hooks/useRecentlyPlayed";
 
 export function RecentlyPlayed() {
-  const [items, setItems] = useState<HistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const loadedRef = useRef(false);
+  const { data: items = [], isPending: loading } = useRecentlyPlayed(20);
 
   const { queue, currentIndex, isPlaying, togglePlay } = useQueue();
   const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
-
-  useEffect(() => {
-    if (loadedRef.current) return;
-    loadedRef.current = true;
-    fetch("/api/history?limit=20")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.items) setItems(data.items);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
 
   if (loading) {
     return (
