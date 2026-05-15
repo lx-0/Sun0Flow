@@ -1,7 +1,7 @@
 ---
 project: SunoFlow
 slug: SunoFlow
-last_updated: 2026-05-15T18:30:00Z
+last_updated: 2026-05-15T19:45:00Z
 current_milestone: none
 active_slice: none
 active_task: none
@@ -46,6 +46,10 @@ PWA / mobile stability + observability batch:
 Auth / observability / data-quality batch (other Claude instance):
 
 - `23116cc` fix(test): use BigInt() instead of literal suffix in active-users tests
+
+Observability follow-up (2026-05-15 evening, 0.1.4):
+
+- `f60a615` feat(observability): log silent generation failures to GlitchTip — `handleSongFailure` + `cleanupStalePending` now emit `logServerError` events. Prod-data audit via `psql DATABASE_PUBLIC_URL` against `Song WHERE generationStatus='failed'` surfaced 21 silent rows: 14× "Generation timed out" (`pollCount=0`, stale-pending sweep), 5× Suno "Internal Error", 2× content-policy rejects (suppressed by regex).
 - `d31671c` test(active-users): cover count, list, and daily helpers
 - `ab1fa19` fix(observability): correct active-user signal, streak triggers, failed-song archival
 - `0d1fbfd` chore: initialise ytstack (brownfield import)

@@ -211,20 +211,43 @@ export async function querySongLibrary(
 
 function cleanupStalePending(userId: string) {
   const staleThreshold = new Date(Date.now() - 15 * 60 * 1000);
-  prisma.song
-    .updateMany({
+  (async () => {
+    const stale = await prisma.song.findMany({
       where: {
         userId,
         generationStatus: "pending",
         updatedAt: { lt: staleThreshold },
       },
+      select: { id: true, sunoJobId: true, pollCount: true, createdAt: true },
+    });
+    if (stale.length === 0) return;
+
+    await prisma.song.updateMany({
+      where: { id: { in: stale.map((s) => s.id) } },
       data: {
         generationStatus: "failed",
         errorMessage: "Generation timed out",
         archivedAt: new Date(),
       },
-    })
-    .catch((err) => {
-      logServerError("songs-stale-cleanup", err, { userId, route: "/api/songs" });
     });
+
+    for (const song of stale) {
+      logServerError(
+        "song-stale-timeout",
+        new Error("Generation timed out (stale-pending sweep)"),
+        {
+          userId,
+          route: "/api/songs",
+          params: {
+            songId: song.id,
+            sunoJobId: song.sunoJobId,
+            pollCount: song.pollCount,
+            ageMs: Date.now() - song.createdAt.getTime(),
+          },
+        },
+      );
+    }
+  })().catch((err) => {
+    logServerError("songs-stale-cleanup", err, { userId, route: "/api/songs" });
+  });
 }

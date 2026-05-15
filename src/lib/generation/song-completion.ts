@@ -1,11 +1,23 @@
 import { recordActivity } from "@/lib/activity";
 import { invalidateByPrefix, audioCache, imageCache } from "@/lib/cache";
+import { logServerError } from "@/lib/error-logger";
 import { broadcast } from "@/lib/event-bus";
 import { resolveBySongId } from "@/lib/generation-queue";
 import { logger } from "@/lib/logger";
 import { notifyFollowersOfNewSong, notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { recordDailyActivity, checkSongMilestones, checkStreakMilestones } from "@/lib/streaks";
+
+const USER_CONTENT_REJECT_PATTERNS = [
+  /artist name/i,
+  /content policy/i,
+  /please change your/i,
+  /copyright/i,
+];
+
+function isUserContentReject(errorMessage: string): boolean {
+  return USER_CONTENT_REJECT_PATTERNS.some((re) => re.test(errorMessage));
+}
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -175,6 +187,22 @@ export async function handleSongFailure(
   errorMessage: string,
 ): Promise<void> {
   await markSongFailed(song, errorMessage);
+
+  if (!isUserContentReject(errorMessage)) {
+    logServerError(
+      "song-generation-failed",
+      new Error(errorMessage),
+      {
+        userId: song.userId,
+        route: "generation/handleSongFailure",
+        params: {
+          songId: song.id,
+          pollCount: song.pollCount,
+          sunoModel: song.sunoModel,
+        },
+      },
+    );
+  }
 
   try {
     broadcast(song.userId, {
