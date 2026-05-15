@@ -229,6 +229,12 @@ async function persistSongCompletion(
     where: { id: song.id },
     data: {
       generationStatus: "ready",
+      // Clear archive timestamp set by an earlier failure on this row. Without
+      // this, a song that failed once and was then recovered (retry, stale-
+      // pending sweep, or SSE poll completing post-restart) stays archivedAt
+      // != null and gets filtered out of the default library view.
+      errorMessage: null,
+      archivedAt: null,
       sunoAudioId: firstSong.id || undefined,
       audioUrl: firstSong.audioUrl || song.audioUrl,
       audioUrlExpiresAt: firstSong.audioUrl ? cdnUrlExpiresAt : song.audioUrlExpiresAt,

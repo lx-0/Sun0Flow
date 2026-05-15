@@ -55,6 +55,10 @@ export const POST = authRoute<{ id: string }>(
           generationStatus: "ready",
           errorMessage: null,
           pollCount: 0,
+          // Un-archive — handleSongFailure set archivedAt when the song failed.
+          // Without clearing it, the row stays hidden from the default library
+          // view even though it is now ready again.
+          archivedAt: null,
         },
       });
       broadcast(auth.userId, {
@@ -82,6 +86,10 @@ export const POST = authRoute<{ id: string }>(
           generationStatus: "pending",
           errorMessage: null,
           pollCount: 0,
+          // Un-archive — handleSongFailure set archivedAt when the song failed.
+          // Without clearing it, the row stays hidden from the default library
+          // view even after generation completes.
+          archivedAt: null,
         },
       });
 
