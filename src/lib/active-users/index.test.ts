@@ -22,7 +22,7 @@ beforeEach(() => {
 
 describe("countActiveUsers", () => {
   it("returns the bigint count coerced to a number", async () => {
-    mockQueryRaw.mockResolvedValueOnce([{ count: 42n }]);
+    mockQueryRaw.mockResolvedValueOnce([{ count: BigInt(42) }]);
     expect(await countActiveUsers(since)).toBe(42);
   });
 
@@ -32,7 +32,7 @@ describe("countActiveUsers", () => {
   });
 
   it("queries Activity and PlayHistory in a UNION", async () => {
-    mockQueryRaw.mockResolvedValueOnce([{ count: 1n }]);
+    mockQueryRaw.mockResolvedValueOnce([{ count: BigInt(1) }]);
     await countActiveUsers(since);
     const sqlFragments = mockQueryRaw.mock.calls[0][0] as TemplateStringsArray;
     const joined = sqlFragments.join("?");
@@ -62,8 +62,8 @@ describe("listActiveUserIds", () => {
 describe("dailyActiveUserCounts", () => {
   it("formats dates as YYYY-MM-DD and coerces bigints", async () => {
     mockQueryRaw.mockResolvedValueOnce([
-      { date: new Date("2026-05-01T00:00:00.000Z"), count: 3n },
-      { date: new Date("2026-05-02T00:00:00.000Z"), count: 7n },
+      { date: new Date("2026-05-01T00:00:00.000Z"), count: BigInt(3) },
+      { date: new Date("2026-05-02T00:00:00.000Z"), count: BigInt(7) },
     ]);
     expect(await dailyActiveUserCounts(since)).toEqual([
       { date: "2026-05-01", count: 3 },
