@@ -250,60 +250,71 @@ export async function runStalePendingRecovery(userId: string): Promise<void> {
   const apiKey = await resolveUserApiKey(userId);
 
   for (const song of stale) {
-    const record: SongRecord = {
-      id: song.id,
-      userId: song.userId,
-      prompt: song.prompt,
-      tags: song.tags,
-      audioUrl: song.audioUrl,
-      audioUrlExpiresAt: song.audioUrlExpiresAt,
-      imageUrl: song.imageUrl,
-      imageUrlExpiresAt: song.imageUrlExpiresAt,
-      duration: song.duration,
-      lyrics: song.lyrics,
-      title: song.title,
-      sunoModel: song.sunoModel,
-      isInstrumental: song.isInstrumental,
-      pollCount: song.pollCount,
-    };
-    const ageMs = now - song.createdAt.getTime();
+    // Per-row isolation: one row's failure (DB error during update, side-
+    // effect throw inside handleSongSuccess/Failure, etc.) must NOT prevent
+    // the remaining stale rows from being recovered.
+    try {
+      const record: SongRecord = {
+        id: song.id,
+        userId: song.userId,
+        prompt: song.prompt,
+        tags: song.tags,
+        audioUrl: song.audioUrl,
+        audioUrlExpiresAt: song.audioUrlExpiresAt,
+        imageUrl: song.imageUrl,
+        imageUrlExpiresAt: song.imageUrlExpiresAt,
+        duration: song.duration,
+        lyrics: song.lyrics,
+        title: song.title,
+        sunoModel: song.sunoModel,
+        isInstrumental: song.isInstrumental,
+        pollCount: song.pollCount,
+      };
+      const ageMs = now - song.createdAt.getTime();
 
-    if (!song.sunoJobId) {
-      await handleSongFailure(record, "Generation timed out (no Suno task ID)");
-      continue;
-    }
+      if (!song.sunoJobId) {
+        await handleSongFailure(record, "Generation timed out (no Suno task ID)");
+        continue;
+      }
 
-    const outcome = await pollOnce(song.sunoJobId, apiKey);
+      const outcome = await pollOnce(song.sunoJobId, apiKey);
 
-    switch (outcome.kind) {
-      case "ready":
-        await handleSongSuccess(record, outcome.songs);
-        break;
-      case "failed":
-        await handleSongFailure(record, outcome.errorMessage);
-        break;
-      case "processing":
-        if (ageMs >= STALE_PENDING_HARD_CEILING_MS) {
-          await handleSongFailure(record, "Generation timed out (upstream still processing)");
-        } else {
-          await prisma.song.update({
-            where: { id: song.id },
-            data: { pollCount: song.pollCount + 1 },
+      switch (outcome.kind) {
+        case "ready":
+          await handleSongSuccess(record, outcome.songs);
+          break;
+        case "failed":
+          await handleSongFailure(record, outcome.errorMessage);
+          break;
+        case "processing":
+          if (ageMs >= STALE_PENDING_HARD_CEILING_MS) {
+            await handleSongFailure(record, "Generation timed out (upstream still processing)");
+          } else {
+            await prisma.song.update({
+              where: { id: song.id },
+              data: { pollCount: song.pollCount + 1 },
+            });
+            logger.warn(
+              { songId: song.id, sunoJobId: song.sunoJobId, pollCount: song.pollCount, ageMs },
+              "stale-pending: upstream still processing, deferring",
+            );
+          }
+          break;
+        case "poll_error":
+          logServerError("song-stale-poll-error", outcome.error, {
+            userId,
+            route: "/api/songs",
+            params: { songId: song.id, sunoJobId: song.sunoJobId, pollCount: song.pollCount, ageMs },
           });
-          logger.warn(
-            { songId: song.id, sunoJobId: song.sunoJobId, pollCount: song.pollCount, ageMs },
-            "stale-pending: upstream still processing, deferring",
-          );
-        }
-        break;
-      case "poll_error":
-        logServerError("song-stale-poll-error", outcome.error, {
-          userId,
-          route: "/api/songs",
-          params: { songId: song.id, sunoJobId: song.sunoJobId, pollCount: song.pollCount, ageMs },
-        });
-        await handleSongFailure(record, "Generation timed out (upstream lost)");
-        break;
+          await handleSongFailure(record, "Generation timed out (upstream lost)");
+          break;
+      }
+    } catch (err) {
+      logServerError("song-stale-recover-error", err, {
+        userId,
+        route: "/api/songs",
+        params: { songId: song.id, sunoJobId: song.sunoJobId },
+      });
     }
   }
 }

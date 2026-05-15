@@ -144,6 +144,28 @@ describe("runStalePendingRecovery", () => {
     );
   });
 
+  it("isolates per-row failures — one bad row does not block subsequent rows", async () => {
+    vi.mocked(prisma.song.findMany).mockResolvedValue([
+      makeStaleRow({ id: "song-bad" }),
+      makeStaleRow({ id: "song-good" }),
+    ] as never);
+    vi.mocked(pollOnce).mockResolvedValue({ kind: "ready", songs: [
+      { id: "x", title: "y", prompt: "p", audioUrl: "https://example.com/a.mp3", status: "complete", createdAt: "2026-05-15T00:00:00Z" },
+    ] });
+    vi.mocked(handleSongSuccess)
+      .mockRejectedValueOnce(new Error("DB exploded"))
+      .mockResolvedValueOnce({ persisted: true, sideEffectErrors: [] });
+
+    await runStalePendingRecovery("user-1");
+
+    expect(handleSongSuccess).toHaveBeenCalledTimes(2);
+    expect(logServerError).toHaveBeenCalledWith(
+      "song-stale-recover-error",
+      expect.any(Error),
+      expect.objectContaining({ params: expect.objectContaining({ songId: "song-bad" }) }),
+    );
+  });
+
   it("fails immediately when no sunoJobId present", async () => {
     vi.mocked(prisma.song.findMany).mockResolvedValue([makeStaleRow({ sunoJobId: null })] as never);
     await runStalePendingRecovery("user-1");

@@ -3,6 +3,7 @@ import { resolveUserApiKey } from "@/lib/sunoapi";
 import { broadcast } from "@/lib/event-bus";
 import { pollToCompletion } from "@/lib/generation/completion";
 import { authRoute } from "@/lib/route-handler";
+import { logServerError } from "@/lib/error-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -86,12 +87,35 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
       });
 
       let streamOpen = true;
-      for await (const update of updates) {
-        if (!streamOpen) continue;
-        try {
-          sendEvent(controller, "generation_update", { ...update });
-        } catch {
-          streamOpen = false;
+      try {
+        for await (const update of updates) {
+          if (!streamOpen) continue;
+          try {
+            sendEvent(controller, "generation_update", { ...update });
+          } catch {
+            streamOpen = false;
+          }
+        }
+      } catch (err) {
+        // pollToCompletion (or one of its side effects) threw. Log it,
+        // surface a terminal failed event to the client so the UI doesn't
+        // hang on a perpetual spinner. The DB row may still be `pending` —
+        // the stale-pending recovery sweep on /api/songs is the backstop.
+        logServerError("generation-stream-error", err, {
+          userId: auth.userId,
+          route: "/api/generate/[jobId]/stream",
+          params: { songId: jobId, sunoJobId: song.sunoJobId },
+        });
+        if (streamOpen) {
+          try {
+            sendEvent(controller, "generation_update", {
+              songId: jobId,
+              status: "failed",
+              errorMessage: "Generation stream error — will retry in background",
+            });
+          } catch {
+            // controller already closed
+          }
         }
       }
 
