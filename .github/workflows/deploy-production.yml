@@ -49,6 +49,8 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Migration safety check
+        env:
+          SUNOFLOW_DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: bash scripts/check-migration-safety.sh
 
       - name: Set build identifier on Railway
