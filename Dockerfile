@@ -32,6 +32,12 @@ FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* env vars must be available at `next build` time because Next.js
+# inlines them into the client bundle AND bakes `headers()` results into the
+# routes manifest. Railway forwards service env vars as --build-arg only when
+# the Dockerfile declares them as ARG.
+ARG NEXT_PUBLIC_SENTRY_DSN
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 RUN pnpm build
 
 # --- Production ---
