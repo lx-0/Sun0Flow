@@ -50,11 +50,39 @@ For the hosted service, contact support for a read-only replica credential suita
 
 ## Available tools
 
-| Tool | Description |
-|------|-------------|
-| `sunoflow_info` | Returns server version and list of all registered tools |
+The canonical reference (with full parameter tables, examples, and credit costs) is [`skills/sunoflow/SKILL.md`](../skills/sunoflow/SKILL.md). Summary of the 16 registered tools:
 
-Additional tools (song generation, library management, etc.) will be registered as the integration matures — see [SUNAA-403](/SUNAA/issues/SUNAA-403) for the roadmap.
+| Tool | Group | Purpose |
+|------|-------|---------|
+| `generate_song` | Generation | Submit a song generation. Returns `songId`; poll `get_song`. |
+| `extend_song` | Generation | Continue an existing song from a point (or end). |
+| `generate_sounds` | Generation | Ambient sounds / SFX (V5 only). |
+| `generate_lyrics` | Generation | Lyrics from a 200-char description (2 credits). |
+| `boost_style` | Generation | Expand a short genre tag into a rich style prompt (5 credits). |
+| `list_songs` | Library | Paginated browse with genre/mood/status filters. |
+| `get_song` | Library | Full song detail (also used for polling pending generations). |
+| `create_playlist` | Library | Create playlist (max 50/user). |
+| `add_to_playlist` | Library | Add song to playlist (max 500/playlist, idempotent). |
+| `separate_vocals` | Audio | Vocal/instrumental split (10) or full stem split (50 credits). |
+| `convert_to_wav` | Audio | Lossless WAV conversion. |
+| `generate_midi` | Audio | Extract per-instrument MIDI tracks. |
+| `create_music_video` | Visual | MP4 with synchronized visuals (retained 15 days). |
+| `generate_cover_image` | Visual | 2 cover-art variations (retained 14 days). |
+| `get_credits` | Utility | Monthly credit balance + cost table. |
+| `sunoflow_info` | Utility | Server version + tool inventory probe. |
+
+## Available resources
+
+Read-only URIs for direct data access:
+
+| URI | Returns |
+|------|---------|
+| `sunoflow://stats/credits` | Credit balance, monthly usage, cost reference |
+| `sunoflow://feed/inspiration` | Top 20 pending RSS-feed inspiration items |
+| `sunoflow://songs/{id}` | Song metadata, audio URL, lyrics, generation params |
+| `sunoflow://playlists/{id}` | Playlist metadata + ordered tracks |
+
+No list-resources for songs/playlists — use `list_songs` and the playlist API for browsing.
 
 ## Adding tools
 

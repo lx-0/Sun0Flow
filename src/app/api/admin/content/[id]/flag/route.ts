@@ -1,37 +1,31 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, logAdminAction } from "@/lib/admin-auth";
+import { adminRoute } from "@/lib/route-handler";
+import { logAdminAction } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notFound } from "@/lib/api-error";
 
-export async function POST(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { error, user: admin } = await requireAdmin();
-  if (error) return error;
-
-  const { id } = await params;
-
+export const POST = adminRoute<{ id: string }>(async (_req, { admin, params }) => {
   const song = await prisma.song.findUnique({
-    where: { id },
+    where: { id: params.id },
     select: { id: true, isHidden: true, title: true },
   });
 
   if (!song) {
-    return NextResponse.json({ error: "Song not found", code: "NOT_FOUND" }, { status: 404 });
+    return notFound("Song not found");
   }
 
   const updated = await prisma.song.update({
-    where: { id },
+    where: { id: params.id },
     data: { isHidden: !song.isHidden },
     select: { id: true, isHidden: true },
   });
 
   await logAdminAction(
-    admin!.id,
+    admin.adminId,
     updated.isHidden ? "flag_content" : "unflag_content",
-    id,
-    `Song "${song.title ?? id}" ${updated.isHidden ? "flagged (hidden)" : "unflagged (visible)"}`
+    params.id,
+    `Song "${song.title ?? params.id}" ${updated.isHidden ? "flagged (hidden)" : "unflagged (visible)"}`
   );
 
   return NextResponse.json(updated);
-}
+}, { route: "/api/admin/content/[id]/flag" });

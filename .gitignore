@@ -51,3 +51,7 @@ prisma.config.ts
 
 # local audio cache
 .audio-cache/
+
+# Tmp files
+~*.md
+~*/

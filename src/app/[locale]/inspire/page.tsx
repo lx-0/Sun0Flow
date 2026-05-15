@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { AppShell } from "@/components/AppShell";
 import { PullToRefreshContainer } from "@/components/PullToRefreshContainer";
+import { useToast } from "@/components/Toast";
 import {
   ArrowPathIcon,
   SparklesIcon,
@@ -289,23 +290,26 @@ function UnifiedCard({
           {item.sourceType === "pending" && onApprove && onDismiss ? (
             <>
               <button
+                type="button"
                 onClick={() => onApprove(item)}
                 className="flex items-center gap-1.5 text-sm font-medium text-teal-400 hover:text-teal-300 transition-colors min-h-[44px]"
               >
                 <CheckCircleIcon className="w-4 h-4" />
                 Generate
               </button>
-              <button
-                onClick={() => onDismiss(item)}
-                className="flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-red-400 transition-colors min-h-[44px] ml-auto"
-                aria-label="Dismiss"
-              >
+                <button
+                type="button"
+                  onClick={() => onDismiss(item)}
+                  className="flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-red-400 transition-colors min-h-[44px] ml-auto"
+                  aria-label="Dismiss"
+                >
                 <XMarkIcon className="w-4 h-4" />
                 Dismiss
               </button>
             </>
           ) : (
             <button
+              type="button"
               onClick={() => onAction(item)}
               className="flex items-center gap-1.5 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors min-h-[44px]"
             >
@@ -410,6 +414,7 @@ function GeneratePicksCTA({
         Auto-curate today&apos;s top inspiration from your RSS feeds with diverse moods and sources.
       </p>
       <button
+        type="button"
         onClick={onGenerate}
         disabled={generating}
         className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
@@ -479,6 +484,7 @@ function TodaysPicksSection({
 
 function InspireContent() {
   const router = useRouter();
+  const { toast } = useToast();
   const { urls: feedUrls, loaded: feedsLoaded } = useDbFeedUrls();
   const igUrls = useStoredUrls(IG_POSTS_KEY);
 
@@ -596,7 +602,14 @@ function InspireContent() {
     async (item: PendingFeedGenerationItem) => {
       try {
         const res = await fetch(`/api/feed-generations/${item.id}/approve`, { method: "POST" });
-        if (!res.ok) return;
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          toast(
+            data?.error ?? "Could not open this suggested item. Please try again.",
+            "error",
+          );
+          return;
+        }
         const data = await res.json();
         setPendingGenerations((prev) => prev.filter((p) => p.id !== item.id));
         const params = new URLSearchParams();
@@ -604,10 +617,10 @@ function InspireContent() {
         if (data.style) params.set("tags", data.style);
         router.push(`/generate?${params.toString()}`);
       } catch {
-        // ignore
+        toast("Could not open this suggested item. Please try again.", "error");
       }
     },
-    [router]
+    [router, toast]
   );
 
   const handleDismissPending = useCallback(async (id: string) => {
@@ -619,9 +632,10 @@ function InspireContent() {
         body: JSON.stringify({ status: "dismissed" }),
       });
     } catch {
-      // ignore — optimistic removal
+      toast("Could not dismiss this item. It may reappear on refresh.", "error");
+      fetchPendingGenerations();
     }
-  }, []);
+  }, [fetchPendingGenerations, toast]);
 
   // ── Today's Picks ──
 
@@ -655,15 +669,18 @@ function InspireContent() {
     setPicksGenerating(true);
     try {
       const res = await fetch("/api/digests/generate", { method: "POST" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        toast("Could not generate today's picks. Please try again.", "error");
+        return;
+      }
       const data = await res.json();
       setPicks(data.digest ?? null);
     } catch {
-      // ignore
+      toast("Could not generate today's picks. Please try again.", "error");
     } finally {
       setPicksGenerating(false);
     }
-  }, []);
+  }, [toast]);
 
   // Auto-generate picks on first visit each day if none exist
   const [autoGenAttempted, setAutoGenAttempted] = useState(false);
@@ -828,40 +845,56 @@ function InspireContent() {
   // ── Action handlers ──
 
   const handleCardAction = useCallback(
-    (item: UnifiedFeedItem) => {
-      switch (item.sourceType) {
-        case "rss": {
-          const rssItem = item.original as FeedItem;
-          const parts: string[] = [];
-          if (rssItem.title) parts.push(rssItem.title);
-          const body = rssItem.content || rssItem.description || "";
-          if (body) parts.push(body.slice(0, 800));
-          if (rssItem.topics && rssItem.topics.length > 0) parts.push(`Themes: ${rssItem.topics.join(", ")}`);
-          if (rssItem.mood && rssItem.mood !== "neutral") parts.push(`Mood: ${rssItem.mood}`);
-          const lyricsPrompt = parts.join("\n\n");
-          const params = new URLSearchParams();
-          params.set("lyricsprompt", lyricsPrompt);
-          const style = rssItem.suggestedStyle || (rssItem.mood !== "neutral" ? rssItem.mood : "");
-          if (style) params.set("tags", style);
-          router.push(`/generate?${params.toString()}`);
-          break;
+    async (item: UnifiedFeedItem) => {
+      try {
+        switch (item.sourceType) {
+          case "rss": {
+            const rssItem = item.original as FeedItem;
+            const normalizeText = (text: string) => text.replace(/\s+/g, " ").trim();
+            const clamp = (text: string, max: number) =>
+              text.length > max ? `${text.slice(0, Math.max(0, max - 1)).trimEnd()}…` : text;
+
+            const title = clamp(normalizeText(rssItem.title || ""), 120);
+            const bodySource = rssItem.content || rssItem.description || "";
+            const body = clamp(normalizeText(bodySource), 520);
+            const topics =
+              rssItem.topics && rssItem.topics.length > 0
+                ? clamp(normalizeText(rssItem.topics.join(", ")), 120)
+                : "";
+
+            const parts: string[] = [];
+            if (title) parts.push(title);
+            if (body) parts.push(body);
+            if (topics) parts.push(`Themes: ${topics}`);
+            if (rssItem.mood && rssItem.mood !== "neutral") parts.push(`Mood: ${rssItem.mood}`);
+            const lyricsPrompt = clamp(parts.join("\n\n"), 800);
+
+            const params = new URLSearchParams();
+            params.set("lyricsprompt", lyricsPrompt);
+            const style = rssItem.suggestedStyle || (rssItem.mood !== "neutral" ? rssItem.mood : "");
+            if (style) params.set("tags", style);
+            router.push(`/generate?${params.toString()}`);
+            break;
+          }
+          case "instagram": {
+            const post = item.original as InstagramPost;
+            router.push(`/generate?prompt=${encodeURIComponent(post.promptSuggestion)}`);
+            break;
+          }
+          case "picks": {
+            const digestItem = item.original as DigestItem;
+            router.push(`/generate?prompt=${encodeURIComponent(digestItem.suggestedPrompt)}`);
+            break;
+          }
+          case "pending":
+            // Handled by onApprove
+            break;
         }
-        case "instagram": {
-          const post = item.original as InstagramPost;
-          router.push(`/generate?prompt=${encodeURIComponent(post.promptSuggestion)}`);
-          break;
-        }
-        case "picks": {
-          const digestItem = item.original as DigestItem;
-          router.push(`/generate?prompt=${encodeURIComponent(digestItem.suggestedPrompt)}`);
-          break;
-        }
-        case "pending":
-          // Handled by onApprove
-          break;
+      } catch {
+        toast("Could not open generator. Please try again.", "error");
       }
     },
-    [router]
+    [router, toast]
   );
 
   const handleApproveCard = useCallback(

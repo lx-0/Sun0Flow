@@ -1,19 +1,8 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { authRoute } from "@/lib/route-handler";
+import { getRateLimitStatus } from "@/lib/rate-limit";
 
-export async function GET(request: Request) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-
-    if (authError) return authError;
-
-    const { status } = await checkRateLimit(userId);
-    return NextResponse.json(status);
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+export const GET = authRoute(async (_request, { auth }) => {
+  const { status } = await getRateLimitStatus(auth.userId);
+  return NextResponse.json(status);
+});

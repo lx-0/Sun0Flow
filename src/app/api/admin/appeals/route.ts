@@ -1,16 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { z } from "zod";
+import { NextResponse } from "next/server";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
+import { zEnumParam, zPageParam } from "@/lib/query-params";
 
-export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+const appealsQuery = z.object({
+  status: zEnumParam(["pending", "approved", "rejected", "all"] as const, "pending"),
+  page: zPageParam(1),
+});
 
-  const params = request.nextUrl.searchParams;
-  const status = params.get("status") || "pending";
-  const page = Math.max(1, parseInt(params.get("page") || "1", 10));
-  const limit = 20;
-  const skip = (page - 1) * limit;
+export const GET = adminRoute<Record<string, never>, undefined, z.infer<typeof appealsQuery>>(async (_request, { query }) => {
+  const { status, page } = query;
+  const skip = pageSkip(page, DEFAULT_PAGE_SIZE);
 
   const where = status === "all" ? {} : { status };
 
@@ -19,7 +21,7 @@ export async function GET(request: NextRequest) {
       where,
       orderBy: { createdAt: "desc" },
       skip,
-      take: limit,
+      take: DEFAULT_PAGE_SIZE,
       include: {
         song: {
           select: {
@@ -45,8 +47,6 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     appeals,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
+    ...offsetPagination(page, DEFAULT_PAGE_SIZE, total),
   });
-}
+}, { route: "/api/admin/appeals", query: appealsQuery });

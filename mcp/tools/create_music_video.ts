@@ -4,8 +4,7 @@
 
 import { registerTool } from "../registry";
 import { prisma } from "@/lib/prisma";
-import { createMusicVideo, SunoApiError } from "@/lib/sunoapi";
-import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
+import { createMusicVideo, SunoApiError, resolveUserApiKeyWithMode } from "@/lib/sunoapi";
 
 registerTool({
   name: "create_music_video",

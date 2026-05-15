@@ -12,120 +12,31 @@ import {
 import { useSession } from "next-auth/react";
 import { proxiedAudioUrl } from "@/lib/audio-cdn";
 import { track } from "@/lib/analytics";
+import {
+  type QueueContextValue,
+  type QueueSong,
+  type RadioParams,
+  type RepeatMode,
+} from "@/components/queue/queue-context-types";
+import {
+  buildPlayQueue,
+  insertAfterCurrent,
+  removeFromQueueState,
+  reorderQueueState,
+  toggleShuffleQueue,
+} from "@/components/queue/queue-ops";
+import { useMediaSession } from "@/components/queue/use-media-session";
+import { usePlaybackRecovery } from "@/components/queue/use-playback-recovery";
+import {
+  loadPlaybackState,
+  savePlaybackState,
+} from "@/components/queue/playback-state";
 
 // ─── Playback state persistence ───────────────────────────────────────────────
 
 const SYNC_DEBOUNCE_MS = 12_000; // save every ~12s of activity
 
-function savePlaybackState(
-  songId: string,
-  position: number,
-  queue: QueueSong[],
-  volume: number,
-  shuffleVersions: boolean,
-  shuffle: boolean,
-  repeat: string,
-  muted: boolean
-) {
-  fetch("/api/user/playback-state", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ songId, position, queue, volume, shuffleVersions, shuffle, repeat, muted }),
-  }).catch(() => {});
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface QueueSong {
-  id: string;
-  title: string | null;
-  audioUrl: string;
-  imageUrl: string | null;
-  duration: number | null;
-  lyrics?: string | null;
-}
-
-export type RepeatMode = "off" | "repeat-all" | "repeat-one";
-
-export interface RadioParams {
-  mood: string | null;
-  genre: string | null;
-  tempoMin?: number | null;
-  tempoMax?: number | null;
-  seedSongId?: string | null;
-}
-
-interface QueueState {
-  /** Songs in play order (shuffled if shuffle is on) */
-  queue: QueueSong[];
-  /** Current index in queue (-1 = nothing playing) */
-  currentIndex: number;
-  isPlaying: boolean;
-  /** True while audio is buffering / waiting for data */
-  isBuffering: boolean;
-  currentTime: number;
-  duration: number;
-  shuffle: boolean;
-  repeat: RepeatMode;
-  volume: number;
-  muted: boolean;
-  /** Source label shown in player, e.g. playlist or library name */
-  playlistSource: string | null;
-  /** Active radio session params, or null when not in radio mode */
-  radioState: RadioParams | null;
-  /** True while radio is fetching more songs */
-  isRadioLoading: boolean;
-  /** When true, advancing songs picks a random version (remix/extension) */
-  shuffleVersions: boolean;
-  /** The version currently playing (null when shuffleVersions is off or song has no variations) */
-  activeVersion: QueueSong | null;
-}
-
-interface QueueActions {
-  /** Replace queue with songs and start playing from given index */
-  playQueue: (songs: QueueSong[], startIndex?: number, source?: string) => void;
-  /** Toggle play/pause for a specific song. If not in queue, plays it solo. */
-  togglePlay: (song?: QueueSong) => void;
-  /** Insert song immediately after the current track */
-  playNext: (song: QueueSong) => void;
-  /** Append song to the end of the queue */
-  addToQueue: (song: QueueSong) => void;
-  /** Remove a track at a given queue index */
-  removeFromQueue: (index: number) => void;
-  /** Move a track from one index to another */
-  reorderQueue: (fromIndex: number, toIndex: number) => void;
-  skipNext: () => void;
-  skipPrev: () => void;
-  seek: (fraction: number) => void;
-  toggleShuffle: () => void;
-  cycleRepeat: () => void;
-  clearQueue: () => void;
-  setVolume: (volume: number) => void;
-  toggleMute: () => void;
-  /** Returns the underlying HTMLAudioElement (for Web Audio API integration) */
-  getAudioElement: () => HTMLAudioElement | null;
-  /** Start a mood-based radio session */
-  startRadio: (params: RadioParams) => Promise<void>;
-  /** Stop the radio session and return to normal mode */
-  stopRadio: () => void;
-  /** Mark a song as disliked — excludes it from future radio fetches */
-  radioThumbsDown: (songId: string) => void;
-  /** Toggle shuffle-across-versions mode */
-  toggleShuffleVersions: () => void;
-}
-
-type QueueContextValue = QueueState & QueueActions;
-
-// ─── Fisher-Yates shuffle ─────────────────────────────────────────────────────
-
-function fisherYatesShuffle<T>(arr: T[]): T[] {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
+export type { QueueSong, RepeatMode, RadioParams } from "@/components/queue/queue-context-types";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -190,6 +101,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const [isRadioLoading, setIsRadioLoading] = useState(false);
   const [shuffleVersions, setShuffleVersions] = useState(false);
   const [activeVersion, setActiveVersion] = useState<QueueSong | null>(null);
+  const [restoredEQ, setRestoredEQ] = useState<{ gains: number[]; speed: number; pitch: number } | null>(null);
+  const eqSettingsRef = useRef({ gains: [0, 0, 0, 0, 0], speed: 1, pitch: 0 });
 
   // Ref versions for use in callbacks without stale closures
   const radioStateRef = useRef<RadioParams | null>(null);
@@ -220,6 +133,18 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const skipNextRef = useRef<() => void>(() => {});
   const skipPrevRef = useRef<() => void>(() => {});
   const hasUserGestureRef = useRef(false);
+
+  // Monotonic counter incremented on every transition that changes the
+  // currently-loaded audio source. Async paths (CDN-error refresh,
+  // playable-versions fetch, deferred canplay handlers) capture the
+  // generation at dispatch time and abort if it no longer matches —
+  // prevents stale fetches from clobbering audio.src after the user has
+  // already moved to a different song.
+  const loadGenerationRef = useRef(0);
+  const bumpLoadGeneration = useCallback(() => {
+    loadGenerationRef.current += 1;
+    return loadGenerationRef.current;
+  }, []);
 
   const trackPlayRef = useRef(trackPlay);
   queueRef.current = queue;
@@ -260,7 +185,18 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     (songId: string, position: number, syncQueue: QueueSong[]) => {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       syncTimerRef.current = setTimeout(() => {
-        savePlaybackState(songId, position, syncQueue, volumeRef.current, shuffleVersionsRef.current, shuffleRef.current, repeatRef.current, mutedRef.current);
+        const eq = eqSettingsRef.current;
+        savePlaybackState({
+          songId,
+          position,
+          queue: syncQueue,
+          volume: volumeRef.current,
+          shuffleVersions: shuffleVersionsRef.current,
+          shuffle: shuffleRef.current,
+          repeat: repeatRef.current,
+          muted: mutedRef.current,
+          eqSettings: { gains: eq.gains, speed: eq.speed, pitch: eq.pitch },
+        });
       }, SYNC_DEBOUNCE_MS);
     },
     []
@@ -287,6 +223,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current;
     if (!audio) return;
 
+    const generation = bumpLoadGeneration();
+
     setCurrentIndex(index);
     setCurrentTime(0);
     setDuration(song.duration ?? 0);
@@ -298,6 +236,9 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     }
 
     const loadAndPlay = (target: QueueSong) => {
+      // Bail if a newer transition has started since this load was scheduled.
+      if (loadGenerationRef.current !== generation) return;
+
       // Installed PWAs are allowed to autoplay. Setting this before changing
       // src lets the browser auto-start the next track without a play() call,
       // which avoids NotAllowedError on mobile during song transitions.
@@ -309,6 +250,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       const onCanPlayOnce = () => {
         audio.removeEventListener("canplay", onCanPlayOnce);
         pendingCanPlayRef.current = null;
+        if (loadGenerationRef.current !== generation) return;
         if (audio.paused) {
           audio.play()
             .then(() => { pendingPlayRef.current = false; })
@@ -344,6 +286,9 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // The fetch may have raced with a newer transition — abort if so.
+    if (loadGenerationRef.current !== generation) return;
+
     if (versions && versions.length > 1) {
       const picked = versions[Math.floor(Math.random() * versions.length)];
       setActiveVersion(picked);
@@ -354,7 +299,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       loadAndPlay(song);
       trackPlayRef.current(song.id);
     }
-  }, [retryPlay]);
+  }, [retryPlay, bumpLoadGeneration]);
 
   resolveAndPlayRef.current = resolveAndPlay;
 
@@ -396,9 +341,12 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       // If this also fails, give up — no further retries to avoid 429 cascades.
       if (currentSong && !cdnFallbackRef.current.has(currentSong.id)) {
         cdnFallbackRef.current.add(currentSong.id);
+        const generation = loadGenerationRef.current;
         fetch(`/api/songs/${currentSong.id}/play`, { method: "POST" })
           .then((res) => (res.ok ? res.json() : Promise.reject()))
           .then((data) => {
+            // Bail if the user has moved to a different song while we waited.
+            if (loadGenerationRef.current !== generation) return;
             if (!data?.audioUrl) {
               setIsBuffering(false);
               setIsPlaying(false);
@@ -411,6 +359,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
             });
           })
           .catch(() => {
+            if (loadGenerationRef.current !== generation) return;
             setIsBuffering(false);
             setIsPlaying(false);
           });
@@ -491,31 +440,20 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       setPlaylistSource(source ?? null);
       originalQueueRef.current = songs;
 
-      let playOrder: QueueSong[];
-      let playIdx: number;
-
-      if (shuffle) {
-        // Shuffle but keep the start song at index 0
-        const startSong = songs[startIndex];
-        const rest = songs.filter((_, i) => i !== startIndex);
-        playOrder = [startSong, ...fisherYatesShuffle(rest)];
-        playIdx = 0;
-      } else {
-        playOrder = songs;
-        playIdx = startIndex;
-      }
+      const { playOrder, playIndex: playIdx } = buildPlayQueue(songs, startIndex, shuffle);
 
       setQueue(playOrder);
       setCurrentIndex(playIdx);
       setCurrentTime(0);
       setDuration(playOrder[playIdx].duration ?? 0);
       audio.pause();
+      bumpLoadGeneration();
       audio.src = getAudioSrc(playOrder[playIdx]);
       retryPlay(audio);
       trackPlay(playOrder[playIdx].id);
       scheduleSyncRef.current?.(playOrder[playIdx].id, 0, playOrder);
     },
-    [shuffle, trackPlay, retryPlay]
+    [shuffle, trackPlay, retryPlay, bumpLoadGeneration]
   );
 
   const togglePlay = useCallback(
@@ -549,6 +487,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       if (idx >= 0) {
         setCurrentIndex(idx);
         audio.pause();
+        bumpLoadGeneration();
         audio.src = getAudioSrc(queue[idx]);
         setCurrentTime(0);
         setDuration(queue[idx].duration ?? 0);
@@ -559,7 +498,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       // Not in queue — play as solo
       playQueue([song], 0);
     },
-    [isPlaying, currentIndex, queue, playQueue]
+    [isPlaying, currentIndex, queue, playQueue, bumpLoadGeneration]
   );
 
   const skipNext = useCallback(() => {
@@ -624,30 +563,14 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const toggleShuffle = useCallback(() => {
     setShuffle((prev) => {
       const next = !prev;
-      const q = queueRef.current;
-      const idx = currentIndexRef.current;
-
-      if (q.length <= 1) return next;
-
-      const currentSong = idx >= 0 ? q[idx] : null;
-
-      if (next) {
-        // Turn shuffle ON — shuffle remaining songs after current
-        const rest = q.filter((_, i) => i !== idx);
-        const shuffled = currentSong
-          ? [currentSong, ...fisherYatesShuffle(rest)]
-          : fisherYatesShuffle(q);
-        setQueue(shuffled);
-        setCurrentIndex(0);
-      } else {
-        // Turn shuffle OFF — restore original order, keep current song playing
-        const original = originalQueueRef.current;
-        if (original.length > 0 && currentSong) {
-          const origIdx = original.findIndex((s) => s.id === currentSong.id);
-          setQueue(original);
-          setCurrentIndex(origIdx >= 0 ? origIdx : 0);
-        }
-      }
+      const result = toggleShuffleQueue(
+        queueRef.current,
+        currentIndexRef.current,
+        next,
+        originalQueueRef.current,
+      );
+      setQueue(result.queue);
+      setCurrentIndex(result.currentIndex);
 
       return next;
     });
@@ -670,12 +593,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const playNext = useCallback((song: QueueSong) => {
-    setQueue((prev) => {
-      const idx = currentIndexRef.current;
-      const next = [...prev];
-      next.splice(idx + 1, 0, song);
-      return next;
-    });
+    setQueue((prev) => insertAfterCurrent(prev, currentIndexRef.current, song));
     originalQueueRef.current = [...originalQueueRef.current, song];
   }, []);
 
@@ -686,39 +604,22 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
   const removeFromQueue = useCallback((index: number) => {
     const audio = audioRef.current;
-    setQueue((prev) => {
-      const next = [...prev];
-      next.splice(index, 1);
-      return next;
-    });
-    setCurrentIndex((prev) => {
-      if (index < prev) return prev - 1;
-      if (index === prev) {
-        // Removing the currently-playing song — stop playback
-        if (audio) { audio.pause(); audio.src = ""; }
-        setIsPlaying(false);
-        setCurrentTime(0);
-        setDuration(0);
-        return -1;
-      }
-      return prev;
-    });
+    const result = removeFromQueueState(queueRef.current, currentIndexRef.current, index);
+    setQueue(result.queue);
+    setCurrentIndex(result.currentIndex);
+    if (result.removedCurrent) {
+      // Removing the currently-playing song — stop playback
+      if (audio) { audio.pause(); audio.src = ""; }
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
+    }
   }, []);
 
   const reorderQueue = useCallback((fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex) return;
-    setQueue((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      return next;
-    });
-    setCurrentIndex((prev) => {
-      if (fromIndex === prev) return toIndex;
-      if (fromIndex < prev && toIndex >= prev) return prev - 1;
-      if (fromIndex > prev && toIndex <= prev) return prev + 1;
-      return prev;
-    });
+    const result = reorderQueueState(queueRef.current, currentIndexRef.current, fromIndex, toIndex);
+    setQueue(result.queue);
+    setCurrentIndex(result.currentIndex);
   }, []);
 
   const clearQueue = useCallback(() => {
@@ -820,8 +721,11 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     const params = radioStateRef.current;
     if (!params) return;
     const excludeIds = Array.from(radioExcludedIds.current);
+    const generation = loadGenerationRef.current;
     fetchRadioSongs(params, excludeIds).then((songs) => {
       if (songs.length === 0) return;
+      // Bail if the user has moved to manual playback in the meantime.
+      if (loadGenerationRef.current !== generation) return;
       songs.forEach((s) => radioExcludedIds.current.add(s.id));
       const audio = audioRef.current;
       setQueue((prev) => {
@@ -830,6 +734,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         if (currentIndexRef.current < 0 && merged.length > 0 && audio) {
           const firstNew = prev.length;
           setCurrentIndex(firstNew);
+          bumpLoadGeneration();
           audio.src = getAudioSrc(merged[firstNew]);
           setCurrentTime(0);
           setDuration(merged[firstNew].duration ?? 0);
@@ -839,97 +744,24 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         return merged;
       });
     });
-  }, [fetchRadioSongs, retryPlay]);
+  }, [fetchRadioSongs, retryPlay, bumpLoadGeneration]);
 
   radioRefillRef.current = radioRefill;
 
-  // ─── Visibility change recovery for background playback ────────────────
-  useEffect(() => {
-    const onVisibilityChange = () => {
-      if (!document.hidden && pendingPlayRef.current && hasUserGestureRef.current) {
-        const audio = audioRef.current;
-        if (audio && audio.src && audio.paused) {
-          audio.play()
-            .then(() => { pendingPlayRef.current = false; })
-            .catch(() => {});
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, []);
-
-  // ─── Resume pending playback on first user gesture ─────────────────────
-  useEffect(() => {
-    const onGesture = () => {
-      hasUserGestureRef.current = true;
-      if (pendingPlayRef.current) {
-        const audio = audioRef.current;
-        if (audio && audio.src && audio.paused) {
-          audio.play()
-            .then(() => { pendingPlayRef.current = false; })
-            .catch(() => {});
-        }
-      }
-      document.removeEventListener("click", onGesture);
-      document.removeEventListener("touchstart", onGesture);
-      document.removeEventListener("keydown", onGesture);
-    };
-    document.addEventListener("click", onGesture);
-    document.addEventListener("touchstart", onGesture);
-    document.addEventListener("keydown", onGesture);
-    return () => {
-      document.removeEventListener("click", onGesture);
-      document.removeEventListener("touchstart", onGesture);
-      document.removeEventListener("keydown", onGesture);
-    };
-  }, []);
-
-  // ─── Media Session API — action handlers (registered once) ─────────────
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-
-    navigator.mediaSession.setActionHandler("play", () => {
-      audioRef.current?.play().catch(() => {});
-    });
-    navigator.mediaSession.setActionHandler("pause", () => {
-      audioRef.current?.pause();
-    });
-    navigator.mediaSession.setActionHandler("nexttrack", () => {
-      skipNextRef.current();
-    });
-    navigator.mediaSession.setActionHandler("previoustrack", () => {
-      skipPrevRef.current();
-    });
-    navigator.mediaSession.setActionHandler("seekto", (details) => {
-      const audio = audioRef.current;
-      if (audio && details.seekTime != null) {
-        audio.currentTime = details.seekTime;
-      }
-    });
-  }, []);
-
-  // ─── Media Session API — metadata (updates when song changes) ──────────
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-    const song = currentIndex >= 0 ? queue[currentIndex] : null;
-    const displaySong = activeVersion ?? song;
-    if (!displaySong) return;
-
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: displaySong.title ?? "Untitled",
-      artist: "SunoFlow",
-      artwork: displaySong.imageUrl
-        ? [{ src: displaySong.imageUrl, sizes: "512x512", type: "image/jpeg" }]
-        : [],
-    });
-  }, [queue, currentIndex, activeVersion]);
-
-  // ─── Media Session API — playback state ────────────────────────────────
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
-  }, [isPlaying]);
+  usePlaybackRecovery({
+    audioRef,
+    pendingPlayRef,
+    hasUserGestureRef,
+  });
+  useMediaSession({
+    isPlaying,
+    queue,
+    currentIndex,
+    activeVersion,
+    audioRef,
+    skipNextRef,
+    skipPrevRef,
+  });
 
   // ─── Auto-restore saved playback state on mount ────────────────────────
   const hasRestoredRef = useRef(false);
@@ -937,76 +769,66 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     if (sessionStatus !== "authenticated" || hasRestoredRef.current) return;
     hasRestoredRef.current = true;
 
-    fetch("/api/user/playback-state")
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.state?.song?.audioUrl) return;
-        const { song, position, queue: savedQueue, volume: savedVol, shuffleVersions: savedShuffleVersions, shuffle: savedShuffle, repeat: savedRepeat, muted: savedMuted } = data.state;
+    loadPlaybackState()
+      .then((restored) => {
+        if (!restored) return;
         const audio = audioRef.current;
         if (!audio) return;
 
-        // Build a queue from saved state
-        const restoreQueue: QueueSong[] =
-          Array.isArray(savedQueue) && savedQueue.length > 0
-            ? savedQueue
-            : [
-                {
-                  id: song.id,
-                  title: song.title,
-                  audioUrl: song.audioUrl,
-                  imageUrl: song.imageUrl,
-                  duration: song.duration,
-                  lyrics: song.lyrics,
-                },
-              ];
-
-        const startIdx = restoreQueue.findIndex((s: QueueSong) => s.id === song.id);
-        const idx = startIdx >= 0 ? startIdx : 0;
+        // If the user interacted before the restore resolved, abandon — we
+        // must not clobber their newly-chosen playback.
+        if (loadGenerationRef.current !== 0) return;
 
         // Load the queue state without auto-playing
-        originalQueueRef.current = restoreQueue;
-        setQueue(restoreQueue);
-        setCurrentIndex(idx);
+        originalQueueRef.current = restored.queue;
+        setQueue(restored.queue);
+        setCurrentIndex(restored.currentIndex);
         setPlaylistSource("Resume");
-        setDuration(restoreQueue[idx].duration ?? 0);
+        setDuration(restored.duration);
 
         // Set the audio source but don't play
         audio.autoplay = false;
-        audio.src = proxiedAudioUrl(restoreQueue[idx].id);
+        const restoreGeneration = bumpLoadGeneration();
+        audio.src = restored.initialSrc;
 
         // Restore shuffleVersions
-        if (savedShuffleVersions === true) {
+        if (restored.shuffleVersions) {
           setShuffleVersions(true);
         }
 
         // Restore shuffle, repeat, muted
-        if (savedShuffle === true) {
+        if (restored.shuffle) {
           setShuffle(true);
         }
-        if (savedRepeat && ["repeat-all", "repeat-one"].includes(savedRepeat)) {
-          setRepeat(savedRepeat as RepeatMode);
-        }
-        if (savedMuted === true) {
+        setRepeat(restored.repeat);
+        if (restored.muted) {
           setMuted(true);
         }
 
         // Restore volume
-        const vol = typeof savedVol === "number" ? savedVol : 1;
-        setVolumeState(vol);
-        volumeRef.current = vol;
-        audio.volume = vol;
+        setVolumeState(restored.volume);
+        volumeRef.current = restored.volume;
+        audio.volume = restored.volume;
+
+        // Restore EQ settings for AudioEQContext to pick up
+        if (restored.eqSettings) {
+          eqSettingsRef.current = restored.eqSettings;
+          setRestoredEQ(restored.eqSettings);
+        }
 
         // Seek to saved position after audio loads
-        if (position > 0 && song.duration) {
+        if (restored.position > 0 && restored.duration > 0) {
           const handleCanPlay = () => {
-            audio.currentTime = position;
             audio.removeEventListener("canplay", handleCanPlay);
+            // Don't seek into a different song the user picked while we waited.
+            if (loadGenerationRef.current !== restoreGeneration) return;
+            audio.currentTime = restored.position;
           };
           audio.addEventListener("canplay", handleCanPlay);
         }
       })
       .catch(() => {});
-  }, [sessionStatus]);
+  }, [sessionStatus, bumpLoadGeneration]);
 
   // ─── Volume ─────────────────────────────────────────────────────────────
 
@@ -1064,6 +886,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     stopRadio,
     radioThumbsDown,
     toggleShuffleVersions,
+    eqSettingsRef,
+    restoredEQ,
   };
 
   return (

@@ -42,15 +42,18 @@ vi.mock("@/lib/credits", () => ({
   getMonthlyCreditUsage: vi.fn(),
   recordCreditUsage: vi.fn(),
   CREDIT_COSTS: { generate: 10, extend: 10, cover: 10, mashup: 10, lyrics: 2, style_boost: 5 },
+  checkCredits: vi.fn(),
+  deductCredits: vi.fn(),
+  getCreditCost: vi.fn((action: string) => {
+    const costs: Record<string, number> = { generate: 10, extend: 10, cover: 10, mashup: 10, lyrics: 2, style_boost: 5 };
+    return costs[action] ?? 10;
+  }),
 }));
 
 vi.mock("@/lib/sunoapi", () => ({
   generateSong: vi.fn(),
-  SunoApiError: class SunoApiError extends Error {},
-}));
-
-vi.mock("@/lib/sunoapi/resolve-key", () => ({
   resolveUserApiKeyWithMode: vi.fn(),
+  SunoApiError: class SunoApiError extends Error {},
 }));
 
 vi.mock("@/lib/sanitize", () => ({
@@ -60,9 +63,9 @@ vi.mock("@/lib/sanitize", () => ({
 // ── Imports after mocks ───────────────────────────────────────────────────────
 
 import { prisma } from "@/lib/prisma";
-import { getMonthlyCreditUsage, recordCreditUsage } from "@/lib/credits";
+import { getMonthlyCreditUsage, recordCreditUsage, checkCredits, deductCredits } from "@/lib/credits";
 import { generateSong } from "@/lib/sunoapi";
-import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
+import { resolveUserApiKeyWithMode } from "@/lib/sunoapi";
 import { getTool } from "../registry";
 
 // Load tools (side-effects register them)
@@ -95,21 +98,7 @@ describe("generate_song tool", () => {
       apiKey: undefined,
       usingPersonalKey: false,
     });
-    vi.mocked(getMonthlyCreditUsage).mockResolvedValue({
-      creditsRemaining: 100,
-      budget: 500,
-      subscriptionBudget: 500,
-      topUpCredits: 0,
-      topUpCreditsRemaining: 0,
-      subscriptionCreditsRemaining: 100,
-      creditsUsedThisMonth: 0,
-      usagePercent: 0,
-      generationsThisMonth: 0,
-      isLow: false,
-      totalCreditsAllTime: 0,
-      totalGenerationsAllTime: 0,
-      dailyChart: [],
-    });
+    vi.mocked(checkCredits).mockResolvedValue({ ok: true, creditCost: 10, creditsRemaining: 100 });
     vi.mocked(prisma.song.create).mockResolvedValue({
       id: "song-abc",
       generationStatus: "ready",
@@ -128,33 +117,19 @@ describe("generate_song tool", () => {
     expect(generateSong).not.toHaveBeenCalled();
   });
 
-  it("calls generateSong when API key is available and records credits", async () => {
+  it("calls generateSong when API key is available and deducts credits", async () => {
     vi.mocked(resolveUserApiKeyWithMode).mockResolvedValue({
       apiKey: "sk-test",
       usingPersonalKey: false,
     });
-    vi.mocked(getMonthlyCreditUsage).mockResolvedValue({
-      creditsRemaining: 100,
-      budget: 500,
-      subscriptionBudget: 500,
-      topUpCredits: 0,
-      topUpCreditsRemaining: 0,
-      subscriptionCreditsRemaining: 100,
-      creditsUsedThisMonth: 0,
-      usagePercent: 0,
-      generationsThisMonth: 0,
-      isLow: false,
-      totalCreditsAllTime: 0,
-      totalGenerationsAllTime: 0,
-      dailyChart: [],
-    });
+    vi.mocked(checkCredits).mockResolvedValue({ ok: true, creditCost: 10, creditsRemaining: 100 });
     vi.mocked(generateSong).mockResolvedValue({ taskId: "task-xyz" });
     vi.mocked(prisma.song.create).mockResolvedValue({
       id: "song-def",
       generationStatus: "pending",
       title: null,
     } as never);
-    vi.mocked(recordCreditUsage).mockResolvedValue(undefined as never);
+    vi.mocked(deductCredits).mockResolvedValue(undefined);
 
     const tool = getTool("generate_song")!;
     const result = await tool.handler({ prompt: "chill lo-fi" }, USER_ID) as {
@@ -165,7 +140,7 @@ describe("generate_song tool", () => {
     expect(generateSong).toHaveBeenCalledWith("chill lo-fi", { title: undefined, style: undefined }, "sk-test");
     expect(result.songId).toBe("song-def");
     expect(result.generationStatus).toBe("pending");
-    expect(recordCreditUsage).toHaveBeenCalledWith(USER_ID, "generate", expect.objectContaining({ creditCost: 10 }));
+    expect(deductCredits).toHaveBeenCalledWith(USER_ID, "generate", expect.objectContaining({ songId: "song-def" }));
   });
 
   it("throws insufficient credits error when balance is low", async () => {
@@ -173,21 +148,7 @@ describe("generate_song tool", () => {
       apiKey: "sk-test",
       usingPersonalKey: false,
     });
-    vi.mocked(getMonthlyCreditUsage).mockResolvedValue({
-      creditsRemaining: 5,
-      budget: 500,
-      subscriptionBudget: 500,
-      topUpCredits: 0,
-      topUpCreditsRemaining: 0,
-      subscriptionCreditsRemaining: 5,
-      creditsUsedThisMonth: 495,
-      usagePercent: 99,
-      generationsThisMonth: 49,
-      isLow: true,
-      totalCreditsAllTime: 495,
-      totalGenerationsAllTime: 49,
-      dailyChart: [],
-    });
+    vi.mocked(checkCredits).mockResolvedValue({ ok: false, creditCost: 10, creditsRemaining: 5 });
 
     const tool = getTool("generate_song")!;
     await expect(tool.handler({ prompt: "rock ballad" }, USER_ID)).rejects.toThrow(

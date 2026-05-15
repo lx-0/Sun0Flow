@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 import { POST } from "./route";
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -22,6 +23,15 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/auth", () => ({
+  resolveUser: vi.fn(),
+  requireAdmin: vi.fn(),
+}));
+
+vi.mock("@/lib/error-logger", () => ({
+  logServerError: vi.fn(),
+}));
+
 vi.mock("bcryptjs", () => ({
   default: {
     hash: vi.fn().mockResolvedValue("new-hashed-password"),
@@ -33,13 +43,14 @@ import bcrypt from "bcryptjs";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeRequest(body: Record<string, unknown>): Request {
-  return new Request("http://localhost/api/auth/reset-password", {
+function makeRequest(body: Record<string, unknown>): NextRequest {
+  return new NextRequest("http://localhost/api/auth/reset-password", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
+const seg = { params: Promise.resolve({}) };
 
 const VALID_USER = { id: "user-1", email: "test@example.com" };
 const VALID_BODY = { token: "valid-reset-token", password: "NewPassword123" };
@@ -56,21 +67,21 @@ beforeEach(() => {
 describe("POST /api/auth/reset-password", () => {
   describe("validation", () => {
     it("returns 400 when token is missing", async () => {
-      const res = await POST(makeRequest({ password: "NewPassword123" }));
+      const res = await POST(makeRequest({ password: "NewPassword123" }), seg);
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.code).toBe("VALIDATION_ERROR");
     });
 
     it("returns 400 when password is missing", async () => {
-      const res = await POST(makeRequest({ token: "valid-reset-token" }));
+      const res = await POST(makeRequest({ token: "valid-reset-token" }), seg);
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.code).toBe("VALIDATION_ERROR");
     });
 
     it("returns 400 when password is too short (< 8 chars)", async () => {
-      const res = await POST(makeRequest({ token: "valid-reset-token", password: "short" }));
+      const res = await POST(makeRequest({ token: "valid-reset-token", password: "short" }), seg);
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.error).toContain("8 characters");
@@ -81,14 +92,14 @@ describe("POST /api/auth/reset-password", () => {
     it("returns 400 when token is invalid (user not found)", async () => {
       vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
 
-      const res = await POST(makeRequest(VALID_BODY));
+      const res = await POST(makeRequest(VALID_BODY), seg);
       expect(res.status).toBe(400);
       const data = await res.json();
       expect(data.error).toContain("Invalid or expired");
     });
 
     it("queries for non-expired tokens only", async () => {
-      await POST(makeRequest(VALID_BODY));
+      await POST(makeRequest(VALID_BODY), seg);
 
       expect(prisma.user.findFirst).toHaveBeenCalledWith({
         where: {
@@ -101,19 +112,19 @@ describe("POST /api/auth/reset-password", () => {
 
   describe("success", () => {
     it("returns 200 with success message", async () => {
-      const res = await POST(makeRequest(VALID_BODY));
+      const res = await POST(makeRequest(VALID_BODY), seg);
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.message).toBe("Password reset successfully");
     });
 
     it("hashes the new password with bcrypt cost 12", async () => {
-      await POST(makeRequest(VALID_BODY));
+      await POST(makeRequest(VALID_BODY), seg);
       expect(bcrypt.hash).toHaveBeenCalledWith("NewPassword123", 12);
     });
 
     it("updates user with new password hash and clears reset token", async () => {
-      await POST(makeRequest(VALID_BODY));
+      await POST(makeRequest(VALID_BODY), seg);
 
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: "user-1" },

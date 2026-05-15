@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PATCH } from "./route";
+import { NextRequest } from "next/server";
 
 vi.mock("@/lib/env", () => ({
   get DATABASE_URL() { return "postgres://test:test@localhost:5432/test"; },
@@ -11,7 +12,7 @@ vi.mock("@/lib/env", () => ({
   env: {},
 }));
 
-vi.mock("@/lib/auth-resolver", () => ({
+vi.mock("@/lib/auth", () => ({
   resolveUser: vi.fn(),
 }));
 
@@ -32,13 +33,13 @@ vi.mock("@/lib/error-logger", () => ({
   logServerError: vi.fn(),
 }));
 
-import { resolveUser } from "@/lib/auth-resolver";
+import { resolveUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const SONG_ID = "song-abc";
 
 function makeRequest(body: Record<string, unknown>) {
-  return new Request(`http://localhost/api/songs/${SONG_ID}/cover-art`, {
+  return new NextRequest(`http://localhost/api/songs/${SONG_ID}/cover-art`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

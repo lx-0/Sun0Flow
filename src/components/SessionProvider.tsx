@@ -10,8 +10,8 @@ import { AudioEQProvider } from "./AudioEQContext";
 import { OnboardingProvider } from "./OnboardingTour";
 import { NotificationProvider, useNotifications } from "./NotificationContext";
 // Lazy-load heavy modals that are only shown on demand
-const ApiKeyWizard = dynamic(() => import("./ApiKeyWizard").then((m) => m.ApiKeyWizard), { ssr: false });
-const Confetti = dynamic(() => import("./Confetti").then((m) => m.Confetti), { ssr: false });
+const ApiKeyWizard = dynamic(() => import("./ApiKeyWizard").then((m) => m.ApiKeyWizard));
+const Confetti = dynamic(() => import("./Confetti").then((m) => m.Confetti));
 
 function ConfettiBridge() {
   const { showConfetti, dismissConfetti } = useNotifications();

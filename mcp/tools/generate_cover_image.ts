@@ -4,8 +4,7 @@
 
 import { registerTool } from "../registry";
 import { prisma } from "@/lib/prisma";
-import { generateCoverImage, SunoApiError } from "@/lib/sunoapi";
-import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
+import { generateCoverImage, SunoApiError, resolveUserApiKeyWithMode } from "@/lib/sunoapi";
 
 registerTool({
   name: "generate_cover_image",

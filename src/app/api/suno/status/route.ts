@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { getRemainingCredits } from "@/lib/sunoapi/status";
-import { SunoApiError } from "@/lib/sunoapi/http";
+import { authRoute } from "@/lib/route-handler";
+import { resolveUserApiKey, getRemainingCredits, SunoApiError } from "@/lib/sunoapi";
+import { handleSunoRouteError } from "@/lib/suno-route";
 
-export async function GET(request: Request) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
-  const apiKey = await resolveUserApiKey(userId);
+export const GET = authRoute(async (_request, { auth }) => {
+  const apiKey = await resolveUserApiKey(auth.userId);
 
   if (!apiKey) {
     return NextResponse.json({ connected: false });
@@ -25,9 +21,22 @@ export async function GET(request: Request) {
     if (err instanceof SunoApiError && err.status === 401) {
       return NextResponse.json({ connected: false, error: "Invalid API key" });
     }
-    return NextResponse.json(
-      { error: "Failed to check Suno connection", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
+    if (err instanceof SunoApiError) {
+      return handleSunoRouteError(err, {
+        logLabel: "suno-status",
+        route: "/api/suno/status",
+        mapOptions: {
+          fallbackMessage: "Failed to check Suno connection",
+        },
+      });
+    }
+    return handleSunoRouteError(err, {
+      logLabel: "suno-status",
+      route: "/api/suno/status",
+      fallbackResponse: NextResponse.json(
+        { error: "Failed to check Suno connection", code: "INTERNAL_ERROR" },
+        { status: 500 },
+      ),
+    });
   }
-}
+}, { route: "/api/suno/status" });

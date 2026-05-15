@@ -157,6 +157,7 @@ pnpm exec prisma studio
 | `pnpm test:watch` | Watch mode unit tests |
 | `pnpm test:e2e` | Run Playwright E2E tests |
 | `pnpm test:e2e:headed` | Run E2E tests with visible browser |
+| `pnpm test:e2e:runner-smoke` | Runner-safe Playwright smoke (auto Chromium + free port) |
 
 ### Linting and formatting
 
@@ -179,8 +180,11 @@ pnpm exec vitest run --coverage
 **E2E tests (Playwright):**
 
 ```bash
-# Make sure the dev server is running first (pnpm dev)
+# Uses Playwright webServer to start/stop app automatically
 pnpm test:e2e
+
+# For constrained runners (no bundled browser, unknown free ports)
+pnpm test:e2e:runner-smoke
 ```
 
 Playwright config lives in `playwright.config.ts`. E2E tests are under `e2e/`.
@@ -378,6 +382,11 @@ Migrations run automatically on container startup (`docker-entrypoint.sh`). To r
 # Against the production database
 DATABASE_URL="postgres://..." pnpm exec prisma migrate deploy
 ```
+
+Production startup uses strict migration safety by default. If `migrate deploy`
+fails, the container exits instead of serving against an unknown schema state.
+For emergency diagnostics only, you can temporarily set `MIGRATIONS_STRICT=false`
+to allow startup after a migration failure.
 
 To roll back a failed migration:
 

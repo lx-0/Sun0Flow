@@ -1,56 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
-import { getSongById } from "@/lib/sunoapi/songs";
-import { SunoApiError } from "@/lib/sunoapi/http";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
+import { getSongById, SunoApiError } from "@/lib/sunoapi";
 import { prisma } from "@/lib/prisma";
-import { logServerError } from "@/lib/error-logger";
-import { apiError, internalError, ErrorCode } from "@/lib/api-error";
+import { handleSunoRouteError, resolveRequiredSunoApiKey } from "@/lib/suno-route";
 
 const MAX_BATCH_SIZE = 20;
 
-export async function POST(request: NextRequest) {
+const importSongsBodySchema = z.object({
+  songIds: z.array(z.string()).min(1, "songIds must not be empty").max(MAX_BATCH_SIZE, `Batch size exceeds limit of ${MAX_BATCH_SIZE}`),
+});
+
+export const POST = authRoute(async (_request, { auth, body }) => {
   try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const apiKey = await resolveUserApiKey(userId!);
-    if (!apiKey) {
-      return apiError("No Suno API key configured", ErrorCode.VALIDATION_ERROR, 400);
+    const apiKey = await resolveRequiredSunoApiKey(auth.userId);
+    if (apiKey instanceof Response) {
+      return apiKey;
     }
 
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return apiError("Invalid JSON body", ErrorCode.VALIDATION_ERROR, 400);
-    }
-
-    if (
-      !body ||
-      typeof body !== "object" ||
-      !Array.isArray((body as Record<string, unknown>).songIds)
-    ) {
-      return apiError("Request body must include a songIds array", ErrorCode.VALIDATION_ERROR, 400);
-    }
-
-    const { songIds } = body as { songIds: string[] };
-
-    if (songIds.length === 0) {
-      return apiError("songIds must not be empty", ErrorCode.VALIDATION_ERROR, 400);
-    }
-
-    if (songIds.length > MAX_BATCH_SIZE) {
-      return apiError(
-        `Batch size exceeds limit of ${MAX_BATCH_SIZE}`,
-        ErrorCode.VALIDATION_ERROR,
-        400
-      );
-    }
-
-    // Find which songs are already imported for this user
     const existing = await prisma.song.findMany({
-      where: { userId: userId!, sunoJobId: { in: songIds } },
+      where: { userId: auth.userId, sunoJobId: { in: body.songIds } },
       select: { sunoJobId: true, id: true },
     });
     const existingMap = new Map(existing.map((s) => [s.sunoJobId!, s.id]));
@@ -59,7 +28,7 @@ export async function POST(request: NextRequest) {
     const skipped: Array<{ sunoId: string; reason: string }> = [];
     const errors: Array<{ id: string; error: string }> = [];
 
-    for (const songId of songIds) {
+    for (const songId of body.songIds) {
       if (existingMap.has(songId)) {
         skipped.push({ sunoId: songId, reason: "already imported" });
         continue;
@@ -69,7 +38,7 @@ export async function POST(request: NextRequest) {
         const song = await getSongById(songId, apiKey);
         const created = await prisma.song.create({
           data: {
-            userId: userId!,
+            userId: auth.userId,
             sunoJobId: song.id,
             title: song.title ?? null,
             audioUrl: song.audioUrl ?? null,
@@ -98,20 +67,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ imported, skipped, errors });
   } catch (error) {
-    if (error instanceof SunoApiError) {
-      if (error.status === 401) {
-        return apiError("Invalid Suno API key", ErrorCode.SUNO_AUTH_ERROR, 401);
-      }
-      if (error.status === 429) {
-        return apiError(
-          "Suno API rate limit exceeded. Please try again later.",
-          ErrorCode.SUNO_RATE_LIMIT,
-          429
-        );
-      }
-      return apiError(error.message, ErrorCode.SUNO_API_ERROR, 502);
-    }
-    logServerError("suno-import", error, { route: "/api/suno/import" });
-    return internalError();
+    return handleSunoRouteError(error, {
+      logLabel: "suno-import",
+      route: "/api/suno/import",
+      mapOptions: {
+        includeRawMessageOnFallback: true,
+      },
+    });
   }
-}
+}, { body: importSongsBodySchema, route: "/api/suno/import" });

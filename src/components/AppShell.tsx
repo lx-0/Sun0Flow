@@ -39,16 +39,16 @@ import {
 import { useTheme } from "./ThemeProvider";
 import dynamic from "next/dynamic";
 import { ErrorBoundary } from "./ErrorBoundary";
-const GlobalPlayer = dynamic(() => import("./GlobalPlayer").then((m) => m.GlobalPlayer), { ssr: false });
+const GlobalPlayer = dynamic(() => import("./GlobalPlayer").then((m) => m.GlobalPlayer));
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
-const KeyboardShortcutsModal = dynamic(() => import("./KeyboardShortcutsModal").then((m) => m.KeyboardShortcutsModal), { ssr: false });
+const KeyboardShortcutsModal = dynamic(() => import("./KeyboardShortcutsModal").then((m) => m.KeyboardShortcutsModal));
 import { NotificationBell } from "./NotificationBell";
 import { SearchBar } from "./SearchBar";
 import { SubscriptionStatusBadge } from "./SubscriptionStatusBadge";
 import { EmailVerificationBanner } from "./EmailVerificationBanner";
 import { SunoStatusBanner } from "./SunoStatusBanner";
 import { LocaleSwitcher } from "./LocaleSwitcher";
-const FeedbackModal = dynamic(() => import("./FeedbackModal").then((m) => m.FeedbackModal), { ssr: false });
+const FeedbackModal = dynamic(() => import("./FeedbackModal").then((m) => m.FeedbackModal));
 
 // prefetch: true forces eager prefetch even before the link enters the viewport.
 // Critical user-flow routes get this treatment so they load instantly on first click.
@@ -225,14 +225,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Load collapsed preference from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem("sidebar-collapsed");
-    if (stored === "true") setSidebarCollapsed(true);
+    try {
+      const stored = localStorage.getItem("sidebar-collapsed");
+      if (stored === "true") setSidebarCollapsed(true);
+    } catch {
+      // localStorage unavailable (iOS PWA restrictions, private browsing)
+    }
   }, []);
 
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
-      localStorage.setItem("sidebar-collapsed", String(next));
+      try {
+        localStorage.setItem("sidebar-collapsed", String(next));
+      } catch {
+        // localStorage unavailable
+      }
       return next;
     });
   }, []);
@@ -272,7 +280,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav links */}
-        <nav aria-label="Primary" className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+        <nav aria-label="Primary" className="flex-1 min-h-0 overflow-y-auto py-3 px-2 space-y-1">
           {navItems.map(({ label, href, icon: Icon, dataTour, prefetch }) => {
             const active = pathname === href;
             return (
@@ -596,18 +604,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Keyboard shortcuts help modal */}
         <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-
-        {/* Feedback button — bottom-right floating, visible when authenticated */}
-        {session?.user && (
-          <button
-            onClick={() => setFeedbackOpen(true)}
-            aria-label="Send feedback"
-            className="fixed bottom-20 right-4 md:bottom-6 z-30 flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-full shadow-lg transition-colors"
-          >
-            <ChatBubbleLeftEllipsisIcon className="w-4 h-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Feedback</span>
-          </button>
-        )}
 
         {/* Feedback modal */}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}

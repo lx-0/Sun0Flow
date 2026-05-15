@@ -1,90 +1,65 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { generateSong, SunoApiError } from "@/lib/sunoapi";
+import { authRoute, requireOwned } from "@/lib/route-handler";
+import { generateSong, resolveUserApiKey } from "@/lib/sunoapi";
 import { prisma } from "@/lib/prisma";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
-import { resolveUserApiKey } from "@/lib/sunoapi/resolve-key";
 import { logServerError } from "@/lib/error-logger";
 import { invalidateByPrefix } from "@/lib/cache";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { broadcast } from "@/lib/event-bus";
+import { userFriendlyError } from "@/lib/generation";
 
-/** Map API errors to user-friendly messages without exposing internals */
-function userFriendlyError(error: unknown): string {
-  if (error instanceof SunoApiError) {
-    if (error.status === 402) return "Insufficient credits. Please check your balance or top up to continue.";
-    if (error.status === 409) return "A conflicting request is already in progress. Please wait and try again.";
-    if (error.status === 422) return `Validation error: ${error.message}`;
-    if (error.status === 429) return "The music generation service is busy. Please try again in a few minutes.";
-    if (error.status === 451) return "This request was blocked for compliance reasons. Please modify your prompt and try again.";
-    if (error.status === 400) return "Invalid generation parameters. Please adjust your prompt and try again.";
-    if (error.status === 401 || error.status === 403) return "API authentication failed. Please check your API key in settings.";
-    if (error.status >= 500) return "The music generation service is temporarily unavailable. Please try again later.";
-    return `Generation failed (Suno ${error.status}): ${error.message}`;
-  }
-  if (error instanceof TypeError && (error.message.includes("fetch") || error.message.includes("network"))) {
-    return "Could not reach the music generation service. Please check your connection and try again.";
-  }
-  return "Song generation failed. Please try again.";
-}
-
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const { id } = await params;
-
-    const song = await prisma.song.findUnique({ where: { id } });
-    if (!song || song.userId !== userId) {
-      return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
-    }
+export const POST = authRoute<{ id: string }>(
+  async (_request, { auth, params }) => {
+    const { data: song, error } = requireOwned(
+      await prisma.song.findUnique({ where: { id: params.id } }),
+      auth.userId,
+      "Song",
+    );
+    if (error) return error;
 
     if (song.generationStatus !== "failed") {
       return NextResponse.json(
         { error: "Only failed songs can be retried", code: "VALIDATION_ERROR" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(userId);
+    const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(auth.userId);
     if (!acquired) {
       const retryAfterSec = Math.max(
         1,
-        Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000)
+        Math.ceil((new Date(rateLimitStatus.resetAt).getTime() - Date.now()) / 1000),
       );
       return NextResponse.json(
         {
-          error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`, code: "RATE_LIMIT",
+          error: `Rate limit exceeded. You can generate up to ${rateLimitStatus.limit} songs per hour.`,
+          code: "RATE_LIMIT",
           resetAt: rateLimitStatus.resetAt,
           rateLimit: rateLimitStatus,
         },
         {
           status: 429,
           headers: { "Retry-After": String(retryAfterSec) },
-        }
+        },
       );
     }
 
-    const userApiKey = await resolveUserApiKey(userId);
+    const userApiKey = await resolveUserApiKey(auth.userId);
     const hasApiKey = !!(userApiKey || SUNOAPI_KEY);
 
     if (!hasApiKey) {
-      // Demo mode — just reset to ready with mock data
       const updated = await prisma.song.update({
-        where: { id },
+        where: { id: params.id },
         data: {
           generationStatus: "ready",
           errorMessage: null,
           pollCount: 0,
         },
       });
-      broadcast(userId, {
+      broadcast(auth.userId, {
         type: "generation_update",
-        data: { songId: id, status: "ready" },
+        data: { songId: params.id, status: "ready" },
       });
       return NextResponse.json({ song: updated, rateLimit: rateLimitStatus }, { status: 200 });
     }
@@ -97,11 +72,11 @@ export async function POST(
           style: song.tags || undefined,
           instrumental: song.isInstrumental,
         },
-        userApiKey
+        userApiKey,
       );
 
       const updated = await prisma.song.update({
-        where: { id },
+        where: { id: params.id },
         data: {
           sunoJobId: result.taskId,
           generationStatus: "pending",
@@ -110,23 +85,23 @@ export async function POST(
         },
       });
 
-      invalidateByPrefix(`dashboard-stats:${userId}`);
-      broadcast(userId, {
+      invalidateByPrefix(`dashboard-stats:${auth.userId}`);
+      broadcast(auth.userId, {
         type: "generation_update",
-        data: { songId: id, status: "pending" },
+        data: { songId: params.id, status: "pending" },
       });
 
       return NextResponse.json({ song: updated, rateLimit: rateLimitStatus }, { status: 200 });
     } catch (apiError) {
       logServerError("retry-api", apiError, {
-        userId,
-        route: `/api/songs/${id}/retry`,
-        params: { songId: id },
+        userId: auth.userId,
+        route: `/api/songs/${params.id}/retry`,
+        params: { songId: params.id },
       });
 
-      const errorMsg = userFriendlyError(apiError);
+      const errorMsg = userFriendlyError(apiError).message;
       const updated = await prisma.song.update({
-        where: { id },
+        where: { id: params.id },
         data: {
           errorMessage: errorMsg,
         },
@@ -134,14 +109,9 @@ export async function POST(
 
       return NextResponse.json(
         { song: updated, error: errorMsg, rateLimit: rateLimitStatus },
-        { status: 200 }
+        { status: 200 },
       );
     }
-  } catch (error) {
-    logServerError("retry-route", error, { route: "/api/songs/retry" });
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+  },
+  { route: "/api/songs/[id]/retry" },
+);

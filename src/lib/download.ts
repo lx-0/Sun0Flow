@@ -3,6 +3,11 @@
  */
 
 import type { AudioFormat, Mp3Quality, WavBitDepth } from "@/lib/audio-metadata";
+import {
+  triggerBrowserDownload,
+  sanitizeForFilename,
+  detectAudioFormat,
+} from "@/lib/download-primitives";
 
 export type { AudioFormat, Mp3Quality, WavBitDepth };
 
@@ -23,12 +28,7 @@ export interface DownloadOptions {
   metadata?: boolean;
 }
 
-/**
- * Detect the native format of a song based on its audio URL.
- */
-export function detectFormat(audioUrl: string): "mp3" | "wav" {
-  return audioUrl.toLowerCase().includes(".wav") ? "wav" : "mp3";
-}
+export { detectAudioFormat as detectFormat } from "@/lib/download-primitives";
 
 /**
  * Download a song via the server-side proxy endpoint.
@@ -77,7 +77,7 @@ export async function downloadSongFile(
     onProgress(50);
     const blob = await res.blob();
     onProgress(100);
-    triggerDownload(blob, extractFilename(res) ?? buildFallbackFilename(song, options.format));
+    triggerBrowserDownload(blob, extractFilename(res) ?? buildFallbackFilename(song, options.format));
     return;
   }
 
@@ -99,7 +99,7 @@ export async function downloadSongFile(
   const mimeType = res.headers.get("content-type") ?? "audio/mpeg";
   const blob = new Blob(chunks, { type: mimeType });
   onProgress(100);
-  triggerDownload(blob, extractFilename(res) ?? buildFallbackFilename(song, options.format));
+  triggerBrowserDownload(blob, extractFilename(res) ?? buildFallbackFilename(song, options.format));
 }
 
 /** Extract filename from Content-Disposition header */
@@ -115,28 +115,14 @@ function buildFallbackFilename(
   song: DownloadableSong,
   format?: AudioFormat | "native"
 ): string {
-  const title = (song.title ?? "song")
-    .replace(/[^a-zA-Z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .toLowerCase() || "song";
+  const title = sanitizeForFilename(song.title);
   const date = song.createdAt
     ? new Date(song.createdAt).toISOString().slice(0, 10)
     : new Date().toISOString().slice(0, 10);
   const ext =
     format === "flac" ? "flac"
     : format === "wav" ? "wav"
-    : detectFormat(song.audioUrl);
+    : detectAudioFormat(song.audioUrl);
   return `${title}-${date}.${ext}`;
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}

@@ -1,20 +1,9 @@
-/**
- * Admin-only Sentry verification endpoint.
- *
- * Throws a test error so you can confirm Sentry is capturing server-side
- * exceptions and source maps are correctly uploaded.
- *
- * GET /api/admin/sentry-test
- */
 import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { adminRoute } from "@/lib/route-handler";
 import { logger } from "@/lib/logger";
 
-export async function GET() {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
+export const GET = adminRoute(async () => {
   const testError = new Error("Sentry verification test — this error is intentional");
   testError.name = "SentryVerificationError";
 
@@ -32,4 +21,4 @@ export async function GET() {
     sentryEventId: eventId ?? null,
     sentryConfigured: Boolean(process.env.SENTRY_DSN),
   });
-}
+}, { route: "/api/admin/sentry-test" });

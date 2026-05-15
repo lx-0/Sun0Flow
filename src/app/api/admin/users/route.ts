@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { z } from "zod";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
-import type { NextRequest } from "next/server";
+import { offsetPagination, pageSkip } from "@/lib/pagination";
 import { TIER_LIMITS } from "@/lib/billing";
+import { zEnumParam, zPaginationQuery, zTrimmedParam } from "@/lib/query-params";
 
-export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+const usersQuery = zPaginationQuery(20, 100).extend({
+  search: zTrimmedParam,
+  sortBy: zEnumParam(["createdAt", "name", "email", "lastLoginAt", "generationCount"] as const, "createdAt"),
+  order: zEnumParam(["asc", "desc"] as const, "desc"),
+});
 
-  const { searchParams } = request.nextUrl;
-  const search = searchParams.get("search") ?? "";
-  const sortBy = searchParams.get("sortBy") ?? "createdAt";
-  const order = searchParams.get("order") === "asc" ? "asc" as const : "desc" as const;
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
+export const GET = adminRoute<Record<string, never>, undefined, z.infer<typeof usersQuery>>(async (_request, { query }) => {
+  const { search, sortBy, order, page, limit } = query;
 
   const where = search
     ? {
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: Object.keys(orderBy).length > 0 ? orderBy : undefined,
-      skip: (page - 1) * limit,
+      skip: pageSkip(page, limit),
       take: limit,
     }),
     prisma.user.count({ where }),
@@ -95,8 +95,6 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     users: result,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
+    ...offsetPagination(page, limit, total),
   });
-}
+}, { route: "/api/admin/users", query: usersQuery });

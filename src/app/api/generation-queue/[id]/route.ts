@@ -1,34 +1,19 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { prisma } from "@/lib/prisma";
+import { authRoute } from "@/lib/route-handler";
+import { cancelItem } from "@/lib/generation-queue";
+import { notFound } from "@/lib/api-error";
 
-/** DELETE: Cancel/remove a queue item */
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { userId, error } = await resolveUser(request);
-  if (error) return error;
+export const DELETE = authRoute<{ id: string }>(
+  async (_request, { auth, params }) => {
+    const result = await cancelItem(auth.userId, params.id);
 
-  const { id } = await params;
+    if (!result.ok) {
+      return notFound("Not found");
+    }
 
-  const item = await prisma.generationQueueItem.findFirst({
-    where: { id, userId },
-  });
-
-  if (!item) {
-    return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
+    return NextResponse.json({ success: true });
+  },
+  {
+    route: "/api/generation-queue/[id]",
   }
-
-  if (item.status === "processing") {
-    // Mark as cancelled rather than deleting — the processing song will still complete
-    await prisma.generationQueueItem.update({
-      where: { id },
-      data: { status: "cancelled" },
-    });
-  } else {
-    await prisma.generationQueueItem.delete({ where: { id } });
-  }
-
-  return NextResponse.json({ success: true });
-}
+);

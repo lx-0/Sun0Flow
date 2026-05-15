@@ -26,12 +26,20 @@ async function fetchPlaylists() {
     const [playlists, smartPlaylists] = await Promise.all([
       prisma.playlist.findMany({
         where: { userId, isSmartPlaylist: false },
-        include: { _count: { select: { songs: true } } },
+        include: {
+          _count: {
+            select: { songs: { where: { song: { archivedAt: null } } } },
+          },
+        },
         orderBy: { updatedAt: "desc" },
       }),
       prisma.playlist.findMany({
         where: { userId, isSmartPlaylist: true },
-        include: { _count: { select: { songs: true } } },
+        include: {
+          _count: {
+            select: { songs: { where: { song: { archivedAt: null } } } },
+          },
+        },
         orderBy: { createdAt: "asc" },
       }),
     ]);

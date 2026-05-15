@@ -35,6 +35,21 @@ const mockStripeInstance = {
 vi.mock("@/lib/stripe", () => ({
   default: vi.fn(() => mockStripeInstance),
   STRIPE_WEBHOOK_SECRET: vi.fn(() => "whsec_test_secret"),
+  STRIPE_PRICES: {
+    get starter() { return "price_starter"; },
+    get pro() { return "price_pro"; },
+    get studio() { return "price_studio"; },
+  },
+  STRIPE_TOPUP_PRICES: {
+    get credits_10() { return "price_topup_10"; },
+    get credits_25() { return "price_topup_25"; },
+    get credits_50() { return "price_topup_50"; },
+  },
+  TOPUP_PACKAGES: [
+    { id: "credits_10", credits: 10, label: "10 Credits", priceLabel: "$0.99" },
+    { id: "credits_25", credits: 25, label: "25 Credits", priceLabel: "$1.99" },
+    { id: "credits_50", credits: 50, label: "50 Credits", priceLabel: "$3.49" },
+  ],
 }));
 
 const mockPaymentEventFindUnique = vi.fn();
@@ -228,6 +243,7 @@ describe("POST /api/billing/webhook", () => {
 
     expect(mockPaymentEventFindUnique).toHaveBeenCalledWith({
       where: { stripeEventId: eventId },
+      select: { id: true },
     });
   });
 
@@ -534,7 +550,7 @@ describe("POST /api/billing/webhook", () => {
 
   // ── Unhandled events ────────────────────────────────────────────────────────
 
-  it("returns 200 for unhandled event types without processing", async () => {
+  it("returns 200 for unhandled event types and records the event", async () => {
     mockConstructEvent.mockReturnValue(
       makeStripeEvent("customer.created", { id: "cus_new" })
     );
@@ -543,7 +559,14 @@ describe("POST /api/billing/webhook", () => {
     expect(res.status).toBe(200);
     expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
-    expect(mockPaymentEventCreate).not.toHaveBeenCalled();
+    expect(mockPaymentEventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "customer.created",
+          status: "processed",
+        }),
+      })
+    );
   });
 
   // ── Error handling ──────────────────────────────────────────────────────────

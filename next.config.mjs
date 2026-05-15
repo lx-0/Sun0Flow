@@ -63,13 +63,14 @@ const nextConfig = {
       )
     );
 
-    // node-cron uses Node.js built-ins (child_process, stream) that are not
-    // available in the edge runtime. Mark it as external so webpack skips
-    // bundling it; it is resolved at runtime by the Node.js server.
+    // node-cron and crypto use Node.js built-ins that are not available in
+    // the edge runtime. Mark them as external so webpack skips bundling;
+    // they are resolved at runtime by the Node.js server.
     if (isServer) {
       config.externals = [
         ...(Array.isArray(config.externals) ? config.externals : [config.externals]),
         "node-cron",
+        "crypto",
       ];
     }
     return config;
@@ -108,6 +109,15 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/style-templates",
+        destination: "/templates?tab=styles",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return {
       // afterFiles: filesystem routes (e.g. /api/v1/openapi.json) match
@@ -122,6 +132,31 @@ const nextConfig = {
   },
 
   async headers() {
+    // Derive the Sentry/GlitchTip ingest origin from the public DSN so the
+    // CSP doesn't hard-code an internal hostname. Falls back to no extra
+    // origin when no DSN is configured.
+    const sentryIngestOrigin = (() => {
+      const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+      if (!dsn) return "";
+      try {
+        return new URL(dsn).origin;
+      } catch {
+        return "";
+      }
+    })();
+
+    const connectSrc = [
+      "'self'",
+      "https://*.sunoapi.org",
+      "https://*.aiquickdraw.com",
+      "https://*.posthog.com",
+      "https://us.i.posthog.com",
+      "https://eu.i.posthog.com",
+      sentryIngestOrigin,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     const securityHeaders = [
       {
         key: "Content-Security-Policy",
@@ -132,7 +167,7 @@ const nextConfig = {
           "img-src 'self' data: blob: https:",
           "media-src 'self' blob: https://*.sunoapi.org https://*.aiquickdraw.com",
           "font-src 'self' data:",
-          "connect-src 'self' https://*.sunoapi.org https://*.aiquickdraw.com https://*.posthog.com https://us.i.posthog.com https://eu.i.posthog.com https://errors.yester.cloud",
+          `connect-src ${connectSrc}`,
           "frame-ancestors 'none'",
           "base-uri 'self'",
           "form-action 'self'",

@@ -1,1 +1,1 @@
-COREPACK_HOME=/tmp/corepack pnpm lint-staged
+./node_modules/.bin/lint-staged

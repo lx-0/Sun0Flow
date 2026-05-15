@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useSongsList, type SongsFilters } from "@/hooks/useSongsList";
 import {
   MusicalNoteIcon,
   ArrowPathIcon,
@@ -279,15 +280,6 @@ export function HistoryView({
   const [loadingMore, setLoadingMore] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
-  // ─── Build query params for API fetch ─────────────────────────────────────
-  function buildParams(cursor?: string): URLSearchParams {
-    const params = new URLSearchParams();
-    if (activeFilter !== "all") params.set("status", activeFilter);
-    params.set("sortBy", sortKey);
-    if (cursor) params.set("cursor", cursor);
-    return params;
-  }
-
   // ─── Sync filter state → URL ──────────────────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams();
@@ -299,67 +291,44 @@ export function HistoryView({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilter, sortKey]);
 
-  // ─── Re-fetch when filter/sort changes ────────────────────────────────────
-  const [filterVersion, setFilterVersion] = useState(0);
+  // ─── Songs query (filter + sort + load-more behind one infinite query) ───
+  const songsFilters: SongsFilters = useMemo(() => ({
+    status: activeFilter !== "all" ? activeFilter : undefined,
+    sortBy: sortKey,
+  }), [activeFilter, sortKey]);
+
+  const songsQuery = useSongsList(songsFilters);
 
   useEffect(() => {
-    // Skip the initial render — we already have server-side data
-    if (filterVersion === 0) return;
+    if (!songsQuery.data) return;
+    const allSongs = songsQuery.data.pages.flatMap((p) => p.songs);
+    setSongs(allSongs);
+    const lastPage = songsQuery.data.pages.at(-1);
+    setNextCursor(lastPage?.nextCursor ?? null);
+    setTotalSongs(lastPage?.total ?? allSongs.length);
+  }, [songsQuery.data]);
 
-    let cancelled = false;
-    setLoading(true);
-    setNextCursor(null);
+  useEffect(() => {
+    setLoading(songsQuery.isFetching && !songsQuery.isFetchingNextPage && songs.length === 0);
+  }, [songsQuery.isFetching, songsQuery.isFetchingNextPage, songs.length]);
 
-    const params = buildParams();
-
-    fetch(`/api/songs?${params.toString()}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled && data.songs) {
-          setSongs(data.songs);
-          setNextCursor(data.nextCursor ?? null);
-          setTotalSongs(data.total ?? data.songs.length);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterVersion]);
+  useEffect(() => {
+    setLoadingMore(songsQuery.isFetchingNextPage);
+  }, [songsQuery.isFetchingNextPage]);
 
   function handleFilterChange(filter: string) {
     setActiveFilter(filter);
-    setFilterVersion((v) => v + 1);
   }
 
   function handleSortChange(sort: SortKey) {
     setSortKey(sort);
-    setFilterVersion((v) => v + 1);
   }
 
   // ─── Load more ────────────────────────────────────────────────────────────
   const handleLoadMore = useCallback(() => {
-    if (!nextCursor || loadingMore) return;
-
-    const params = buildParams(nextCursor);
-    setLoadingMore(true);
-
-    fetch(`/api/songs?${params.toString()}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.songs) {
-          setSongs((prev) => [...prev, ...data.songs]);
-          setNextCursor(data.nextCursor ?? null);
-          setTotalSongs(data.total ?? totalSongs);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoadingMore(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nextCursor, loadingMore, activeFilter, sortKey]);
+    if (!songsQuery.hasNextPage || songsQuery.isFetchingNextPage) return;
+    songsQuery.fetchNextPage();
+  }, [songsQuery]);
 
   // ─── Retry handler ────────────────────────────────────────────────────────
   async function handleRetry(song: Song) {

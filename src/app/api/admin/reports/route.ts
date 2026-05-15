@@ -1,49 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
-import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+import { NextResponse } from "next/server";
+import { adminRoute } from "@/lib/route-handler";
+import { listReports } from "@/lib/moderation";
+import { zEnumParam, zPageParam } from "@/lib/query-params";
 
-export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+const reportsQuery = z.object({
+  status: zEnumParam(["pending", "actioned", "dismissed", "all"] as const, "pending"),
+  page: zPageParam(1),
+});
 
-  const params = request.nextUrl.searchParams;
-  const status = params.get("status") || "pending";
-  const page = Math.max(1, parseInt(params.get("page") || "1", 10));
-  const limit = 20;
-  const skip = (page - 1) * limit;
+export const GET = adminRoute<Record<string, never>, undefined, z.infer<typeof reportsQuery>>(async (_request, { query }) => {
+  const { status, page } = query;
 
-  const where = status === "all" ? {} : { status };
-
-  const [reports, total] = await Promise.all([
-    prisma.report.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: limit,
-      include: {
-        song: {
-          select: {
-            id: true,
-            title: true,
-            imageUrl: true,
-            audioUrl: true,
-            isHidden: true,
-            userId: true,
-            user: { select: { id: true, name: true, email: true } },
-          },
-        },
-        reporter: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    }),
-    prisma.report.count({ where }),
-  ]);
-
-  return NextResponse.json({
-    reports,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
-  });
-}
+  const result = await listReports({ status, page });
+  return NextResponse.json(result);
+}, { route: "/api/admin/reports", query: reportsQuery });

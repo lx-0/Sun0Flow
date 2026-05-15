@@ -96,6 +96,13 @@ describe("middleware — protected route access", () => {
     expect(res.status).not.toBe(307);
   });
 
+  it("allows unauthenticated access to /api/songs/public", async () => {
+    vi.mocked(getToken).mockResolvedValue(null);
+
+    const res = await middleware(makeRequest("http://localhost/api/songs/public?limit=3"));
+    expect(res.status).not.toBe(307);
+  });
+
   it("redirects authenticated users away from /login to /", async () => {
     vi.mocked(getToken).mockResolvedValue({ id: "user-1", sub: "user-1" } as never);
 

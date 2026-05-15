@@ -1,12 +1,9 @@
-import { resolveUser } from "@/lib/auth-resolver";
+import { authRoute } from "@/lib/route-handler";
 import { subscribe, SSEEvent } from "@/lib/event-bus";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
+export const GET = authRoute(async (request, { auth }) => {
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
 
@@ -15,7 +12,7 @@ export async function GET(request: Request) {
       // Send initial keepalive
       controller.enqueue(encoder.encode(": connected\n\n"));
 
-      unsubscribe = subscribe(userId, (event: SSEEvent) => {
+      unsubscribe = subscribe(auth.userId, (event: SSEEvent) => {
         try {
           const payload = `event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`;
           controller.enqueue(encoder.encode(payload));
@@ -56,4 +53,4 @@ export async function GET(request: Request) {
       Connection: "keep-alive",
     },
   });
-}
+}, { route: "/api/events" });

@@ -1,25 +1,18 @@
 import { NextResponse } from "next/server";
-import { logger } from "@/lib/logger";
+import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { publicRoute } from "@/lib/route-handler";
+import { badRequest } from "@/lib/api-error";
 
-export async function POST(request: Request) {
-  try {
-    const { token, password } = await request.json();
+const resetPasswordBody = z.object({
+  token: z.string().trim().min(1, "Token is required"),
+  password: z.string().trim().min(8, "Password must be at least 8 characters"),
+});
 
-    if (!token || !password) {
-      return NextResponse.json(
-        { error: "Token and password are required", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    if (password.length < 8) {
-      return NextResponse.json(
-        { error: "Password must be at least 8 characters", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
+export const POST = publicRoute<Record<string, never>, z.infer<typeof resetPasswordBody>>(
+  async (_request, { body }) => {
+    const { token, password } = body;
 
     const user = await prisma.user.findFirst({
       where: {
@@ -29,10 +22,7 @@ export async function POST(request: Request) {
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Invalid or expired reset token", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
+      return badRequest("Invalid or expired reset token");
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -47,11 +37,9 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ message: "Password reset successfully" });
-  } catch (err) {
-    logger.error({ err }, "reset-password: error");
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
+  },
+  {
+    body: resetPasswordBody,
+    route: "/api/auth/reset-password",
   }
-}
+);

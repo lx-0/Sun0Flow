@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
-import { logServerError } from "@/lib/error-logger";
+import { notFound } from "@/lib/api-error";
 
 /**
  * POST /api/songs/[id]/cover-art/generate
@@ -13,23 +13,16 @@ import { logServerError } from "@/lib/error-logger";
  * In v1 this is a placeholder that generates deterministic SVG images.
  * A future version can integrate an external AI image generation service.
  */
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const { id } = await params;
-
+export const POST = authRoute<{ id: string }>(
+  async (_request, { auth, params }) => {
+    const { id } = params;
     const song = await prisma.song.findFirst({
-      where: { id, userId: userId! },
+      where: { id, userId: auth.userId },
       select: { id: true, title: true, tags: true },
     });
 
     if (!song) {
-      return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
+      return notFound();
     }
 
     const variants = generateCoverArtVariants({
@@ -39,13 +32,6 @@ export async function POST(
     });
 
     return NextResponse.json({ variants });
-  } catch (error) {
-    logServerError("cover-art-generate", error, {
-      route: "/api/songs/[id]/cover-art/generate",
-    });
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+  },
+  { route: "/api/songs/[id]/cover-art/generate" },
+);

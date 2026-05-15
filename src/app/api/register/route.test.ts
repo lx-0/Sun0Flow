@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "./route";
 
+vi.mock("@/lib/auth/session", () => ({
+  auth: vi.fn(),
+  handlers: {},
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+  googleEnabled: false,
+}));
+
 vi.mock("@/lib/env", () => ({
   get DATABASE_URL() { return "postgres://test:test@localhost:5432/test"; },
   get AUTH_SECRET() { return "test-secret"; },
@@ -51,6 +59,7 @@ vi.mock("bcryptjs", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
+const seg = { params: Promise.resolve({}) };
 
 function makeRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest("http://localhost/api/register", {
@@ -75,7 +84,7 @@ describe("POST /api/register", () => {
       email: "test@example.com",
       password: "password123",
       name: "Test User",
-    }));
+    }), seg);
 
     expect(res.status).toBe(201);
     const data = await res.json();
@@ -83,36 +92,36 @@ describe("POST /api/register", () => {
   });
 
   it("returns 400 when email is missing", async () => {
-    const res = await POST(makeRequest({ password: "password123" }));
+    const res = await POST(makeRequest({ password: "password123" }), seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.code).toBe("VALIDATION_ERROR");
   });
 
   it("returns 400 when password is missing", async () => {
-    const res = await POST(makeRequest({ email: "test@example.com" }));
+    const res = await POST(makeRequest({ email: "test@example.com" }), seg);
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when password is too short", async () => {
-    const res = await POST(makeRequest({ email: "test@example.com", password: "short" }));
+    const res = await POST(makeRequest({ email: "test@example.com", password: "short" }), seg);
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when password is too long", async () => {
-    const res = await POST(makeRequest({ email: "test@example.com", password: "p".repeat(129) }));
+    const res = await POST(makeRequest({ email: "test@example.com", password: "p".repeat(129) }), seg);
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when email is too long", async () => {
-    const res = await POST(makeRequest({ email: "a".repeat(256) + "@example.com", password: "password123" }));
+    const res = await POST(makeRequest({ email: "a".repeat(256) + "@example.com", password: "password123" }), seg);
     expect(res.status).toBe(400);
   });
 
   it("returns 409 when email already exists", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "existing" } as never);
 
-    const res = await POST(makeRequest({ email: "existing@example.com", password: "password123" }));
+    const res = await POST(makeRequest({ email: "existing@example.com", password: "password123" }), seg);
     expect(res.status).toBe(409);
     const data = await res.json();
     expect(data.code).toBe("CONFLICT");
@@ -123,36 +132,37 @@ describe("POST /api/register", () => {
       email: "test@example.com",
       password: "password123",
       name: "n".repeat(101),
-    }));
+    }), seg);
     expect(res.status).toBe(400);
   });
 });
 
 describe("POST /api/register — malformed input and XSS edge cases", () => {
-  it("returns 500 when request body is malformed JSON", async () => {
+  it("returns 400 when request body is malformed JSON", async () => {
     const req = new NextRequest("http://localhost/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{ invalid json ;;; }",
     });
 
-    const res = await POST(req);
-    expect(res.status).toBe(500);
+    const res = await POST(req, seg);
+    expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.code).toBe("INTERNAL_ERROR");
-    // Must not expose internal error message
-    expect(data.error).not.toContain("SyntaxError");
+    expect(data.code).toBe("VALIDATION_ERROR");
+    expect(data.error).toContain("Invalid JSON");
   });
 
-  it("returns 500 when request body is completely empty", async () => {
+  it("returns 400 when request body is completely empty", async () => {
     const req = new NextRequest("http://localhost/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "",
     });
 
-    const res = await POST(req);
-    expect(res.status).toBe(500);
+    const res = await POST(req, seg);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.code).toBe("VALIDATION_ERROR");
   });
 
   it("sanitizes XSS in name field and creates user successfully", async () => {
@@ -160,7 +170,7 @@ describe("POST /api/register — malformed input and XSS edge cases", () => {
       email: "xss-test@example.com",
       password: "password123",
       name: '<script>alert("xss")</script>Alice',
-    }));
+    }), seg);
 
     expect(res.status).toBe(201);
     // Confirm the user was created with a sanitized name (no HTML tags)
@@ -174,7 +184,7 @@ describe("POST /api/register — malformed input and XSS edge cases", () => {
   });
 
   it("returns consistent error format (error + code) for all 4xx responses", async () => {
-    const res = await POST(makeRequest({ password: "password123" })); // missing email
+    const res = await POST(makeRequest({ password: "password123" }), seg); // missing email
     const data = await res.json();
     expect(data).toHaveProperty("error");
     expect(data).toHaveProperty("code");
@@ -182,3 +192,5 @@ describe("POST /api/register — malformed input and XSS edge cases", () => {
     expect(typeof data.code).toBe("string");
   });
 });
+
+// CI trigger commit after rebase conflict resolution.

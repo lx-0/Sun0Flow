@@ -3,11 +3,11 @@ name: sunoflow
 description: >
   AI music creation and management via the SunoFlow MCP server.
   Use when you need to generate songs, lyrics, sound effects, manage playlists,
-  separate stems, create music videos, or export audio. Connects to a SunoFlow
-  instance over MCP stdio transport.
+  separate stems, create music videos, extract MIDI, convert to WAV, or browse
+  the inspiration feed. Connects to a SunoFlow instance over MCP stdio transport.
 license: MIT
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
   mcp-server: sunoflow-mcp
   transport: stdio
   production-url: https://sunoflow.up.railway.app
@@ -15,13 +15,13 @@ metadata:
 
 # SunoFlow
 
-Generate and manage AI music through the SunoFlow MCP server.
+Generate and manage AI music through the SunoFlow MCP server (Suno API behind a credit-managed multi-user backend).
 
 **Production instance:** https://sunoflow.up.railway.app
 
 ## Setup
 
-1. Get an API key from your SunoFlow account at https://sunoflow.up.railway.app/settings/api-keys (or your self-hosted instance under **Settings > API Keys**).
+1. Get an API key from your SunoFlow account at https://sunoflow.up.railway.app/settings/api-keys (or your self-hosted instance under **Settings → API Keys**).
 2. Start the MCP server:
 
 ```json
@@ -43,88 +43,309 @@ The server also needs `DATABASE_URL` pointing to the SunoFlow Postgres database.
 
 ## Tools
 
+16 tools, grouped by purpose. All async generation tools return a `taskId` and `status: "pending"` — poll the corresponding read tool (usually `get_song`) until the resource is `ready`.
+
 ### Song generation
 
-| Tool | Description |
-|------|-------------|
-| `generate_song` | Create a new song from a prompt or custom lyrics/style/title. Returns a song ID — poll `get_song` until `generationStatus === "ready"`. Generates 2 songs per request. |
-| `extend_song` | Continue an existing song from a given point. Creates a new variation linked to the original. |
-| `generate_lyrics` | Generate song lyrics from a text description. Returns a task ID for polling. |
-| `generate_sounds` | Generate ambient sounds or SFX from a text prompt. Supports looping, BPM, and musical key control. |
-| `boost_style` | Expand a short style description (e.g. "chill lofi") into a detailed style prompt for more precise generation. |
+#### `generate_song`
+
+Submit a song generation. Returns a song ID immediately, then 2 audio variations once `generationStatus === "ready"`.
+
+| Param | Type | Notes |
+|---|---|---|
+| `prompt` *(required)* | string | Free-form style description (non-custom mode, max 500) or literal lyrics (custom mode, max 3000 V4 / 5000 V4_5+). |
+| `title` | string | Setting this enables custom mode. Max 80 (V4) / 100 (V4_5+). |
+| `style` | string | Comma-separated style/genre tags. Setting this enables custom mode. |
+| `makeInstrumental` | boolean | Default `false`. |
+| `model` | `V4` \| `V4_5` \| `V5` \| `V5_5` | `V5_5` = latest, best quality. Server default usually `V4`. |
+| `personaId` | string | Voice persona to apply. |
+| `personaModel` | `voice_persona` \| `style_persona` | Type of persona cloning. |
+| `negativeTags` | string | Comma-separated tags to exclude (e.g. `"autotune, screaming"`). |
+| `vocalGender` | `m` \| `f` | |
+| `styleWeight` | 0–1 | Style-adherence intensity, default ~0.5. |
+| `weirdnessConstraint` | 0–1 | Creative deviation, default ~0.5. |
+| `audioWeight` | 0–1 | Only when using persona/cover features. |
+
+**Examples**
+
+```jsonc
+// Free-form mode (style-as-prompt)
+{ "prompt": "upbeat synthwave with retro arpeggios", "model": "V5_5" }
+
+// Custom mode (literal lyrics with title + style)
+{
+  "title": "Coffee Shop Confession",
+  "style": "indie folk, acoustic guitar, intimate",
+  "prompt": "[Verse 1]\nI saw you reading by the window\nRain was falling on the glass\n...",
+  "vocalGender": "f",
+  "model": "V5_5"
+}
+```
+
+→ Returns `{ songId, status: "pending" }`. Poll `get_song(songId)` until `generationStatus === "ready"`.
+
+#### `extend_song`
+
+Continue an existing song from a point. Creates a new variation linked to the original.
+
+| Param | Type | Notes |
+|---|---|---|
+| `songId` *(required)* | string | Source song. |
+| `prompt` | string | New lyrics/description for the extension. Omit to continue in original style. |
+| `style` | string | Override style for the extension. Max 200 (V4) / 1000 (V4_5+). |
+| `title` | string | Title for extended version. |
+| `continueAt` | number ≥ 0 | Continue from this many seconds in. Omit = continue from end. |
+| `model` | enum | Match original for best results. |
+| `negativeTags`, `vocalGender`, `styleWeight`, `weirdnessConstraint` | same as `generate_song` | |
+
+**Example**
+
+```jsonc
+{ "songId": "song_abc", "continueAt": 45, "style": "epic guitar solo, rock" }
+```
+
+#### `generate_sounds`
+
+Ambient sounds / SFX. Uses V5 model only.
+
+| Param | Type | Notes |
+|---|---|---|
+| `prompt` *(required)* | string | Max 500. E.g. `"rain on a tin roof"`, `"808 drum loop"`. |
+| `soundLoop` | boolean | Loopable output. |
+| `soundTempo` | 1–300 | BPM for rhythmic sounds. |
+| `soundKey` | `Any` / `C`–`B` / `Cm`–`Bm` | Musical key. Minor keys end in `m`. |
+
+**Example**
+
+```jsonc
+{ "prompt": "lo-fi vinyl crackle loop", "soundLoop": true, "soundKey": "Am" }
+```
+
+#### `generate_lyrics`
+
+Generate song lyrics from a description. Costs 2 credits. Returns a `taskId` (polling happens server-side; lyrics surface via the SunoFlow UI/API).
+
+| Param | Type | Notes |
+|---|---|---|
+| `prompt` *(required)* | string | Max 200. E.g. `"a love song about meeting someone at a coffee shop"`. |
+
+#### `boost_style`
+
+Expand a short genre tag into a rich style prompt. Use the result as the `style` param of `generate_song`. Costs 5 credits.
+
+| Param | Type | Notes |
+|---|---|---|
+| `description` *(required)* | string | Max 500. E.g. `"chill lofi"` → mellow lo-fi hip-hop with warm vinyl crackle, jazzy piano chords, soft boom-bap drums. |
+
+**Example chain**
+
+```jsonc
+// 1
+boost_style({ "description": "chill lofi" })
+// → { boosted: "mellow lo-fi hip-hop with warm vinyl crackle, jazzy piano chords, soft boom-bap drums" }
+
+// 2
+generate_song({
+  "title": "Late Night Study",
+  "style": "<boosted result>",
+  "prompt": "[Verse]\nLamp light on the page...",
+  "model": "V5_5"
+})
+```
 
 ### Library management
 
-| Tool | Description |
-|------|-------------|
-| `list_songs` | Browse the song library with optional genre, mood, and status filters. Paginated. |
-| `get_song` | Get full song details: audio URL, metadata, lyrics, generation status. Also used for polling pending generations. |
-| `create_playlist` | Create a new playlist (max 50 per user). |
-| `add_to_playlist` | Add a song to an existing playlist (max 500 songs per playlist). |
+#### `list_songs`
+
+Browse the song library. Paginated.
+
+| Param | Type | Notes |
+|---|---|---|
+| `limit` | 1–100 | Default 20. |
+| `cursor` | string | From previous response. |
+| `genre` | string | Partial-match on tags. |
+| `mood` | string | Partial-match on tags. |
+| `status` | `ready` \| `pending` \| `failed` | Filter by generation status. |
+
+**Example**
+
+```jsonc
+{ "status": "ready", "genre": "lofi", "limit": 10 }
+```
+
+#### `get_song`
+
+Full song detail. Used both for retrieval and for polling pending generations.
+
+| Param | Type | Notes |
+|---|---|---|
+| `songId` *(required)* | string | |
+
+#### `create_playlist`
+
+Create a new playlist. Max 50 playlists per user.
+
+| Param | Type | Notes |
+|---|---|---|
+| `name` *(required)* | string | Max 100. |
+| `description` | string | Max 1000. |
+
+#### `add_to_playlist`
+
+Add a song to a playlist. Max 500 songs per playlist. Idempotent (returns `{ alreadyInPlaylist: true }` on duplicate).
+
+| Param | Type | Notes |
+|---|---|---|
+| `playlistId` *(required)* | string | |
+| `songId` *(required)* | string | |
 
 ### Audio processing
 
-| Tool | Description |
-|------|-------------|
-| `separate_vocals` | Split a song into vocal + instrumental tracks, or full multi-stem separation (drums, bass, guitar, etc.). |
-| `convert_to_wav` | Convert a generated song to lossless WAV format. |
-| `generate_midi` | Extract MIDI data with instrument tracks and note-level detail. |
+#### `separate_vocals`
+
+Stem separation. Song must be `ready`.
+
+| Param | Type | Notes |
+|---|---|---|
+| `songId` *(required)* | string | |
+| `type` *(required)* | `separate_vocal` \| `split_stem` | `separate_vocal` = vocal + instrumental (10 credits). `split_stem` = drums + bass + guitar + keyboard + percussion + strings + synth + fx + brass + woodwinds (50 credits). |
+
+**Example (remix prep)**
+
+```jsonc
+{ "songId": "song_abc", "type": "split_stem" }
+```
+
+#### `convert_to_wav`
+
+Convert a `ready` song to lossless WAV. Returns a `taskId`; the download URL surfaces in the SunoFlow UI/API once conversion completes.
+
+| Param | Type | Notes |
+|---|---|---|
+| `songId` *(required)* | string | |
+
+#### `generate_midi`
+
+Extract MIDI (per-instrument tracks with pitch/start/end/velocity).
+
+| Param | Type | Notes |
+|---|---|---|
+| `songId` *(required)* | string | Song must be `ready`. |
 
 ### Visual & video
 
-| Tool | Description |
-|------|-------------|
-| `create_music_video` | Generate an MP4 music video with synchronized visuals. Retained 15 days. |
-| `generate_cover_image` | Generate 2 AI cover art images for a song. Retained 14 days. |
+#### `create_music_video`
+
+Render an MP4 with synchronized visuals. Retained 15 days. Returns a `taskId`.
+
+| Param | Type | Notes |
+|---|---|---|
+| `songId` *(required)* | string | Song must be `ready`. |
+| `author` | string | Artist name to display in the video. |
+
+#### `generate_cover_image`
+
+Generate 2 AI cover-art variations. Retained 14 days. Returns a `taskId`.
+
+| Param | Type | Notes |
+|---|---|---|
+| `songId` *(required)* | string | Song must be `ready`. |
 
 ### Utility
 
-| Tool | Description |
-|------|-------------|
-| `sunoflow_info` | Server version and list of all registered tools. |
-| `get_credits` | Check remaining monthly generation credits. |
+#### `sunoflow_info`
+
+No input. Returns server version + complete tool list with descriptions. Use as a discovery probe.
+
+#### `get_credits`
+
+No input. Returns monthly credit balance:
+
+```jsonc
+{
+  "creditsRemaining": 240,
+  "budget": 500,
+  "creditsUsedThisMonth": 260,
+  "usagePercent": 52,
+  "costPerGeneration": 10
+}
+```
 
 ## Resources
 
-The server exposes MCP resources for direct data access:
+Direct-read URIs (read-only data access without going through tools):
 
-- `sunoflow://songs` — recent songs list
-- `sunoflow://songs/{id}` — single song detail
-- `sunoflow://playlists` — user playlists
-- `sunoflow://playlists/{id}` — playlist with tracks
-- `sunoflow://feed` — discovery feed
-- `sunoflow://stats/credits` — credit usage summary
+| URI | Kind | Returns |
+|---|---|---|
+| `sunoflow://stats/credits` | static | Credit balance, monthly usage, full cost table |
+| `sunoflow://feed/inspiration` | static | Top 20 pending RSS-feed inspiration items awaiting song-generation approval |
+| `sunoflow://songs/{id}` | template | Single song: metadata, audio URL, lyrics, generation params |
+| `sunoflow://playlists/{id}` | template | Playlist metadata + ordered track listing |
 
-## Workflow: generate a song
-
-1. (Optional) Call `boost_style` to expand a short genre tag into a rich style prompt.
-2. Call `generate_song` with your prompt, title, and style. Note the returned `songId`.
-3. Poll `get_song` with that `songId` until `generationStatus === "ready"`.
-4. Optionally call `extend_song` to continue the track, `generate_cover_image` for artwork, or `create_music_video` for video.
-
-## Workflow: stem separation for remixing
-
-1. Use `list_songs` or `get_song` to find the target song (must be status `"ready"`).
-2. Call `separate_vocals` with `type: "split_stem"` for full multi-stem output (drums, bass, guitar, keyboard, percussion, strings, synth, fx, brass, woodwinds).
-3. Poll the returned task ID until processing completes.
+There is no list-resource for songs or playlists — use the `list_songs` tool and the playlist UI/API for browsing.
 
 ## Credits
 
-Most operations consume credits. Check `get_credits` before bulk operations.
+Most generative operations cost credits (charged only when using the SunoFlow-managed key, not when bringing your own Suno API key).
 
 | Operation | Cost |
-|-----------|------|
-| Song generation | 10 credits |
-| Song extension | 10 credits |
-| Lyrics generation | 2 credits |
-| Style boost | 5 credits |
-| Vocal separation | 10 credits |
-| Full stem split | 50 credits |
+|---|---|
+| Song generation (`generate_song`, `extend_song`, `generate_sounds`) | 10 |
+| Lyrics generation (`generate_lyrics`) | 2 |
+| Style boost (`boost_style`) | 5 |
+| Vocal separation (`separate_vocals` `separate_vocal`) | 10 |
+| Full stem split (`separate_vocals` `split_stem`) | 50 |
+
+Read-side tools (`list_songs`, `get_song`, `get_credits`), playlist mutations, and download-style operations (`convert_to_wav`, `generate_midi`, `create_music_video`, `generate_cover_image`) do not currently deduct credits.
+
+Check `get_credits` (or read `sunoflow://stats/credits`) before bulk operations.
 
 ## Model versions
 
-`generate_song` and `extend_song` accept a `model` parameter: `V4`, `V4_5`, `V5`, `V5_5`. V5_5 is the latest with best quality. Match the original model when extending a song.
+`generate_song` and `extend_song` accept `model`: `V4`, `V4_5`, `V5`, `V5_5`. `V5_5` is the latest with best quality. **Match the original model when extending a song.** Server default is usually `V4` unless overridden in SunoFlow config.
 
-## Custom mode
+`generate_sounds` uses V5 only — the `model` param is not accepted there.
 
-Setting `title` or `style` on `generate_song` enables custom mode where `prompt` is treated as literal lyrics text rather than a free-form description. Use this when you have specific lyrics to set to music.
+## Custom mode (generate_song)
+
+Setting `title` or `style` on `generate_song` enables **custom mode**:
+
+- `prompt` is treated as literal lyrics text (with optional `[Verse]` / `[Chorus]` / `[Bridge]` structural tags).
+- Max `prompt` length jumps from 500 (free-form) to 3000 (V4) / 5000 (V4_5+).
+- `style` controls genre/instrumentation independently of `prompt`.
+
+Use custom mode when you have specific lyrics; use free-form mode when you want the model to invent both lyrics and style from a description.
+
+## Workflows
+
+### Generate a song
+
+1. *(Optional)* `boost_style({ description: "<short tag>" })` → rich style prompt.
+2. `generate_song({ prompt, title, style, model: "V5_5" })` → `songId`.
+3. Poll `get_song(songId)` every ~10s until `generationStatus === "ready"`.
+4. *(Optional)* Chain `generate_cover_image`, `create_music_video`, `convert_to_wav`, `generate_midi`, or `extend_song`.
+
+### Stem separation for remixing
+
+1. `list_songs({ status: "ready" })` → pick target.
+2. `separate_vocals({ songId, type: "split_stem" })` → `taskId`.
+3. Poll via the SunoFlow UI or your application until stems are ready (no MCP polling tool — surfaces in `get_song` and the song's audio sections).
+
+### Lyrics-first pipeline
+
+1. `generate_lyrics({ prompt: "<theme>" })` → lyrics surface in the SunoFlow UI.
+2. Copy lyrics into `generate_song.prompt` with a `title` + `style` (custom mode).
+
+### Bulk-process before credit check
+
+1. `get_credits` → confirm headroom.
+2. Plan operations (10 credits per song, 50 for full stems).
+3. Run generations, monitor `usagePercent` via the static resource.
+
+## Errors
+
+Tools raise `Error("<verb> failed (<code>): <message>")` on Suno-API errors (network/quota/validation). Credit checks fail before the API call with `Error("Insufficient credits: need <n>, have <m>")`. Songs missing `sunoJobId` / `sunoAudioId` (e.g. failed generation) fail post-processing tools with `"Cannot <verb> — song is missing Suno identifiers."`.
+
+## Server info
+
+The MCP server exposes `sunoflow_info` for runtime discovery — call it first if you need to verify which tools the installed version supports. Current source-of-truth is server `version: "0.1.0"`; this skill description is pinned to `0.2.0` to track doc revisions independently.

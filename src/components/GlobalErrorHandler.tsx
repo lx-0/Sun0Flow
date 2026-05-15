@@ -8,14 +8,26 @@ import { logError } from "@/lib/error-logger";
  * Returns true for errors that are benign / non-actionable and should be
  * silently logged without surfacing a toast to the user.
  */
-function isBenignError(error: unknown, message?: string): boolean {
+export function isBenignError(error: unknown, message?: string): boolean {
+  // Some browser/library cancellation paths reject promises with no payload.
+  // Treat these as non-actionable to avoid noisy runtime toasts.
+  if (error == null && (message == null || message.trim() === "")) return true;
+
   const msg =
     (error instanceof Error ? error.message : undefined) ?? message ?? "";
+  const name = error instanceof Error ? error.name : "";
 
   // ResizeObserver loop errors — fired by layout-measuring libraries
   // (react-virtual, auto-size textareas, etc.) when a resize callback
   // triggers another layout pass. Completely harmless.
   if (msg.includes("ResizeObserver loop")) return true;
+  // Common expected cancellation paths in the app (search/audio/fetch aborts)
+  // that should not surface as user-visible runtime errors.
+  if (name === "AbortError") return true;
+  if (msg.includes("The play() request was interrupted")) return true;
+  // Browser cross-origin script errors often omit useful stack/message details.
+  // They are tracked separately and are not actionable from client runtime patrol.
+  if (msg === "Script error.") return true;
 
   return false;
 }
@@ -24,7 +36,7 @@ function isBenignError(error: unknown, message?: string): boolean {
  * Returns true when a stale Next.js chunk failed to load, typically after a
  * new deployment while the browser still references old chunk hashes.
  */
-function isChunkLoadError(error: unknown, message?: string): boolean {
+export function isChunkLoadError(error: unknown, message?: string): boolean {
   const msg =
     (error instanceof Error ? error.message : undefined) ?? message ?? "";
   const name = error instanceof Error ? error.name : "";
@@ -33,7 +45,8 @@ function isChunkLoadError(error: unknown, message?: string): boolean {
     name === "ChunkLoadError" ||
     msg.includes("Loading chunk") ||
     msg.includes("Failed to fetch dynamically imported module") ||
-    msg.includes("error loading dynamically imported module")
+    msg.includes("error loading dynamically imported module") ||
+    msg.includes("Importing a module script failed")
   );
 }
 

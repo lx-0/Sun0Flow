@@ -1,69 +1,50 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
+import { badRequest } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
 
 const MAX_PRESETS = 20;
 
-// GET /api/presets — list current user presets
-export async function GET(request: Request) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
+export const GET = authRoute(async (_request, { auth }) => {
+  const presets = await prisma.generationPreset.findMany({
+    where: { userId: auth.userId },
+    orderBy: { createdAt: "desc" },
+  });
 
-    const presets = await prisma.generationPreset.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
+  return NextResponse.json({ presets });
+});
 
-    return NextResponse.json({ presets });
-  } catch {
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
+const createPresetBody = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100),
+  title: z.string().nullish(),
+  stylePrompt: z.string().nullish(),
+  lyricsPrompt: z.string().nullish(),
+  isInstrumental: z.boolean().optional().default(false),
+  customMode: z.boolean().optional().default(false),
+});
+
+export const POST = authRoute(async (_request, { auth, body }) => {
+  if (!body.stylePrompt?.trim() && !body.lyricsPrompt?.trim()) {
+    return badRequest("At least one of style or lyrics must be set");
   }
-}
 
-// POST /api/presets — create a new preset
-export async function POST(request: Request) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const { name, title, stylePrompt, lyricsPrompt, isInstrumental, customMode } = await request.json();
-
-    if (!name || typeof name !== "string" || !name.trim()) {
-      return NextResponse.json({ error: "Name is required", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (name.length > 100) {
-      return NextResponse.json({ error: "Name must be 100 characters or less", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (!stylePrompt?.trim() && !lyricsPrompt?.trim()) {
-      return NextResponse.json(
-        { error: "At least one of style or lyrics must be set", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    const count = await prisma.generationPreset.count({ where: { userId } });
-    if (count >= MAX_PRESETS) {
-      return NextResponse.json(
-        { error: `Maximum of ${MAX_PRESETS} presets reached. Delete one to create a new one.`, code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    const preset = await prisma.generationPreset.create({
-      data: {
-        userId,
-        name: name.trim(),
-        title: title?.trim() || null,
-        stylePrompt: stylePrompt?.trim() || null,
-        lyricsPrompt: lyricsPrompt?.trim() || null,
-        isInstrumental: Boolean(isInstrumental),
-        customMode: Boolean(customMode),
-      },
-    });
-
-    return NextResponse.json({ preset }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
+  const count = await prisma.generationPreset.count({ where: { userId: auth.userId } });
+  if (count >= MAX_PRESETS) {
+    return badRequest(`Maximum of ${MAX_PRESETS} presets reached. Delete one to create a new one.`);
   }
-}
+
+  const preset = await prisma.generationPreset.create({
+    data: {
+      userId: auth.userId,
+      name: body.name,
+      title: body.title?.trim() || null,
+      stylePrompt: body.stylePrompt?.trim() || null,
+      lyricsPrompt: body.lyricsPrompt?.trim() || null,
+      isInstrumental: body.isInstrumental,
+      customMode: body.customMode,
+    },
+  });
+
+  return NextResponse.json({ preset }, { status: 201 });
+}, { body: createPresetBody });

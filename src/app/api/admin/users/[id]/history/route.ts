@@ -1,22 +1,20 @@
+import { z } from "zod";
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
-import type { NextRequest } from "next/server";
+import { offsetPagination, pageSkip } from "@/lib/pagination";
+import { zPaginationQuery } from "@/lib/query-params";
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+const historyQuery = zPaginationQuery(20, 100);
 
-  const { id } = await params;
-  const { searchParams } = request.nextUrl;
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
+export const GET = adminRoute<{ id: string }, undefined, z.infer<typeof historyQuery>>(async (_request, { params, query }) => {
+  const { page, limit } = query;
 
   const [songs, total] = await Promise.all([
     prisma.song.findMany({
-      where: { userId: id },
+      where: { userId: params.id },
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
+      skip: pageSkip(page, limit),
       take: limit,
       select: {
         id: true,
@@ -28,13 +26,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         createdAt: true,
       },
     }),
-    prisma.song.count({ where: { userId: id } }),
+    prisma.song.count({ where: { userId: params.id } }),
   ]);
 
   return NextResponse.json({
     songs,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
+    ...offsetPagination(page, limit, total),
   });
-}
+}, { route: "/api/admin/users/[id]/history", query: historyQuery });

@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { SongDetailView } from "@/components/SongDetailView";
 import { SongDetailSkeleton } from "@/components/Skeleton";
-import { sunoApi } from "@/lib/sunoapi";
-import { mockSongs } from "@/lib/sunoapi/mock";
+import { sunoApi, mockSongs } from "@/lib/sunoapi";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -49,7 +48,7 @@ async function fetchSong(id: string) {
 async function fetchDbMeta(songId: string) {
   try {
     const session = await auth();
-    if (!session?.user?.id) return { isFavorite: false, favoriteCount: 0, sunoJobId: null, isPublic: false, publicSlug: null, isHidden: false, isInstrumental: false, lyricsEdited: null };
+    if (!session?.user?.id) return { isFavorite: false, favoriteCount: 0, sunoJobId: null, isPublic: false, publicSlug: null, isHidden: false, isInstrumental: false, isArchived: false, lyricsEdited: null };
     const dbSong = await prisma.song.findFirst({
       where: { id: songId, userId: session.user.id },
       select: {
@@ -61,6 +60,7 @@ async function fetchDbMeta(songId: string) {
         rating: true,
         ratingNote: true,
         lyricsEdited: true,
+        archivedAt: true,
         _count: { select: { favorites: true } },
         favorites: { where: { userId: session.user.id }, select: { id: true } },
       },
@@ -73,12 +73,13 @@ async function fetchDbMeta(songId: string) {
       publicSlug: dbSong?.publicSlug ?? null,
       isHidden: dbSong?.isHidden ?? false,
       isInstrumental: dbSong?.isInstrumental ?? false,
+      isArchived: dbSong?.archivedAt != null,
       lyricsEdited: dbSong?.lyricsEdited ?? null,
       rating: dbSong?.rating ?? null,
       ratingNote: dbSong?.ratingNote ?? null,
     };
   } catch {
-    return { isFavorite: false, favoriteCount: 0, sunoJobId: null, isPublic: false, publicSlug: null, isHidden: false, isInstrumental: false, lyricsEdited: null, rating: null, ratingNote: null };
+    return { isFavorite: false, favoriteCount: 0, sunoJobId: null, isPublic: false, publicSlug: null, isHidden: false, isInstrumental: false, isArchived: false, lyricsEdited: null, rating: null, ratingNote: null };
   }
 }
 
@@ -167,6 +168,7 @@ async function SongDetailContent({ id }: { id: string }) {
       publicSlug={dbMeta.publicSlug}
       isHidden={dbMeta.isHidden}
       isInstrumental={dbMeta.isInstrumental}
+      isArchived={dbMeta.isArchived}
       initialRating={dbMeta.rating}
       initialRatingNote={dbMeta.ratingNote}
       lyricsEdited={dbMeta.lyricsEdited}

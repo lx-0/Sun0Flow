@@ -38,7 +38,9 @@ async function fetchPlaylist(id: string, userId: string) {
             addedByUser: { select: { id: true, name: true, image: true, avatarUrl: true } },
           },
         },
-        _count: { select: { songs: true } },
+        _count: {
+          select: { songs: { where: { song: { archivedAt: null } } } },
+        },
         collaborators: {
           where: { status: "accepted" },
           select: {

@@ -12,12 +12,17 @@ import path from "path";
  */
 export default async function globalSetup() {
   const baseURL = process.env.BASE_URL ?? "http://localhost:3200";
+  const outPath = path.join(__dirname, ".shared-user.json");
+
+  // Reuse credentials from a prior run to avoid hitting the registration rate limit.
+  if (fs.existsSync(outPath)) {
+    return;
+  }
+
   const email = uniqueEmail("shared");
   const password = DEFAULT_PASSWORD;
   const name = "Shared E2E User";
 
   await registerUser(baseURL, { name, email, password });
-
-  const outPath = path.join(__dirname, ".shared-user.json");
   fs.writeFileSync(outPath, JSON.stringify({ email, password, name }));
 }

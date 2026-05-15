@@ -4,8 +4,7 @@
 
 import { registerTool } from "../registry";
 import { prisma } from "@/lib/prisma";
-import { generateMidi, SunoApiError } from "@/lib/sunoapi";
-import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
+import { generateMidi, SunoApiError, resolveUserApiKeyWithMode } from "@/lib/sunoapi";
 
 registerTool({
   name: "generate_midi",

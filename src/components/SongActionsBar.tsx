@@ -10,9 +10,10 @@ import {
   QueueListIcon,
   CloudArrowDownIcon,
   CheckCircleIcon,
+  ArchiveBoxIcon,
+  ArchiveBoxXMarkIcon,
 } from "@heroicons/react/24/outline";
 import { DownloadButton } from "./DownloadButton";
-import { AddToPlaylistButton } from "./AddToPlaylistButton";
 import type { SunoSong } from "@/lib/sunoapi";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -35,6 +36,10 @@ export interface SongActionsBarProps {
   onRemoveOffline: () => void;
   onPlayNext: () => void;
   onAddToQueue: () => void;
+  isArchived: boolean;
+  archiving: boolean;
+  onArchive: () => void;
+  onRestore: () => void;
 }
 
 // ─── SongActionsBar ──────────────────────────────────────────────────────────
@@ -55,6 +60,10 @@ export function SongActionsBar({
   onRemoveOffline,
   onPlayNext,
   onAddToQueue,
+  isArchived,
+  archiving,
+  onArchive,
+  onRestore,
 }: SongActionsBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -161,8 +170,28 @@ export function SongActionsBar({
         </>
       )}
 
-      {/* Add to playlist */}
-      <AddToPlaylistButton songId={song.id} songTitle={song.title} variant="button" />
+      {/* Archive / Restore button */}
+      {isArchived ? (
+        <button
+          onClick={onRestore}
+          disabled={archiving}
+          className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 transition-all duration-200 active:scale-95 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Restore song from archive"
+        >
+          <ArchiveBoxXMarkIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+          {archiving ? "Restoring…" : "Restore"}
+        </button>
+      ) : (
+        <button
+          onClick={onArchive}
+          disabled={archiving}
+          className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200 active:scale-95 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Archive song"
+        >
+          <ArchiveBoxIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+          {archiving ? "Archiving…" : "Archive"}
+        </button>
+      )}
 
       {/* Report button */}
       <button

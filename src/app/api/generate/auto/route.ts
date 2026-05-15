@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
-import { resolveUser } from "@/lib/auth-resolver";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { generateText } from "@/lib/llm";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
@@ -19,43 +20,30 @@ Respond ONLY with valid JSON in this exact format:
 
 Consider the user's musical taste if reference songs are provided. Be creative and specific.`;
 
-export async function POST(request: Request) {
+const generateAutoBodySchema = z.object({
+  prompt: z
+    .string()
+    .trim()
+    .min(1, "A description prompt is required")
+    .max(1000, "Prompt must be 1000 characters or less"),
+});
+
+export const POST = authRoute(async (_request, { auth, body }) => {
   try {
-    const { userId, isAdmin, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const body = await request.json();
-    const prompt = body?.prompt;
-
-    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
-      return NextResponse.json(
-        { error: "A description prompt is required", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    if (prompt.length > 1000) {
-      return NextResponse.json(
-        { error: "Prompt must be 1000 characters or less", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-
-    // Admins are exempt from rate limits
-    if (!isAdmin) {
+    if (!auth.isAdmin) {
       const { acquired, status: rateLimitStatus } = await acquireRateLimitSlot(
-        userId,
+        auth.userId,
         "lyrics_generate"
       );
       if (!acquired) {
         const resetAt = new Date(rateLimitStatus.resetAt);
         const retryAfterSec = Math.ceil((resetAt.getTime() - Date.now()) / 1000);
-        logger.warn({ userId, action: "lyrics_generate", limit: rateLimitStatus.limit, resetAt: rateLimitStatus.resetAt }, "rate-limit: lyrics_generate limit exceeded");
+        logger.warn({ userId: auth.userId, action: "lyrics_generate", limit: rateLimitStatus.limit, resetAt: rateLimitStatus.resetAt }, "rate-limit: lyrics_generate limit exceeded");
         Sentry.addBreadcrumb({
           category: "rate-limit",
           message: "Lyrics generate rate limit exceeded",
           level: "warning",
-          data: { userId, action: "lyrics_generate", limit: rateLimitStatus.limit, resetAt: rateLimitStatus.resetAt },
+          data: { userId: auth.userId, action: "lyrics_generate", limit: rateLimitStatus.limit, resetAt: rateLimitStatus.resetAt },
         });
         return NextResponse.json(
           { error: "Rate limit exceeded. Please try again later.", code: "RATE_LIMIT", resetAt: rateLimitStatus.resetAt },
@@ -64,18 +52,17 @@ export async function POST(request: Request) {
       }
     }
 
-    // Fetch reference songs for personalization
     const favoriteSongs = await prisma.song.findMany({
       where: {
-        userId,
-        favorites: { some: { userId } },
+        userId: auth.userId,
+        favorites: { some: { userId: auth.userId } },
       },
       orderBy: [{ rating: "desc" }, { downloadCount: "desc" }],
       take: MAX_REFERENCE_SONGS,
       select: { title: true, tags: true },
     });
 
-    let userPrompt = `Description: ${prompt.trim()}`;
+    let userPrompt = `Description: ${body.prompt}`;
 
     if (favoriteSongs.length > 0) {
       const refContext = favoriteSongs
@@ -93,7 +80,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse the JSON response
     let result: { title: string; style: string; lyricsPrompt: string };
     try {
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -111,10 +97,10 @@ export async function POST(request: Request) {
       lyricsPrompt: result.lyricsPrompt ?? "",
     });
   } catch (error) {
-    logServerError("generate-auto", error, { route: "/api/generate/auto" });
+    logServerError("generate-auto", error, { route: "/api/generate/auto", userId: auth.userId });
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
       { status: 500 }
     );
   }
-}
+}, { body: generateAutoBodySchema, route: "/api/generate/auto" });

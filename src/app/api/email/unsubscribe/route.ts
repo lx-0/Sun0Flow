@@ -1,14 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { publicRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 const VALID_TYPES = ["generation_complete", "weekly_highlights"] as const;
 type UnsubscribeType = (typeof VALID_TYPES)[number];
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const token = searchParams.get("token");
-  const type = searchParams.get("type") as UnsubscribeType | null;
+const unsubscribeQuery = z.object({
+  token: z.string().optional(),
+  type: z.string().optional(),
+});
+
+export const GET = publicRoute<Record<string, never>, undefined, z.infer<typeof unsubscribeQuery>>(async (request, { query }) => {
+  const token = query.token;
+  const type = query.type as UnsubscribeType | undefined;
 
   if (!token || !type || !VALID_TYPES.includes(type)) {
     return NextResponse.json({ error: "Invalid unsubscribe link", code: "INVALID_LINK" }, { status: 400 });
@@ -37,4 +43,4 @@ export async function GET(request: NextRequest) {
 
   // Redirect to a confirmation page (settings page with a message)
   return NextResponse.redirect(new URL("/settings?unsubscribed=1", request.url));
-}
+}, { route: "/api/email/unsubscribe", query: unsubscribeQuery });

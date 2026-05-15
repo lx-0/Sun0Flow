@@ -1,5 +1,7 @@
 # Sentry Alerting Configuration
 
+> **Backend:** The Sentry SDK (`@sentry/nextjs`) is compatible with both Sentry SaaS and self-hosted, Sentry-protocol-compatible backends such as **GlitchTip**. Only the DSN host differs. GlitchTip accepts error + performance envelopes but **rejects Session Replay**, so `replayIntegration()` is intentionally omitted from `sentry.client.config.ts`. Trace sampling stays at 10%. The CSP `connect-src` origin is derived from `NEXT_PUBLIC_SENTRY_DSN` at build time (see `next.config.mjs`), so swapping backends only requires changing the DSN.
+
 ## Setup
 
 Set these environment variables to enable Sentry:

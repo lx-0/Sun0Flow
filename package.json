@@ -1,6 +1,6 @@
 {
   "name": "sunoflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "postinstall": "prisma generate",
@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "test:e2e:runner-smoke": "bash scripts/run-e2e-runner-smoke.sh e2e/smoke.spec.ts",
     "prepare": "husky",
     "mcp": "tsx mcp/server.ts",
     "analyze": "ANALYZE=true pnpm build",
@@ -31,13 +32,15 @@
     "@prisma/client": "^5.22.0",
     "@sentry/nextjs": "^10.45.0",
     "@stripe/stripe-js": "^8.11.0",
+    "@tanstack/react-query": "^5.100.10",
+    "@tanstack/react-query-devtools": "^5.100.10",
     "@tanstack/react-virtual": "^3.13.23",
     "bcryptjs": "^3.0.3",
     "jszip": "^3.10.1",
     "lru-cache": "^11.2.7",
-    "next": "15.5.15",
+    "next": "15.5.18",
     "next-auth": "^5.0.0-beta.30",
-    "next-intl": "^4.9.1",
+    "next-intl": "^4.9.2",
     "node-cron": "^4.2.1",
     "node-mailjet": "^6.0.11",
     "openai": "^6.32.0",
@@ -50,7 +53,8 @@
     "swagger-ui-react": "^5.32.1",
     "vaul": "^1.1.2",
     "wavesurfer.js": "^7.12.4",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "zod": "^4.4.2"
   },
   "pnpm": {
     "overrides": {
@@ -59,12 +63,16 @@
       "brace-expansion@<2": ">=1.1.13",
       "brace-expansion@>=2 <3": ">=2.0.3",
       "lodash": ">=4.18.0",
-      "axios": ">=1.15.0",
+      "axios": ">=1.15.2",
       "protobufjs": ">=7.5.5",
-      "hono": ">=4.12.14",
+      "hono": ">=4.12.18",
       "@hono/node-server": ">=1.19.13",
       "follow-redirects": ">=1.16.0",
-      "dompurify": ">=3.4.0"
+      "dompurify": ">=3.4.0",
+      "fast-uri": ">=3.1.2",
+      "postcss": ">=8.5.10",
+      "icu-minify": ">=4.9.2",
+      "ip-address": ">=10.1.1"
     },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
@@ -73,18 +81,20 @@
       "@scarf/scarf",
       "@sentry/cli",
       "@swc/core",
+      "@tree-sitter-grammars/tree-sitter-yaml",
       "core-js",
       "core-js-pure",
       "esbuild",
       "prisma",
       "protobufjs",
+      "sharp",
       "tree-sitter",
       "tree-sitter-json",
       "unrs-resolver"
     ]
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^15.5.15",
+    "@next/bundle-analyzer": "^15.5.18",
     "@playwright/test": "^1.58.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/jszip": "^3.4.0",
@@ -98,7 +108,7 @@
     "dotenv": "^17.3.1",
     "dotenv-cli": "^11.0.0",
     "eslint": "^8",
-    "eslint-config-next": "15.5.15",
+    "eslint-config-next": "15.5.18",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "postcss": "^8",

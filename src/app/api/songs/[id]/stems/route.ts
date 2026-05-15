@@ -1,26 +1,18 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { authRoute, requireOwned } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
-import { logServerError } from "@/lib/error-logger";
 
-/** GET /api/songs/[id]/stems — list child stem tracks for a song */
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const { id: songId } = await params;
-
-    const song = await prisma.song.findUnique({ where: { id: songId } });
-    if (!song || song.userId !== userId) {
-      return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
-    }
+export const GET = authRoute<{ id: string }>(
+  async (_request, { auth, params }) => {
+    const { error } = requireOwned(
+      await prisma.song.findUnique({ where: { id: params.id } }),
+      auth.userId,
+      "Song",
+    );
+    if (error) return error;
 
     const stems = await prisma.song.findMany({
-      where: { parentSongId: songId, userId },
+      where: { parentSongId: params.id, userId: auth.userId },
       select: {
         id: true,
         title: true,
@@ -32,8 +24,6 @@ export async function GET(
     });
 
     return NextResponse.json({ stems });
-  } catch (error) {
-    logServerError("stems-route", error, { route: "/api/songs/[id]/stems" });
-    return NextResponse.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, { status: 500 });
-  }
-}
+  },
+  { route: "/api/songs/[id]/stems" },
+);

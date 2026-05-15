@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { authRoute } from "@/lib/route-handler";
 import { generateDigest } from "@/lib/digest";
+import { apiError, ErrorCode } from "@/lib/api-error";
 
-export async function POST(request: Request) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
-  const digest = await generateDigest(userId);
+export const POST = authRoute(async (_request, { auth }) => {
+  const digest = await generateDigest(auth.userId);
 
   if (!digest) {
-    return NextResponse.json(
-      { error: "No RSS feeds configured. Add feeds in Settings to generate a digest.", code: "NO_FEEDS" },
-      { status: 422 }
+    return apiError(
+      "No RSS feeds configured. Add feeds in Settings to generate a digest.",
+      ErrorCode.VALIDATION_ERROR,
+      422,
     );
   }
 
   return NextResponse.json({ digest });
-}
+}, { route: "/api/digests/generate" });

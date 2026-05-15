@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  try {
-    const { error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
+export const GET = authRoute<{ id: string }>(
+  async (_request, { params }) => {
+    const { id } = params;
     const [thumbsUp, thumbsDown] = await Promise.all([
       prisma.generationFeedback.count({
         where: { songId: id, rating: "thumbs_up" },
@@ -21,10 +15,6 @@ export async function GET(
     ]);
 
     return NextResponse.json({ thumbsUp, thumbsDown });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+  },
+  { route: "/api/songs/[id]/feedback/summary" },
+);

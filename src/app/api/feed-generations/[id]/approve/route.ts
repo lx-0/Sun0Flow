@@ -1,42 +1,33 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { NextResponse } from "next/server";
+import { authRoute, requireOwned } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
-/**
- * POST /api/feed-generations/[id]/approve
- *
- * Marks a pending feed generation as approved and returns the prompt/style
- * so the client can navigate to the generate page pre-filled.
- */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { userId, error: authError } = await resolveUser(req);
-  if (authError) return authError;
-
-  const { id } = await params;
-
-  const item = await prisma.pendingFeedGeneration.findUnique({ where: { id } });
-  if (!item || item.userId !== userId) {
-    return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
-  }
-
-  if (item.status !== "pending") {
-    return NextResponse.json(
-      { error: "Only pending items can be approved", code: "CONFLICT" },
-      { status: 409 }
+export const POST = authRoute<{ id: string }>(
+  async (_request, { auth, params }) => {
+    const { data: item, error } = requireOwned(
+      await prisma.pendingFeedGeneration.findUnique({ where: { id: params.id } }),
+      auth.userId,
+      "Feed generation",
     );
-  }
+    if (error) return error;
 
-  await prisma.pendingFeedGeneration.update({
-    where: { id },
-    data: { status: "approved" },
-  });
+    if (item.status !== "pending") {
+      return NextResponse.json(
+        { error: "Only pending items can be approved", code: "CONFLICT" },
+        { status: 409 },
+      );
+    }
 
-  return NextResponse.json({
-    prompt: item.prompt,
-    style: item.style,
-    itemTitle: item.itemTitle,
-  });
-}
+    await prisma.pendingFeedGeneration.update({
+      where: { id: params.id },
+      data: { status: "approved" },
+    });
+
+    return NextResponse.json({
+      prompt: item.prompt,
+      style: item.style,
+      itemTitle: item.itemTitle,
+    });
+  },
+  { route: "/api/feed-generations/[id]/approve" },
+);

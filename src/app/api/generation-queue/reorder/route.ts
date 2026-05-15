@@ -1,39 +1,21 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
+import { reorderItems } from "@/lib/generation-queue";
 
-/** POST: Reorder queue items. Body: { orderedIds: string[] } */
-export async function POST(request: Request) {
-  const { userId, error } = await resolveUser(request);
-  if (error) return error;
+const reorderBody = z.object({
+  orderedIds: z.array(z.string()),
+});
 
-  const { orderedIds } = await request.json();
+export const POST = authRoute<Record<string, never>, z.infer<typeof reorderBody>>(
+  async (_request, { auth, body }) => {
+    const { orderedIds } = body;
 
-  if (!Array.isArray(orderedIds)) {
-    return NextResponse.json(
-      { error: "orderedIds must be an array", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
+    await reorderItems(auth.userId, orderedIds);
+    return NextResponse.json({ success: true });
+  },
+  {
+    body: reorderBody,
+    route: "/api/generation-queue/reorder",
   }
-
-  // Verify all IDs belong to this user and are pending
-  const items = await prisma.generationQueueItem.findMany({
-    where: { userId, status: "pending", id: { in: orderedIds } },
-    select: { id: true },
-  });
-
-  const validIds = new Set(items.map((i) => i.id));
-  const filteredIds = orderedIds.filter((id: string) => validIds.has(id));
-
-  // Update positions in a transaction
-  await prisma.$transaction(
-    filteredIds.map((id: string, index: number) =>
-      prisma.generationQueueItem.update({
-        where: { id },
-        data: { position: index },
-      })
-    )
-  );
-
-  return NextResponse.json({ success: true });
-}
+);

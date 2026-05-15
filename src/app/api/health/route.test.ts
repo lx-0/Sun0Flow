@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { NextRequest } from "next/server";
 import { GET } from "./route";
 
 vi.mock("@/lib/env", () => ({
@@ -17,13 +18,21 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/auth", () => ({
+  resolveUser: vi.fn(),
+  requireAdmin: vi.fn(),
+}));
+
 import { prisma } from "@/lib/prisma";
 
 describe("GET /api/health", () => {
+  const request = new NextRequest("http://localhost/api/health");
+  const segmentData = { params: Promise.resolve({}) };
+
   it("returns status ok when DB is healthy", async () => {
     vi.mocked(prisma.$queryRaw).mockResolvedValue([{ "?column?": 1 }]);
 
-    const res = await GET();
+    const res = await GET(request, segmentData);
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -35,7 +44,7 @@ describe("GET /api/health", () => {
   it("returns status error when DB is unavailable", async () => {
     vi.mocked(prisma.$queryRaw).mockRejectedValue(new Error("Connection refused"));
 
-    const res = await GET();
+    const res = await GET(request, segmentData);
     const data = await res.json();
 
     expect(res.status).toBe(503);

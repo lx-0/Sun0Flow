@@ -1,36 +1,34 @@
 import { NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { stripHtml } from "@/lib/sanitize";
+import { notFound } from "@/lib/api-error";
+import {
+  buildEmailPreferencesUpdateData,
+  EMAIL_PREFERENCES_SELECT,
+} from "@/lib/profile/email-preferences";
 
-const VALID_DIGEST_FREQUENCIES = ["daily", "weekly", "monthly", "off"] as const;
-type DigestFrequency = (typeof VALID_DIGEST_FREQUENCIES)[number];
+const SETTINGS_SELECT = {
+  id: true,
+  email: true,
+  name: true,
+  bio: true,
+  avatarUrl: true,
+  ...EMAIL_PREFERENCES_SELECT,
+} as const;
 
-// GET /api/settings — returns profile + notification preferences
-export async function GET(request: Request) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
+export const GET = authRoute(async (_request, { auth }) => {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: auth.userId },
     select: {
-      id: true,
-      email: true,
-      name: true,
-      bio: true,
-      avatarUrl: true,
-      emailWelcome: true,
-      emailGenerationComplete: true,
-      emailDigestFrequency: true,
-      quietHoursEnabled: true,
-      quietHoursStart: true,
-      quietHoursEnd: true,
+      ...SETTINGS_SELECT,
       accounts: { select: { provider: true, type: true } },
     },
   });
 
   if (!user) {
-    return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 });
+    return notFound("User not found");
   }
 
   const { accounts, ...rest } = user;
@@ -38,131 +36,39 @@ export async function GET(request: Request) {
     ...rest,
     connectedProviders: accounts.map((a: { provider: string; type: string }) => a.provider),
   });
-}
+}, { route: "/api/settings" });
 
-// PATCH /api/settings — updates profile and/or notification preferences
-export async function PATCH(request: Request) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
+const updateSettingsBody = z
+  .object({
+    name: z.string().min(1, "Name is required").max(100, "Name must be 100 characters or less").optional(),
+    bio: z.string().max(500, "Bio must be 500 characters or less").nullable().optional(),
+    avatarUrl: z.string().url("Invalid avatar URL").max(2048, "Avatar URL too long").nullable().optional(),
+    emailWelcome: z.boolean().optional(),
+    emailGenerationComplete: z.boolean().optional(),
+    emailDigestFrequency: z.enum(["daily", "weekly", "monthly", "off"]).optional(),
+    quietHoursEnabled: z.boolean().optional(),
+    quietHoursStart: z.number().int().min(0).max(23, "quietHoursStart must be an integer 0–23").optional(),
+    quietHoursEnd: z.number().int().min(0).max(23, "quietHoursEnd must be an integer 0–23").optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, "No fields to update");
 
-  const body = await request.json();
-  const {
-    name,
-    bio,
-    avatarUrl,
-    emailWelcome,
-    emailGenerationComplete,
-    emailDigestFrequency,
-    quietHoursEnabled,
-    quietHoursStart,
-    quietHoursEnd,
-  } = body;
+export const PATCH = authRoute(async (_request, { auth, body }) => {
+  const data: Record<string, unknown> = buildEmailPreferencesUpdateData(body);
 
-  const data: Record<string, unknown> = {};
-
-  if (name !== undefined) {
-    if (typeof name !== "string" || !name.trim()) {
-      return NextResponse.json({ error: "Name is required", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (name.length > 100) {
-      return NextResponse.json({ error: "Name must be 100 characters or less", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    data.name = stripHtml(name).trim();
+  if (body.name !== undefined) {
+    data.name = stripHtml(body.name).trim();
   }
-
-  if (bio !== undefined) {
-    if (bio !== null && typeof bio !== "string") {
-      return NextResponse.json({ error: "Bio must be a string", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (typeof bio === "string" && bio.length > 500) {
-      return NextResponse.json({ error: "Bio must be 500 characters or less", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    data.bio = bio ? stripHtml(bio).trim() : null;
+  if (body.bio !== undefined) {
+    data.bio = body.bio ? stripHtml(body.bio).trim() : null;
   }
-
-  if (avatarUrl !== undefined) {
-    if (avatarUrl !== null && typeof avatarUrl !== "string") {
-      return NextResponse.json({ error: "Avatar URL must be a string", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (typeof avatarUrl === "string" && avatarUrl.length > 2048) {
-      return NextResponse.json({ error: "Avatar URL too long", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    if (typeof avatarUrl === "string" && avatarUrl) {
-      try {
-        new URL(avatarUrl);
-      } catch {
-        return NextResponse.json({ error: "Invalid avatar URL", code: "VALIDATION_ERROR" }, { status: 400 });
-      }
-    }
-    data.avatarUrl = avatarUrl ? avatarUrl.trim() : null;
+  if (body.avatarUrl !== undefined) {
+    data.avatarUrl = body.avatarUrl ? body.avatarUrl.trim() : null;
   }
-
-  if (emailWelcome !== undefined) {
-    if (typeof emailWelcome !== "boolean") {
-      return NextResponse.json({ error: "emailWelcome must be a boolean", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    data.emailWelcome = emailWelcome;
-  }
-
-  if (emailGenerationComplete !== undefined) {
-    if (typeof emailGenerationComplete !== "boolean") {
-      return NextResponse.json({ error: "emailGenerationComplete must be a boolean", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    data.emailGenerationComplete = emailGenerationComplete;
-  }
-
-  if (emailDigestFrequency !== undefined) {
-    if (!VALID_DIGEST_FREQUENCIES.includes(emailDigestFrequency as DigestFrequency)) {
-      return NextResponse.json(
-        { error: `emailDigestFrequency must be one of: ${VALID_DIGEST_FREQUENCIES.join(", ")}`, code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-    data.emailDigestFrequency = emailDigestFrequency;
-  }
-
-  if (quietHoursEnabled !== undefined) {
-    if (typeof quietHoursEnabled !== "boolean") {
-      return NextResponse.json({ error: "quietHoursEnabled must be a boolean", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    data.quietHoursEnabled = quietHoursEnabled;
-  }
-
-  if (quietHoursStart !== undefined) {
-    if (typeof quietHoursStart !== "number" || quietHoursStart < 0 || quietHoursStart > 23) {
-      return NextResponse.json({ error: "quietHoursStart must be an integer 0–23", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    data.quietHoursStart = quietHoursStart;
-  }
-
-  if (quietHoursEnd !== undefined) {
-    if (typeof quietHoursEnd !== "number" || quietHoursEnd < 0 || quietHoursEnd > 23) {
-      return NextResponse.json({ error: "quietHoursEnd must be an integer 0–23", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-    data.quietHoursEnd = quietHoursEnd;
-  }
-
-  if (Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "No fields to update", code: "VALIDATION_ERROR" }, { status: 400 });
-  }
-
   const user = await prisma.user.update({
-    where: { id: userId },
+    where: { id: auth.userId },
     data,
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      bio: true,
-      avatarUrl: true,
-      emailWelcome: true,
-      emailGenerationComplete: true,
-      emailDigestFrequency: true,
-      quietHoursEnabled: true,
-      quietHoursStart: true,
-      quietHoursEnd: true,
-    },
+    select: SETTINGS_SELECT,
   });
 
   return NextResponse.json(user);
-}
+}, { route: "/api/settings", body: updateSettingsBody });

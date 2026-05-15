@@ -5,8 +5,7 @@
 
 import { registerTool } from "../registry";
 import { prisma } from "@/lib/prisma";
-import { separateVocals, SunoApiError } from "@/lib/sunoapi";
-import { resolveUserApiKeyWithMode } from "@/lib/sunoapi/resolve-key";
+import { separateVocals, SunoApiError, resolveUserApiKeyWithMode } from "@/lib/sunoapi";
 
 registerTool({
   name: "separate_vocals",

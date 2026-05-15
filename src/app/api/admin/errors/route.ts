@@ -1,14 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { z } from "zod";
+import { NextResponse } from "next/server";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import { zPaginationQuery } from "@/lib/query-params";
 
-export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+const errorsQuery = zPaginationQuery(50, 100);
 
-  const searchParams = request.nextUrl.searchParams;
-  const limit = Math.min(Number(searchParams.get("limit")) || 50, 100);
-  const page = Math.max(Number(searchParams.get("page")) || 1, 1);
+export const GET = adminRoute<Record<string, never>, undefined, z.infer<typeof errorsQuery>>(async (_request, { query }) => {
+  const { page, limit } = query;
   const skip = (page - 1) * limit;
 
   const [errors, total] = await Promise.all([
@@ -21,4 +20,4 @@ export async function GET(request: NextRequest) {
   ]);
 
   return NextResponse.json({ errors, total, page, limit });
-}
+}, { route: "/api/admin/errors", query: errorsQuery });

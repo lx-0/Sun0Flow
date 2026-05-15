@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { getClientIp } from "@/lib/network";
 
 const MAX_MESSAGE_LENGTH = 500;
 const MAX_STACK_LENGTH = 2048;
@@ -34,14 +35,20 @@ setInterval(() => {
   });
 }, 5 * 60_000).unref?.();
 
-const VALID_SOURCE_PREFIXES = ["error-boundary", "global-error-boundary", "unhandled-error", "unhandled-rejection"];
+const VALID_SOURCE_PREFIXES = [
+  "error-boundary",
+  "global-error-boundary",
+  "unhandled-error",
+  "unhandled-rejection",
+  "chunk-load-error",
+];
 
 function isValidSource(source: string): boolean {
   return VALID_SOURCE_PREFIXES.some((prefix) => source === prefix || source.startsWith(prefix + ":"));
 }
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getClientIp(request);
 
   if (isRateLimited(ip)) {
     return NextResponse.json(

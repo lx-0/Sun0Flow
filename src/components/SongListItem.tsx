@@ -21,6 +21,7 @@ import {
   QueueListIcon,
   SignalSlashIcon,
   CloudArrowDownIcon,
+  SwatchIcon,
 } from "@heroicons/react/24/outline";
 import { CoverArtImage } from "./CoverArtImage";
 import type { Song } from "@prisma/client";
@@ -31,6 +32,7 @@ import { TagChip } from "./TagInput";
 import { ShareButton } from "./ShareButton";
 import { AddToPlaylistButton } from "./AddToPlaylistButton";
 import { useRouter } from "next/navigation";
+import { HighlightText } from "./HighlightText";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,34 +41,6 @@ interface SongTagRelation {
 }
 
 type SongWithTags = Song & { songTags: SongTagRelation[] };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Highlight matching search terms in text with bold spans. */
-function Highlight({ text, query }: { text: string; query: string }) {
-  if (!query || query.length < 3) return <>{text}</>;
-  const tokens = query
-    .replace(/["']/g, " ")
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2);
-  if (tokens.length === 0) return <>{text}</>;
-  const pattern = new RegExp(`(${tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
-  const parts = text.split(pattern);
-  return (
-    <>
-      {parts.map((part, i) =>
-        pattern.test(part) ? (
-          <mark key={i} className="bg-yellow-200 dark:bg-yellow-800/60 text-inherit rounded-sm px-0.5">
-            {part}
-          </mark>
-        ) : (
-          part
-        )
-      )}
-    </>
-  );
-}
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -223,6 +197,10 @@ function SongRowMenu({
   onSingleDeleteForever,
 }: SongRowMenuProps) {
   const [open, setOpen] = useState(false);
+  const [saveStyleOpen, setSaveStyleOpen] = useState(false);
+  const [styleTemplateName, setStyleTemplateName] = useState("");
+  const [styleTemplateTags, setStyleTemplateTags] = useState("");
+  const [isSavingStyle, setIsSavingStyle] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { playNext, addToQueue } = useQueue();
   const { toast } = useToast();
@@ -313,6 +291,20 @@ function SongRowMenu({
               Download
             </button>
           )}
+          {!isArchiveView && song.tags && (
+            <button
+              onClick={() => {
+                setOpen(false);
+                setStyleTemplateTags(song.tags!);
+                setStyleTemplateName("");
+                setSaveStyleOpen(true);
+              }}
+              className={itemClass}
+            >
+              <SwatchIcon className="w-4 h-4 flex-shrink-0" />
+              Save Style
+            </button>
+          )}
           {!isArchiveView && (
             <button
               onClick={() => { setOpen(false); router.push(`/library/${song.id}`); }}
@@ -348,6 +340,71 @@ function SongRowMenu({
               Archive
             </button>
           )}
+        </div>
+      )}
+
+      {saveStyleOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setSaveStyleOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 rounded-xl shadow-xl p-5 w-80 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Save as Style Template</h3>
+            <input
+              type="text"
+              placeholder="Template name"
+              value={styleTemplateName}
+              onChange={(e) => setStyleTemplateName(e.target.value)}
+              autoFocus
+              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            />
+            <textarea
+              value={styleTemplateTags}
+              onChange={(e) => setStyleTemplateTags(e.target.value)}
+              rows={2}
+              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSaveStyleOpen(false)}
+                className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!styleTemplateName.trim() || !styleTemplateTags.trim() || isSavingStyle}
+                onClick={async () => {
+                  setIsSavingStyle(true);
+                  try {
+                    const res = await fetch("/api/style-templates", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: styleTemplateName.trim(), tags: styleTemplateTags.trim(), sourceSongId: song.id }),
+                    });
+                    if (res.ok) {
+                      toast("Style template saved", "success");
+                      setSaveStyleOpen(false);
+                    } else {
+                      const data = await res.json();
+                      toast(data.error ?? "Failed to save template", "error");
+                    }
+                  } catch {
+                    toast("Failed to save template", "error");
+                  } finally {
+                    setIsSavingStyle(false);
+                  }
+                }}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {isSavingStyle ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -532,7 +589,7 @@ export const SongListItem = memo(function SongListItem({
             href={`/library/${song.id}`}
             className="block text-sm font-medium text-gray-900 dark:text-white truncate hover:text-violet-400 transition-colors"
           >
-            <Highlight text={song.title ?? "Untitled"} query={searchQuery} />
+            <HighlightText text={song.title ?? "Untitled"} query={searchQuery} />
           </Link>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {isPending && <GeneratingBadge />}

@@ -1,0 +1,21 @@
+{
+  "name": "sunoflow",
+  "version": "0.1.0",
+  "description": "SunoFlow MCP skill -- AI music creation and management (song generation, lyrics, stem separation, music videos, playlists, exports) via the SunoFlow MCP server. Ships the sunoflow skill; the MCP server itself runs from the SunoFlow repo (stdio transport) against a self-hosted or hosted SunoFlow instance.",
+  "author": {
+    "name": "lx-0",
+    "url": "https://github.com/lx-0"
+  },
+  "homepage": "https://github.com/lx-0/SunoFlow",
+  "repository": "https://github.com/lx-0/SunoFlow",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "mcp",
+    "music",
+    "ai-music",
+    "suno",
+    "audio",
+    "sunoflow"
+  ]
+}

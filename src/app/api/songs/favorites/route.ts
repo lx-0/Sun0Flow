@@ -1,98 +1,40 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
-import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
 import { CacheControl } from "@/lib/cache";
+import { listFavorites } from "@/lib/songs";
+import {
+  zTrimmedParam,
+  zLimitParam,
+  zCursorParam,
+  zEnumParam,
+} from "@/lib/query-params";
 
-export async function GET(request: NextRequest) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
+const favoritesQuery = z.object({
+  q: zTrimmedParam,
+  status: zTrimmedParam,
+  sortBy: zEnumParam(
+    ["recently_liked", "newest", "oldest", "title_az"] as const,
+    "recently_liked",
+  ),
+  limit: zLimitParam(20, 100),
+  cursor: zCursorParam,
+});
 
-    if (authError) return authError;
+export const GET = authRoute(
+  async (_request, { auth, query }) => {
+    const result = await listFavorites({
+      userId: auth.userId,
+      search: query.q,
+      status: query.status,
+      sortBy: query.sortBy,
+      limit: query.limit,
+      cursor: query.cursor,
+    });
 
-    const params = request.nextUrl.searchParams;
-    const q = params.get("q")?.trim() || "";
-    const status = params.get("status") || "";
-    const sortBy = params.get("sortBy") || "recently_liked";
-
-    // Pagination
-    const limitParam = parseInt(params.get("limit") || "", 10);
-    const limit = !isNaN(limitParam) && limitParam >= 1 && limitParam <= 100 ? limitParam : 20;
-    const cursor = params.get("cursor") || "";
-
-    // Build song WHERE conditions
-    const songWhere: Prisma.SongWhereInput = { userId: userId };
-
-    if (q) {
-      songWhere.OR = [
-        { title: { contains: q, mode: "insensitive" } },
-        { prompt: { contains: q, mode: "insensitive" } },
-      ];
-    }
-
-    if (status && ["ready", "pending", "failed"].includes(status)) {
-      songWhere.generationStatus = status;
-    }
-
-    // Build ORDER BY for favorites
-    let favoriteOrderBy: Prisma.FavoriteOrderByWithRelationInput;
-    switch (sortBy) {
-      case "newest":
-        favoriteOrderBy = { song: { createdAt: "desc" } };
-        break;
-      case "oldest":
-        favoriteOrderBy = { song: { createdAt: "asc" } };
-        break;
-      case "title_az":
-        favoriteOrderBy = { song: { title: { sort: "asc", nulls: "last" } } };
-        break;
-      case "recently_liked":
-      default:
-        favoriteOrderBy = { createdAt: "desc" };
-        break;
-    }
-
-    const [favorites, total] = await Promise.all([
-      prisma.favorite.findMany({
-        where: {
-          userId: userId,
-          song: songWhere,
-        },
-        include: {
-          song: {
-            include: {
-              songTags: { include: { tag: true }, orderBy: { tag: { name: "asc" } } },
-              _count: { select: { favorites: true } },
-            },
-          },
-        },
-        orderBy: favoriteOrderBy,
-        take: limit + 1,
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      }),
-      prisma.favorite.count({
-        where: { userId: userId, song: songWhere },
-      }),
-    ]);
-
-    const hasMore = favorites.length > limit;
-    const sliced = hasMore ? favorites.slice(0, limit) : favorites;
-    const nextCursor = hasMore ? sliced[sliced.length - 1].id : null;
-
-    const songs = sliced.map((f) => ({
-      ...f.song,
-      isFavorite: true,
-      favoriteCount: f.song._count.favorites,
-      favoritedAt: f.createdAt,
-    }));
-
-    return NextResponse.json({ songs, nextCursor, total }, {
+    return NextResponse.json(result, {
       headers: { "Cache-Control": CacheControl.privateNoCache },
     });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+  },
+  { route: "/api/songs/favorites", query: favoritesQuery },
+);

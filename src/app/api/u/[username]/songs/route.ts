@@ -1,41 +1,31 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { publicRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
+import { buildDiscoverableFilter } from "@/lib/songs";
+import { zPageParam } from "@/lib/query-params";
+import { notFound } from "@/lib/api-error";
 
-const PAGE_SIZE = 20;
+const pageQuery = z.object({ page: zPageParam() });
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ username: string }> }
-) {
-  const { username } = await params;
-  try {
-    const { searchParams } = new URL(request.url);
-    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-
+export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof pageQuery>>(
+  async (_request, { params, query }) => {
     const user = await prisma.user.findUnique({
-      where: { username },
+      where: { username: params.username },
       select: { id: true },
     });
 
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found", code: "NOT_FOUND" },
-        { status: 404 }
-      );
-    }
+    if (!user) return notFound("User not found");
+
+    const where = { ...buildDiscoverableFilter(), userId: user.id };
 
     const [songs, total] = await Promise.all([
       prisma.song.findMany({
-        where: {
-          userId: user.id,
-          isPublic: true,
-          isHidden: false,
-          archivedAt: null,
-          generationStatus: "ready",
-        },
+        where,
         orderBy: { createdAt: "desc" },
-        skip: (page - 1) * PAGE_SIZE,
-        take: PAGE_SIZE,
+        skip: pageSkip(query.page, DEFAULT_PAGE_SIZE),
+        take: DEFAULT_PAGE_SIZE,
         select: {
           id: true,
           title: true,
@@ -48,30 +38,13 @@ export async function GET(
           createdAt: true,
         },
       }),
-      prisma.song.count({
-        where: {
-          userId: user.id,
-          isPublic: true,
-          isHidden: false,
-          archivedAt: null,
-          generationStatus: "ready",
-        },
-      }),
+      prisma.song.count({ where }),
     ]);
 
     return NextResponse.json({
       songs,
-      pagination: {
-        page,
-        pageSize: PAGE_SIZE,
-        total,
-        hasMore: page * PAGE_SIZE < total,
-      },
+      pagination: offsetPagination(query.page, DEFAULT_PAGE_SIZE, total),
     });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error", code: "INTERNAL_ERROR" },
-      { status: 500 }
-    );
-  }
-}
+  },
+  { query: pageQuery, route: "/api/u/[username]/songs" }
+);

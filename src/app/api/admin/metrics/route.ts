@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
-  const { error } = await requireAdmin();
-  if (error) return error;
-
+export const GET = adminRoute(async () => {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -52,7 +49,6 @@ export async function GET() {
     }),
   ]);
 
-  // Daily new signups for last 30 days
   const dailySignups = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
     SELECT DATE("createdAt") as date, COUNT(*)::bigint as count
     FROM "User"
@@ -61,7 +57,6 @@ export async function GET() {
     ORDER BY date ASC
   `;
 
-  // Daily songs generated for last 30 days
   const dailyGenerations = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
     SELECT DATE("createdAt") as date, COUNT(*)::bigint as count
     FROM "Song"
@@ -112,4 +107,4 @@ export async function GET() {
       count: Number(r.count),
     })),
   });
-}
+}, { route: "/api/admin/metrics" });

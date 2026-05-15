@@ -1,84 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
+import { notFound } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
+import { PUSH_PREFERENCES_SELECT, toPushPreferencesResponse } from "@/lib/push-preferences";
+
+const pushPreferencesPatchBody = z.object({
+  pushGenerationComplete: z.boolean().optional(),
+  pushNewFollower: z.boolean().optional(),
+  pushSongComment: z.boolean().optional(),
+}).refine(
+  (data) =>
+    data.pushGenerationComplete !== undefined
+    || data.pushNewFollower !== undefined
+    || data.pushSongComment !== undefined,
+  "No fields to update",
+);
 
 // GET /api/push/preferences — return user's push notification preferences
-export async function GET(request: NextRequest) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
+export const GET = authRoute(async (_request, { auth }) => {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      pushGenerationComplete: true,
-      pushNewFollower: true,
-      pushSongComment: true,
-    },
+    where: { id: auth.userId },
+    select: PUSH_PREFERENCES_SELECT,
   });
 
   if (!user) {
-    return NextResponse.json({ error: "User not found", code: "NOT_FOUND" }, { status: 404 });
+    return notFound("User not found");
   }
 
-  return NextResponse.json(user);
-}
+  return NextResponse.json(toPushPreferencesResponse(user));
+}, { route: "/api/push/preferences" });
 
 // PATCH /api/push/preferences — update user's push notification preferences
-export async function PATCH(request: NextRequest) {
-  const { userId, error: authError } = await resolveUser(request);
-  if (authError) return authError;
-
-  const body = await request.json();
-  const { pushGenerationComplete, pushNewFollower, pushSongComment } = body ?? {};
-
-  const data: Record<string, unknown> = {};
-
-  if (pushGenerationComplete !== undefined) {
-    if (typeof pushGenerationComplete !== "boolean") {
-      return NextResponse.json(
-        { error: "pushGenerationComplete must be a boolean", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-    data.pushGenerationComplete = pushGenerationComplete;
-  }
-
-  if (pushNewFollower !== undefined) {
-    if (typeof pushNewFollower !== "boolean") {
-      return NextResponse.json(
-        { error: "pushNewFollower must be a boolean", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-    data.pushNewFollower = pushNewFollower;
-  }
-
-  if (pushSongComment !== undefined) {
-    if (typeof pushSongComment !== "boolean") {
-      return NextResponse.json(
-        { error: "pushSongComment must be a boolean", code: "VALIDATION_ERROR" },
-        { status: 400 }
-      );
-    }
-    data.pushSongComment = pushSongComment;
-  }
-
-  if (Object.keys(data).length === 0) {
-    return NextResponse.json(
-      { error: "No fields to update", code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
-  }
-
+export const PATCH = authRoute(async (_request, { auth, body }) => {
   const user = await prisma.user.update({
-    where: { id: userId },
-    data,
-    select: {
-      pushGenerationComplete: true,
-      pushNewFollower: true,
-      pushSongComment: true,
-    },
+    where: { id: auth.userId },
+    data: body,
+    select: PUSH_PREFERENCES_SELECT,
   });
 
-  return NextResponse.json(user);
-}
+  return NextResponse.json(toPushPreferencesResponse(user));
+}, { route: "/api/push/preferences", body: pushPreferencesPatchBody });

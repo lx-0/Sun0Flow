@@ -10,6 +10,14 @@ export interface ApiErrorBody {
   details?: Record<string, unknown>;
 }
 
+export interface ApiFailureResult {
+  ok: false;
+  code: string;
+  status: number;
+  message?: string;
+  error?: string;
+}
+
 /**
  * Common error codes used across API routes.
  */
@@ -28,6 +36,7 @@ export const ErrorCode = {
   TIMEOUT: "TIMEOUT",
   INSUFFICIENT_CREDITS: "INSUFFICIENT_CREDITS",
   COMPLIANCE_BLOCK: "COMPLIANCE_BLOCK",
+  ALREADY_RESOLVED: "ALREADY_RESOLVED",
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -66,6 +75,10 @@ export const forbidden = (msg = "Forbidden") =>
 export const notFound = (msg = "Not found") =>
   apiError(msg, ErrorCode.NOT_FOUND, 404);
 
+/** 409 — state conflict */
+export const conflict = (msg: string, code: ErrorCodeValue = ErrorCode.CONFLICT) =>
+  apiError(msg, code, 409);
+
 /** 429 — rate limit exceeded */
 export const rateLimited = (
   msg: string,
@@ -99,3 +112,16 @@ export const insufficientCredits = (msg = "Insufficient credits") =>
 /** 503 — upstream/external service unavailable */
 export const serviceUnavailable = (msg: string) =>
   apiError(msg, ErrorCode.SERVICE_UNAVAILABLE, 503);
+
+/**
+ * Convert a domain/service failure result into the standard API error shape.
+ */
+export function errorFromResult(result: ApiFailureResult): NextResponse<ApiErrorBody> {
+  return NextResponse.json(
+    {
+      error: result.message ?? result.error ?? "Request failed",
+      code: result.code,
+    },
+    { status: result.status },
+  );
+}

@@ -1,21 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { NextResponse } from "next/server";
+import { authRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
-import { internalError } from "@/lib/api-error";
-import { logServerError } from "@/lib/error-logger";
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { userId, error: authError } = await resolveUser(request);
-    if (authError) return authError;
-
-    const { id: songId } = await params;
-
+export const GET = authRoute<{ id: string }>(
+  async (_request, { auth, params }) => {
     const song = await prisma.song.findFirst({
-      where: { id: songId, userId },
+      where: { id: params.id, userId: auth.userId },
       select: {
         id: true,
         title: true,
@@ -29,7 +19,7 @@ export async function GET(
     if (!song) {
       return NextResponse.json(
         { error: "Song not found", code: "NOT_FOUND" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -37,11 +27,10 @@ export async function GET(
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
-    // Views over last 7 days
     const viewsRaw = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
       SELECT DATE("viewedAt") as date, COUNT(*)::bigint as count
       FROM "SongView"
-      WHERE "songId" = ${songId}
+      WHERE "songId" = ${params.id}
         AND "viewedAt" >= ${sevenDaysAgo}
       GROUP BY DATE("viewedAt")
       ORDER BY date ASC
@@ -49,7 +38,7 @@ export async function GET(
 
     const now = new Date();
     const viewMap = new Map(
-      viewsRaw.map((r) => [r.date.toString().slice(0, 10), Number(r.count)])
+      viewsRaw.map((r) => [r.date.toString().slice(0, 10), Number(r.count)]),
     );
     const views7d: Array<{ date: string; count: number }> = [];
     for (let i = 6; i >= 0; i--) {
@@ -67,10 +56,6 @@ export async function GET(
       isPublic: song.isPublic,
       views7d,
     });
-  } catch (error) {
-    logServerError("GET /api/songs/[id]/analytics", error, {
-      route: "/api/songs/[id]/analytics",
-    });
-    return internalError();
-  }
-}
+  },
+  { route: "/api/songs/[id]/analytics" },
+);

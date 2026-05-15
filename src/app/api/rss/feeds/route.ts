@@ -1,81 +1,61 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resolveUser } from "@/lib/auth-resolver";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authRoute } from "@/lib/route-handler";
+import { badRequest, conflict, notFound } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(request: Request) {
-  const { userId, error: authError } = await resolveUser(request);
+const createFeedBody = z.object({
+  url: z.string().min(1, "url is required"),
+});
 
-  if (authError) return authError;
+const deleteFeedQuery = z.object({
+  id: z.string().min(1, "id query param required"),
+});
 
+export const GET = authRoute(async (_request, { auth }) => {
   const feeds = await prisma.rssFeedSubscription.findMany({
-    where: { userId: userId },
+    where: { userId: auth.userId },
     orderBy: { createdAt: "asc" },
     select: { id: true, url: true, title: true, autoGenerate: true, createdAt: true },
   });
 
   return NextResponse.json({ feeds });
-}
+}, { route: "/api/rss/feeds" });
 
-export async function POST(req: NextRequest) {
-  const { userId, error: authError } = await resolveUser(req);
-
-  if (authError) return authError;
-
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON", code: "VALIDATION_ERROR" }, { status: 400 });
-  }
-
-  const { url } = body as { url?: string };
-  if (!url || typeof url !== "string") {
-    return NextResponse.json({ error: "url is required", code: "VALIDATION_ERROR" }, { status: 400 });
-  }
-
-  const trimmed = url.trim();
+export const POST = authRoute(async (_req, { auth, body }) => {
+  const trimmed = body.url.trim();
   if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-    return NextResponse.json({ error: "URL must start with http:// or https://", code: "VALIDATION_ERROR" }, { status: 400 });
+    return badRequest("URL must start with http:// or https://");
   }
 
   const existing = await prisma.rssFeedSubscription.findUnique({
-    where: { userId_url: { userId: userId, url: trimmed } },
+    where: { userId_url: { userId: auth.userId, url: trimmed } },
   });
   if (existing) {
-    return NextResponse.json({ error: "Feed already added", code: "CONFLICT" }, { status: 409 });
+    return conflict("Feed already added");
   }
 
   const count = await prisma.rssFeedSubscription.count({
-    where: { userId: userId },
+    where: { userId: auth.userId },
   });
   if (count >= 20) {
-    return NextResponse.json({ error: "Maximum 20 feeds allowed", code: "VALIDATION_ERROR" }, { status: 400 });
+    return badRequest("Maximum 20 feeds allowed");
   }
 
   const feed = await prisma.rssFeedSubscription.create({
-    data: { userId: userId, url: trimmed },
+    data: { userId: auth.userId, url: trimmed },
     select: { id: true, url: true, title: true, createdAt: true },
   });
 
   return NextResponse.json({ feed }, { status: 201 });
-}
+}, { route: "/api/rss/feeds", body: createFeedBody });
 
-export async function DELETE(req: NextRequest) {
-  const { userId, error: authError } = await resolveUser(req);
-
-  if (authError) return authError;
-
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  if (!id) {
-    return NextResponse.json({ error: "id query param required", code: "VALIDATION_ERROR" }, { status: 400 });
+export const DELETE = authRoute(async (_req, { auth, query }) => {
+  const feed = await prisma.rssFeedSubscription.findUnique({ where: { id: query.id } });
+  if (!feed || feed.userId !== auth.userId) {
+    return notFound();
   }
 
-  const feed = await prisma.rssFeedSubscription.findUnique({ where: { id } });
-  if (!feed || feed.userId !== userId) {
-    return NextResponse.json({ error: "Not found", code: "NOT_FOUND" }, { status: 404 });
-  }
-
-  await prisma.rssFeedSubscription.delete({ where: { id } });
+  await prisma.rssFeedSubscription.delete({ where: { id: query.id } });
   return NextResponse.json({ ok: true });
-}
+}, { route: "/api/rss/feeds", query: deleteFeedQuery });
