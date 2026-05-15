@@ -20,6 +20,7 @@ import {
   PUSH_NOTIF_TYPES,
 } from "./constants";
 import { Toast, FieldError } from "./ui";
+import { useAutoDismissToast } from "./use-auto-dismiss-toast";
 import { ApiKeySection, PersonalApiKeysSection } from "./api-key-sections";
 import { OnboardingSection, ExportDataSection, ConnectedAccountsSection, SubscriptionSummarySection } from "./account-info-sections";
 import {
@@ -50,13 +51,8 @@ function ProfileTab() {
   const [songs, setSongs] = useState<ProfileSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const { toast, showToast } = useAutoDismissToast();
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   useEffect(() => {
     Promise.all([
@@ -444,16 +440,11 @@ function PreferencesTab() {
   const [preferredGenres, setPreferredGenres] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const { toast, showToast } = useAutoDismissToast();
   const [genreInput, setGenreInput] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   useEffect(() => {
     fetch("/api/profile/preferences")
@@ -813,13 +804,8 @@ function PasswordSection() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const { toast, showToast } = useAutoDismissToast();
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1085,12 +1071,7 @@ function EmailNotificationsSection() {
   const [digestFrequency, setDigestFrequency] = useState<string>("off");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const { toast, showToast } = useAutoDismissToast();
 
   useEffect(() => {
     fetch("/api/profile/email-preferences")
@@ -1212,12 +1193,7 @@ function QuietHoursSection() {
   const [end, setEnd] = useState(8);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const { toast, showToast } = useAutoDismissToast();
 
   useEffect(() => {
     fetch("/api/profile/email-preferences")
@@ -1350,12 +1326,7 @@ function PushNotificationsSection() {
   const [prefs, setPrefs] = useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const { toast, showToast } = useAutoDismissToast();
 
   useEffect(() => {
     fetch("/api/push/preferences")
@@ -1645,13 +1616,8 @@ function DeleteAccountSection() {
   const [password, setPassword] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
   const [deleting, setDeleting] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const { toast, showToast } = useAutoDismissToast();
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const handleDelete = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1771,13 +1737,8 @@ function TagManagementSection() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const { toast, showToast } = useAutoDismissToast();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   useEffect(() => {
     fetch("/api/tags")
