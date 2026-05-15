@@ -1,9 +1,12 @@
 import { authRoute, resultResponse } from "@/lib/route-handler";
 import { respondToGeneration } from "@/lib/generation";
 import { replaceSection } from "@/lib/songs";
+import {
+  replaceSectionBody,
+  type ReplaceSectionBody,
+} from "@/lib/songs/variations/schemas";
 
-export const POST = authRoute<{ id: string }>(async (_request, { auth, params }) => {
-  const body = await _request.json();
+export const POST = authRoute<{ id: string }, ReplaceSectionBody>(async (_request, { auth, params, body }) => {
   const result = await replaceSection(auth.userId, params.id, {
     prompt: body.prompt,
     tags: body.tags,
@@ -19,4 +22,4 @@ export const POST = authRoute<{ id: string }>(async (_request, { auth, params })
     userId: auth.userId,
     route: `/api/songs/${params.id}/replace-section`,
   });
-});
+}, { body: replaceSectionBody });

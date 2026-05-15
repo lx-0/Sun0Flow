@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
 import { authRoute, requireOwned } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { separateVocals, mockSongs, resolveUserApiKey } from "@/lib/sunoapi";
 import type { SeparationType } from "@/lib/sunoapi";
 import { executeGeneration, respondToGeneration } from "@/lib/generation";
+import { validateSongTransformPrerequisites } from "@/lib/song-transform-guards";
 
 export const POST = authRoute<{ id: string }>(
   async (request, { auth, params }) => {
@@ -14,19 +14,17 @@ export const POST = authRoute<{ id: string }>(
     );
     if (error) return error;
 
-    if (song.generationStatus !== "ready") {
-      return NextResponse.json({ error: "Song must be fully generated before separating vocals.", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-
     const body = await request.json();
     const separationType: SeparationType = body.type === "split_stem" ? "split_stem" : "separate_vocal";
 
     const userApiKey = await resolveUserApiKey(auth.userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
-
-    if (hasApiKey && (!song.sunoJobId || !song.sunoAudioId)) {
-      return NextResponse.json({ error: "Song is missing Suno identifiers for vocal separation.", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
+    const validationError = validateSongTransformPrerequisites(song, {
+      requireIdentifiers: hasApiKey,
+      notReadyMessage: "Song must be fully generated before separating vocals.",
+      missingIdentifiersMessage: "Song is missing Suno identifiers for vocal separation.",
+    });
+    if (validationError) return validationError;
 
     const suffix = separationType === "split_stem" ? "stems" : "vocals";
     const title = `${song.title || "Untitled"} (${suffix})`;

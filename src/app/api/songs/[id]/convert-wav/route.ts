@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
 import { authRoute, requireOwned } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { convertToWav, resolveUserApiKey } from "@/lib/sunoapi";
 import { executeTransform, respondToTransform } from "@/lib/generation";
+import { validateSongTransformPrerequisites } from "@/lib/song-transform-guards";
 
 export const POST = authRoute<{ id: string }>(
   async (_request, { auth, params }) => {
@@ -13,16 +13,14 @@ export const POST = authRoute<{ id: string }>(
     );
     if (error) return error;
 
-    if (song.generationStatus !== "ready") {
-      return NextResponse.json({ error: "Song must be fully generated before converting to WAV.", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
-
     const userApiKey = await resolveUserApiKey(auth.userId);
     const hasApiKey = !!(userApiKey || process.env.SUNOAPI_KEY);
-
-    if (hasApiKey && (!song.sunoJobId || !song.sunoAudioId)) {
-      return NextResponse.json({ error: "Song is missing Suno identifiers for WAV conversion.", code: "VALIDATION_ERROR" }, { status: 400 });
-    }
+    const validationError = validateSongTransformPrerequisites(song, {
+      requireIdentifiers: hasApiKey,
+      notReadyMessage: "Song must be fully generated before converting to WAV.",
+      missingIdentifiersMessage: "Song is missing Suno identifiers for WAV conversion.",
+    });
+    if (validationError) return validationError;
 
     const outcome = await executeTransform({
       userId: auth.userId,

@@ -1,9 +1,12 @@
 import { authRoute, resultResponse } from "@/lib/route-handler";
 import { respondToGeneration } from "@/lib/generation";
 import { addInstrumental } from "@/lib/songs";
+import {
+  addInstrumentalBody,
+  type AddInstrumentalBody,
+} from "@/lib/songs/variations/schemas";
 
-export const POST = authRoute<{ id: string }>(async (_request, { auth, params }) => {
-  const body = await _request.json();
+export const POST = authRoute<{ id: string }, AddInstrumentalBody>(async (_request, { auth, params, body }) => {
   const result = await addInstrumental(auth.userId, params.id, {
     tags: body.tags,
     title: body.title,
@@ -15,4 +18,4 @@ export const POST = authRoute<{ id: string }>(async (_request, { auth, params })
     userId: auth.userId,
     route: `/api/songs/${params.id}/add-instrumental`,
   });
-});
+}, { body: addInstrumentalBody });
