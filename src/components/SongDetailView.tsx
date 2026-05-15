@@ -18,6 +18,7 @@ import {
   SpeakerWaveIcon,
   ScissorsIcon,
   PaintBrushIcon,
+  SwatchIcon,
   FilmIcon,
   PlayIcon,
   PauseIcon,
@@ -214,6 +215,10 @@ export function SongDetailView({
   const [embedOpen, setEmbedOpen] = useState(false);
   const [embedTheme, setEmbedTheme] = useState<"dark" | "light">("dark");
   const [embedAutoplay, setEmbedAutoplay] = useState(false);
+  const [saveStyleOpen, setSaveStyleOpen] = useState(false);
+  const [styleTemplateName, setStyleTemplateName] = useState("");
+  const [styleTemplateTags, setStyleTemplateTags] = useState("");
+  const [isSavingStyle, setIsSavingStyle] = useState(false);
 
   // Vocal separation — delegated to useSongStems hook
   const stemHook = useSongStems({ songId: song.id, songTitle: song.title, toast });
@@ -587,6 +592,46 @@ export function SongDetailView({
     }
   }
 
+  function openSaveStyleModal() {
+    setStyleTemplateName("");
+    setStyleTemplateTags((song.tags || "").trim());
+    setSaveStyleOpen(true);
+  }
+
+  async function handleSaveStyleTemplate() {
+    if (isSavingStyle || !styleTemplateName.trim() || !styleTemplateTags.trim()) return;
+
+    const name = styleTemplateName.trim();
+    const tags = styleTemplateTags.trim();
+    setIsSavingStyle(true);
+    try {
+      const res = await fetch("/api/style-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          tags,
+          sourceSongId: song.id,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast(data.error ?? "Failed to save style template", "error");
+        return;
+      }
+
+      setSaveStyleOpen(false);
+      setStyleTemplateName("");
+      setStyleTemplateTags("");
+      toast("Style template saved", "success");
+    } catch {
+      toast("Failed to save style template", "error");
+    } finally {
+      setIsSavingStyle(false);
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       {/* Hero cover art with blurred background */}
@@ -884,6 +929,72 @@ export function SongDetailView({
         />
       )}
 
+      {saveStyleOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-style-title"
+          onClick={() => setSaveStyleOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="save-style-title" className="text-lg font-semibold text-gray-900 dark:text-white">Save Style Template</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Save this song style for quick reuse in future generations.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="style-template-name" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Template Name
+                </label>
+                <input
+                  id="style-template-name"
+                  type="text"
+                  value={styleTemplateName}
+                  onChange={(e) => setStyleTemplateName(e.target.value)}
+                  maxLength={100}
+                  autoFocus
+                  className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  placeholder="e.g. Cinematic Piano Ballad"
+                />
+              </div>
+              <div>
+                <label htmlFor="style-template-tags" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Style Tags
+                </label>
+                <textarea
+                  id="style-template-tags"
+                  value={styleTemplateTags}
+                  onChange={(e) => setStyleTemplateTags(e.target.value)}
+                  rows={3}
+                  maxLength={500}
+                  className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  placeholder="e.g. dreamy synthwave, lush pads, driving bass"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setSaveStyleOpen(false)}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveStyleTemplate}
+                disabled={isSavingStyle || !styleTemplateName.trim() || !styleTemplateTags.trim()}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+              >
+                {isSavingStyle ? "Saving..." : "Save Style"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Export / Format Conversion */}
       {hasAudio && (
@@ -1095,6 +1206,15 @@ export function SongDetailView({
             <DocumentDuplicateIcon className="w-4 h-4" aria-hidden="true" />
             Use as Template
           </button>
+          {song.tags?.trim() && (
+            <button
+              onClick={openSaveStyleModal}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors min-h-[44px] col-span-2"
+            >
+              <SwatchIcon className="w-4 h-4" aria-hidden="true" />
+              Save Style
+            </button>
+          )}
         </div>
       </div>
 
