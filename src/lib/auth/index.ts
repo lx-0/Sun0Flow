@@ -4,6 +4,7 @@ export type { RegisterInput, RegisterResult } from "./register";
 
 import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import { auth } from "./session";
+import { isAdminEmail } from "./admin";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { unauthorized } from "@/lib/api-error";
@@ -104,14 +105,15 @@ export async function requireAdmin() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, isAdmin: true },
+    select: { id: true, isAdmin: true, email: true },
   });
 
-  if (!user?.isAdmin) {
+  const adminGranted = Boolean(user?.isAdmin) || isAdminEmail(user?.email);
+  if (!user || !adminGranted) {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }), session: null, user: null };
   }
 
-  return { error: null, session, user };
+  return { error: null, session, user: { id: user.id, isAdmin: true } };
 }
 
 export async function logAdminAction(adminId: string, action: string, targetId?: string, details?: string) {
