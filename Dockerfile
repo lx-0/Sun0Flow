@@ -38,6 +38,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # the Dockerfile declares them as ARG.
 ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+# Build identifier baked into the client bundle for service-worker cache
+# busting and the Sentry release. Set by the deploy workflow from
+# ${{ github.sha }} since Railway-via-`railway up` doesn't auto-inject
+# RAILWAY_GIT_COMMIT_SHA. Falls back to a timestamp inside next.config.mjs
+# when neither is provided so each build still gets a unique namespace.
+ARG NEXT_PUBLIC_BUILD_ID
+ENV NEXT_PUBLIC_BUILD_ID=$NEXT_PUBLIC_BUILD_ID
+ARG SENTRY_RELEASE
+ENV SENTRY_RELEASE=$SENTRY_RELEASE
 RUN pnpm build
 
 # --- Production ---

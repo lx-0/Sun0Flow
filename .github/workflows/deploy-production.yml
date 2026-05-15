@@ -39,6 +39,19 @@ jobs:
       - name: Migration safety check
         run: bash scripts/check-migration-safety.sh
 
+      - name: Set build identifier on Railway
+        # Tie the Service Worker cache namespace and Sentry release to the
+        # commit SHA of this deploy. `railway up` uploads a tarball, so
+        # Railway never auto-populates RAILWAY_GIT_COMMIT_SHA — we wire it
+        # explicitly here. --skip-deploys avoids triggering an extra deploy
+        # before `railway up` runs below.
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          DEPLOY_SHA: ${{ inputs.sha || github.sha }}
+        run: |
+          railway variable set "NEXT_PUBLIC_BUILD_ID=${DEPLOY_SHA}" --service SunoFlow --skip-deploys
+          railway variable set "SENTRY_RELEASE=${DEPLOY_SHA}" --service SunoFlow --skip-deploys
+
       - name: Deploy to production
         id: deploy
         run: railway up --detach --service SunoFlow
