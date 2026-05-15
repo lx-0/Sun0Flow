@@ -12,13 +12,23 @@ function PostHogPageView() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Initialize once on mount
+  // Initialize once on mount, deferred to idle so the analytics SDK doesn't
+  // compete with first interactive paint on mobile. Safari has no
+  // requestIdleCallback yet — fall back to setTimeout.
   const initRef = useRef(false);
   useEffect(() => {
-    if (!initRef.current) {
-      initAnalytics();
-      initRef.current = true;
+    if (initRef.current) return;
+    initRef.current = true;
+    const win = window as Window & {
+      requestIdleCallback?: typeof requestIdleCallback;
+      cancelIdleCallback?: typeof cancelIdleCallback;
+    };
+    if (typeof win.requestIdleCallback === "function") {
+      const handle = win.requestIdleCallback(() => initAnalytics(), { timeout: 4000 });
+      return () => win.cancelIdleCallback?.(handle);
     }
+    const handle = window.setTimeout(() => initAnalytics(), 1);
+    return () => window.clearTimeout(handle);
   }, []);
 
   // Track page views on navigation
