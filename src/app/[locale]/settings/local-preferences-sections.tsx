@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BellIcon, PlusIcon, SpeakerWaveIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { BellIcon, CloudArrowDownIcon, ComputerDesktopIcon, MoonIcon, PlusIcon, SunIcon, SpeakerWaveIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { useTheme } from "@/components/ThemeProvider";
+import { useOfflineCache } from "@/hooks/useOfflineCache";
+import { formatBytes, getCachedSongsMeta } from "@/lib/cache/offline";
 import { FieldError } from "./ui";
 import { IG_POSTS_KEY, NOTIF_PREFS_KEY, NOTIFICATION_TYPES, PLAYBACK_PREFS_KEY } from "./constants";
 
@@ -277,6 +280,143 @@ export function PlaybackDefaultsSection() {
             </button>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+export function OfflineCacheSection() {
+  const { stats, saving, removeOffline, clearAll } = useOfflineCache();
+  const [songs, setSongs] = useState(getCachedSongsMeta);
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    setSongs(getCachedSongsMeta());
+  }, [stats]);
+
+  async function handleClearAll() {
+    await clearAll();
+    setSongs([]);
+    setConfirming(false);
+  }
+
+  const usedLabel = formatBytes(stats.totalBytes);
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+          <CloudArrowDownIcon className="w-4 h-4 text-violet-500" />
+          Offline Songs
+        </h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          Songs saved for playback without a network connection.
+        </p>
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-600 dark:text-gray-400">Cached songs</span>
+          <span className="font-semibold text-gray-900 dark:text-white">{stats.count}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-600 dark:text-gray-400">Storage used</span>
+          <span className="font-semibold text-gray-900 dark:text-white">{usedLabel}</span>
+        </div>
+
+        {songs.length > 0 && (
+          <div className="space-y-1 pt-1 border-t border-gray-100 dark:border-gray-800">
+            {songs.map((s) => (
+              <div key={s.id} className="flex items-center justify-between gap-2 py-1">
+                <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">
+                  {s.title ?? "Untitled"}
+                </span>
+                <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                  {formatBytes(s.size)}
+                </span>
+                <button
+                  onClick={() => {
+                    removeOffline(s.id);
+                    setSongs((prev) => prev.filter((m) => m.id !== s.id));
+                  }}
+                  disabled={saving.has(s.id)}
+                  className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label={`Remove "${s.title ?? "Untitled"}" from offline cache`}
+                >
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {songs.length === 0 && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 py-1">
+            No songs saved offline. Use the cloud icon on any song to save it.
+          </p>
+        )}
+      </div>
+
+      {songs.length > 0 && (
+        confirming ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600 dark:text-gray-400">Remove all {stats.count} offline songs?</span>
+            <button
+              onClick={handleClearAll}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors min-h-[44px]"
+            >
+              Confirm
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors min-h-[44px]"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirming(true)}
+            className="text-sm text-red-500 dark:text-red-400 hover:underline"
+          >
+            Clear All Offline Songs
+          </button>
+        )
+      )}
+    </section>
+  );
+}
+
+export function ThemeSection() {
+  const { theme, setTheme } = useTheme();
+
+  const options: { value: "light" | "dark" | "system"; label: string; icon: typeof SunIcon }[] = [
+    { value: "light", label: "Light", icon: SunIcon },
+    { value: "dark", label: "Dark", icon: MoonIcon },
+    { value: "system", label: "System", icon: ComputerDesktopIcon },
+  ];
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Appearance</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Choose your preferred theme.</p>
+      </div>
+      <div className="flex gap-2">
+        {options.map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            onClick={() => setTheme(value)}
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-sm font-medium transition-colors min-h-[44px] border ${
+              theme === value
+                ? "bg-violet-600 text-white border-violet-600"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
       </div>
     </section>
   );
