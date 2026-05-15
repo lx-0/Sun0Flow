@@ -60,30 +60,39 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
 
       const userApiKey = await resolveUserApiKey(auth.userId);
 
-      const updates = pollToCompletion(
-        {
-          songId: jobId,
-          userId: auth.userId,
-          sunoJobId: song.sunoJobId,
-          apiKey: userApiKey,
-          currentPollCount: song.pollCount,
-          existingSong: {
-            title: song.title,
-            prompt: song.prompt,
-            tags: song.tags,
-            audioUrl: song.audioUrl,
-            imageUrl: song.imageUrl,
-            duration: song.duration,
-            lyrics: song.lyrics,
-            sunoModel: song.sunoModel,
-            isInstrumental: song.isInstrumental,
-          },
+      // Run the poll loop independent of the SSE connection lifecycle. If the
+      // client disconnects (tab close, navigation) we still want Suno's result
+      // to land in the DB — handleSongSuccess / handleSongFailure persist
+      // regardless of who's listening. The SSE stream is a best-effort
+      // forwarder; once it closes, sendEvent throws and we stop forwarding,
+      // but the generator keeps iterating to completion.
+      const updates = pollToCompletion({
+        songId: jobId,
+        userId: auth.userId,
+        sunoJobId: song.sunoJobId,
+        apiKey: userApiKey,
+        currentPollCount: song.pollCount,
+        existingSong: {
+          title: song.title,
+          prompt: song.prompt,
+          tags: song.tags,
+          audioUrl: song.audioUrl,
+          imageUrl: song.imageUrl,
+          duration: song.duration,
+          lyrics: song.lyrics,
+          sunoModel: song.sunoModel,
+          isInstrumental: song.isInstrumental,
         },
-        request.signal,
-      );
+      });
 
+      let streamOpen = true;
       for await (const update of updates) {
-        sendEvent(controller, "generation_update", { ...update });
+        if (!streamOpen) continue;
+        try {
+          sendEvent(controller, "generation_update", { ...update });
+        } catch {
+          streamOpen = false;
+        }
       }
 
       try {
