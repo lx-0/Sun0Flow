@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { ensureFreeSubscription } from "@/lib/billing";
+import { isAdminEmail } from "@/lib/auth/admin";
 
 export const googleEnabled = Boolean(
   process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
@@ -102,7 +103,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const [dbUser, sub] = await Promise.all([
           prisma.user.findUnique({
             where: { id: user.id as string },
-            select: { onboardingCompleted: true, isAdmin: true, emailVerified: true, sunoApiKey: true },
+            select: { email: true, onboardingCompleted: true, isAdmin: true, emailVerified: true, sunoApiKey: true },
           }),
           prisma.subscription.findUnique({
             where: { userId: user.id as string },
@@ -110,7 +111,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }),
         ]);
         token.onboardingCompleted = dbUser?.onboardingCompleted ?? false;
-        token.isAdmin = dbUser?.isAdmin ?? false;
+        token.isAdmin = (dbUser?.isAdmin ?? false) || isAdminEmail(dbUser?.email);
         token.emailVerified = dbUser?.emailVerified?.toISOString() ?? null;
         token.hasSunoApiKey = Boolean(dbUser?.sunoApiKey);
         token.subscriptionTier = sub?.tier ?? "free";
@@ -120,7 +121,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const [dbUser, sub] = await Promise.all([
           prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { onboardingCompleted: true, isAdmin: true, emailVerified: true, sunoApiKey: true },
+            select: { email: true, onboardingCompleted: true, isAdmin: true, emailVerified: true, sunoApiKey: true },
           }),
           prisma.subscription.findUnique({
             where: { userId: token.id as string },
@@ -128,7 +129,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }),
         ]);
         token.onboardingCompleted = dbUser?.onboardingCompleted ?? false;
-        token.isAdmin = dbUser?.isAdmin ?? false;
+        token.isAdmin = (dbUser?.isAdmin ?? false) || isAdminEmail(dbUser?.email);
         token.emailVerified = dbUser?.emailVerified?.toISOString() ?? null;
         token.hasSunoApiKey = Boolean(dbUser?.sunoApiKey);
         token.subscriptionTier = sub?.tier ?? "free";

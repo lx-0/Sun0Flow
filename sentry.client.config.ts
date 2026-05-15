@@ -2,9 +2,10 @@
  * Sentry client-side (browser) configuration.
  * Only active when NEXT_PUBLIC_SENTRY_DSN is set.
  *
- * Targets a GlitchTip backend (errors.yester.cloud), which is Sentry-protocol
- * compatible for error + performance envelopes but does NOT support Session
- * Replay. Replay integration is intentionally omitted.
+ * The DSN may point at Sentry SaaS or a self-hosted, Sentry-protocol-compatible
+ * backend such as GlitchTip. GlitchTip supports error + performance envelopes
+ * but rejects Session Replay, so `replayIntegration()` is intentionally omitted
+ * for portability.
  */
 import * as Sentry from "@sentry/nextjs";
 

@@ -132,6 +132,31 @@ const nextConfig = {
   },
 
   async headers() {
+    // Derive the Sentry/GlitchTip ingest origin from the public DSN so the
+    // CSP doesn't hard-code an internal hostname. Falls back to no extra
+    // origin when no DSN is configured.
+    const sentryIngestOrigin = (() => {
+      const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+      if (!dsn) return "";
+      try {
+        return new URL(dsn).origin;
+      } catch {
+        return "";
+      }
+    })();
+
+    const connectSrc = [
+      "'self'",
+      "https://*.sunoapi.org",
+      "https://*.aiquickdraw.com",
+      "https://*.posthog.com",
+      "https://us.i.posthog.com",
+      "https://eu.i.posthog.com",
+      sentryIngestOrigin,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     const securityHeaders = [
       {
         key: "Content-Security-Policy",
@@ -142,7 +167,7 @@ const nextConfig = {
           "img-src 'self' data: blob: https:",
           "media-src 'self' blob: https://*.sunoapi.org https://*.aiquickdraw.com",
           "font-src 'self' data:",
-          "connect-src 'self' https://*.sunoapi.org https://*.aiquickdraw.com https://*.posthog.com https://us.i.posthog.com https://eu.i.posthog.com https://errors.yester.cloud",
+          `connect-src ${connectSrc}`,
           "frame-ancestors 'none'",
           "base-uri 'self'",
           "form-action 'self'",
