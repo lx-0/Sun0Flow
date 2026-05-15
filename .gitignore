@@ -47,7 +47,14 @@ next-env.d.ts
 .env
 prisma.config.ts
 
+# Agents local user settings
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
+# ytstack runtime artifacts (per-install session journal — never tracked)
+.ytstack/journal/
+.ytstack/HANDOFF.md
 
 # local audio cache
 .audio-cache/
