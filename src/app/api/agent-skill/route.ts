@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { publicRoute } from "@/lib/route-handler";
 import { getSkillMarkdown } from "@/lib/agent-skill";
 
-export async function GET() {
+export const GET = publicRoute(async () => {
   const skillMarkdown = await getSkillMarkdown();
 
   return new NextResponse(skillMarkdown, {
@@ -11,4 +12,4 @@ export async function GET() {
       "Content-Disposition": 'attachment; filename="sunoflow-skill.md"',
     },
   });
-}
+}, { route: "/api/agent-skill" });
