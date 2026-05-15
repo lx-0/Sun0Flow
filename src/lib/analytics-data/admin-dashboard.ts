@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { parseDateRange, startOfToday, dateRangeStart } from "@/lib/date-series";
 import { countGenres } from "@/lib/tags";
+import { countActiveUsers, dailyActiveUserCounts } from "@/lib/active-users";
 
 export interface AdminAnalytics {
   totalUsers: number;
@@ -40,16 +41,9 @@ export async function getAdminAnalytics(range: string): Promise<AdminAnalytics> 
     prisma.song.count(),
     prisma.song.count({ where: { createdAt: { gte: sinceDate } } }),
     prisma.song.count({ where: { createdAt: { gte: todayStart } } }),
-    prisma.user.count({ where: { lastLoginAt: { gte: sevenDaysAgo } } }),
+    countActiveUsers(sevenDaysAgo),
 
-    prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
-      SELECT DATE("lastLoginAt") as date, COUNT(DISTINCT id)::bigint as count
-      FROM "User"
-      WHERE "lastLoginAt" >= ${sinceDate}
-        AND "lastLoginAt" IS NOT NULL
-      GROUP BY DATE("lastLoginAt")
-      ORDER BY date ASC
-    `,
+    dailyActiveUserCounts(sinceDate),
 
     prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
       SELECT DATE("createdAt") as date, COUNT(*)::bigint as count
@@ -88,10 +82,7 @@ export async function getAdminAnalytics(range: string): Promise<AdminAnalytics> 
       date: new Date(row.date).toISOString().split("T")[0],
       count: Number(row.count),
     })),
-    dailyActiveUsers: dailyActiveUsers.map((row) => ({
-      date: new Date(row.date).toISOString().split("T")[0],
-      count: Number(row.count),
-    })),
+    dailyActiveUsers,
     popularGenres: countGenres(allSongsForGenres, 10),
     topCreators: topCreators.map((c) => ({
       userId: c.userId,

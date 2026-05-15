@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recordActivity } from "@/lib/activity";
+import { recordDailyActivity, checkStreakMilestones } from "@/lib/streaks";
 import { cursorPaginate } from "@/lib/pagination";
 import { type Result, success, Err } from "@/lib/result";
 import { findAccessibleSong, invalidateSongDashboardCache } from "./access";
@@ -49,6 +50,10 @@ export async function addFavorite(
 
   invalidateSongDashboardCache(userId);
   recordActivity({ userId, type: "song_favorited", songId: song.id });
+
+  recordDailyActivity(userId)
+    .then((streak) => checkStreakMilestones(userId, streak))
+    .catch(() => {});
 
   return success({ isFavorite: true, favoriteCount: count, favoriteId: favorite.id });
 }

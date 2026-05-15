@@ -221,6 +221,7 @@ function cleanupStalePending(userId: string) {
       data: {
         generationStatus: "failed",
         errorMessage: "Generation timed out",
+        archivedAt: new Date(),
       },
     })
     .catch((err) => {

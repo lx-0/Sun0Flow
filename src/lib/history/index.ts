@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { cursorPaginate } from "@/lib/pagination";
+import { recordDailyActivity, checkStreakMilestones } from "@/lib/streaks";
 
 const MAX_HISTORY = 50;
 const DEDUP_WINDOW_MS = 5_000;
@@ -73,6 +74,10 @@ export async function recordPlay(
   const entry = await prisma.playHistory.create({
     data: { userId, songId },
   });
+
+  recordDailyActivity(userId)
+    .then((streak) => checkStreakMilestones(userId, streak))
+    .catch(() => {});
 
   prisma.playHistory
     .findMany({

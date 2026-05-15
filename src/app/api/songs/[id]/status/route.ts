@@ -23,7 +23,7 @@ export const GET = authRoute<{ id: string }>(
     if (!song.sunoJobId) {
       const updated = await prisma.song.update({
         where: { id: params.id },
-        data: { generationStatus: "failed", errorMessage: "No Suno task ID" },
+        data: { generationStatus: "failed", errorMessage: "No Suno task ID", archivedAt: new Date() },
       });
       broadcast(song.userId, {
         type: "generation_update",

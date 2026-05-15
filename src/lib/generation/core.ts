@@ -76,6 +76,7 @@ export function createSongRecord(
           ...base,
           errorMessage: input.errorMessage,
           generationStatus: "failed",
+          archivedAt: new Date(),
         },
       });
   }

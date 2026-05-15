@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import { countActiveUsers } from "@/lib/active-users";
 
 export const GET = adminRoute(async () => {
   const now = new Date();
@@ -22,8 +23,8 @@ export const GET = adminRoute(async () => {
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { createdAt: { gte: todayStart } } }),
-    prisma.user.count({ where: { lastLoginAt: { gte: sevenDaysAgo } } }),
-    prisma.user.count({ where: { lastLoginAt: { gte: thirtyDaysAgo } } }),
+    countActiveUsers(sevenDaysAgo),
+    countActiveUsers(thirtyDaysAgo),
     prisma.song.count(),
     prisma.song.count({ where: { createdAt: { gte: todayStart } } }),
     prisma.subscription.groupBy({

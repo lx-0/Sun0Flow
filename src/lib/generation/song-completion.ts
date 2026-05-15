@@ -270,12 +270,19 @@ async function markSongFailed(
   song: SongRecord,
   errorMessage: string,
 ): Promise<void> {
+  // Auto-archive failed songs so they don't pollute the user's library.
+  // Preserve any earlier archivedAt the user may have set manually.
+  const existing = await prisma.song.findUnique({
+    where: { id: song.id },
+    select: { archivedAt: true },
+  });
   await prisma.song.update({
     where: { id: song.id },
     data: {
       generationStatus: "failed",
       pollCount: song.pollCount + 1,
       errorMessage,
+      archivedAt: existing?.archivedAt ?? new Date(),
     },
   });
   await resolveBySongId(song.id, { status: "failed", errorMessage });

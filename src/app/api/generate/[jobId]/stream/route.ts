@@ -49,7 +49,7 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
       if (!song.sunoJobId) {
         await prisma.song.update({
           where: { id: jobId },
-          data: { generationStatus: "failed", errorMessage: "No Suno task ID" },
+          data: { generationStatus: "failed", errorMessage: "No Suno task ID", archivedAt: new Date() },
         });
         const failData = { songId: jobId, status: "failed", errorMessage: "No Suno task ID" };
         broadcast(song.userId, { type: "generation_update", data: failData });

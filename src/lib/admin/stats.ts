@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { countActiveUsers } from "@/lib/active-users";
 
 const TIER_MONTHLY_PRICE_CENTS: Record<string, number> = {
   starter: 999,
@@ -46,8 +47,8 @@ export async function getAdminStats(): Promise<AdminStats> {
     prisma.song.count({ where: { createdAt: { gte: todayStart } } }),
     prisma.song.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
     prisma.song.count({ where: { createdAt: { gte: monthStart } } }),
-    prisma.user.count({ where: { lastLoginAt: { gte: sevenDaysAgo } } }),
-    prisma.user.count({ where: { lastLoginAt: { gte: thirtyDaysAgo } } }),
+    countActiveUsers(sevenDaysAgo),
+    countActiveUsers(thirtyDaysAgo),
     prisma.report.count({ where: { status: "pending" } }),
     prisma.errorReport.count({ where: { createdAt: { gte: todayStart } } }),
     prisma.subscription.count({

@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendWeeklyHighlightsEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
+import { listActiveUserIds } from "@/lib/active-users";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,12 +55,15 @@ async function fetchDigestRecipients(): Promise<DigestRecipient[]> {
     Date.now() - ACTIVE_WINDOW_DAYS * 24 * 60 * 60 * 1000
   );
 
+  const activeIds = await listActiveUserIds(cutoff);
+  if (activeIds.length === 0) return [];
+
   return prisma.user.findMany({
     where: {
+      id: { in: activeIds },
       emailDigestFrequency: "weekly",
       email: { not: null },
       isDisabled: false,
-      lastLoginAt: { gte: cutoff },
     },
     select: {
       id: true,
