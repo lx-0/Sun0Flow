@@ -94,6 +94,7 @@ describe("POST /api/style-templates", () => {
       ok: false,
       status: 404,
       error: "Source song not found",
+      code: "NOT_FOUND",
     } as never);
 
     const res = await POST(makePostRequest({
@@ -103,6 +104,7 @@ describe("POST /api/style-templates", () => {
     }), seg);
 
     expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("returns 400 for service-level validation failures", async () => {
@@ -110,6 +112,7 @@ describe("POST /api/style-templates", () => {
       ok: false,
       status: 400,
       error: "Maximum of 50 style templates reached",
+      code: "LIMIT_REACHED",
     } as never);
 
     const res = await POST(makePostRequest({
@@ -120,5 +123,6 @@ describe("POST /api/style-templates", () => {
 
     expect(res.status).toBe(400);
     expect(payload.error).toContain("Maximum");
+    expect(payload.code).toBe("LIMIT_REACHED");
   });
 });
