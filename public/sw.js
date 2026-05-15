@@ -1,6 +1,14 @@
-const CACHE_NAME = "sunoflow-v4";
-const STATIC_CACHE = "sunoflow-static-v2";
-const API_CACHE = "sunoflow-api-v2";
+// Cache namespaces are derived from the BUILD_ID query string the client
+// passes when registering this SW (`/sw.js?v=<commit-sha>`). Each deploy
+// registers a unique URL, so the browser treats it as a new SW and evicts
+// every namespace not in keepCaches — stale /_next/static chunks from
+// prior deploys can never resurface in the PWA.
+// AUDIO_CACHE intentionally stays stable across deploys: its entries are
+// user-saved offline songs, not deploy-coupled bundles.
+const BUILD_ID = new URL(self.location.href).searchParams.get("v") || "dev";
+const CACHE_NAME = `sunoflow-shell-${BUILD_ID}`;
+const STATIC_CACHE = `sunoflow-static-${BUILD_ID}`;
+const API_CACHE = `sunoflow-api-${BUILD_ID}`;
 const AUDIO_CACHE = "sunoflow-audio-v1";
 const OFFLINE_URL = "/offline.html";
 const QUEUE_STORE = "sunoflow-offline-queue";

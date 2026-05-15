@@ -22,12 +22,25 @@ const corejs3Stubs = {
 };
 
 /** @type {import('next').NextConfig} */
+// Build identifier exposed to the client for service-worker cache busting
+// and the update banner. Each deploy must yield a distinct value so the SW
+// re-registers with a new ?v= query and evicts stale /_next/static chunks.
+const buildId =
+  process.env.NEXT_PUBLIC_BUILD_ID ??
+  process.env.RAILWAY_GIT_COMMIT_SHA ??
+  process.env.SENTRY_RELEASE ??
+  `dev-${Date.now()}`;
+
 const nextConfig = {
   output: "standalone",
   // Enable gzip/brotli compression for all responses
   compress: true,
   serverExternalPackages: ["@prisma/client", "bcryptjs", "node-cron"],
   experimental: {},
+  env: {
+    NEXT_PUBLIC_BUILD_ID: buildId,
+  },
+  generateBuildId: async () => buildId,
   webpack(config, { isServer, nextRuntime, webpack: wp }) {
     // Edge runtime (middleware) can't resolve Node.js builtins like fs/path.
     // Server-only modules (audio-cache.ts) use them but only execute under
