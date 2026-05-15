@@ -107,6 +107,7 @@ function makeRequest(body: Record<string, unknown>): Request {
     body: JSON.stringify(body),
   });
 }
+const seg = { params: Promise.resolve({}) } as never;
 
 const RATE_LIMIT_STATUS = { remaining: 5, limit: 10, resetAt: new Date(Date.now() + 60000).toISOString() };
 
@@ -154,7 +155,7 @@ describe("POST /api/upload — authentication", () => {
       error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
 
-    const res = await POST(makeRequest(COVER_BODY));
+    const res = await POST(makeRequest(COVER_BODY) as never, seg);
     expect(res.status).toBe(401);
     const data = await res.json();
     expect(data.code).toBe("UNAUTHORIZED");
@@ -168,7 +169,7 @@ describe("POST /api/upload — rate limiting", () => {
       status: { remaining: 0, limit: 10, resetAt: new Date(Date.now() + 30000).toISOString() },
     });
 
-    const res = await POST(makeRequest(COVER_BODY));
+    const res = await POST(makeRequest(COVER_BODY) as never, seg);
     expect(res.status).toBe(429);
     const data = await res.json();
     expect(data.code).toBe("RATE_LIMIT");
@@ -178,7 +179,7 @@ describe("POST /api/upload — rate limiting", () => {
 
 describe("POST /api/upload — input validation", () => {
   it("returns 400 when mode is invalid", async () => {
-    const res = await POST(makeRequest({ ...COVER_BODY, mode: "invalid" }));
+    const res = await POST(makeRequest({ ...COVER_BODY, mode: "invalid" }) as never, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.code).toBe("VALIDATION_ERROR");
@@ -186,7 +187,7 @@ describe("POST /api/upload — input validation", () => {
   });
 
   it("returns 400 when neither base64Data nor fileUrl is provided", async () => {
-    const res = await POST(makeRequest({ mode: "cover", title: "My Song" }));
+    const res = await POST(makeRequest({ mode: "cover", title: "My Song" }) as never, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.code).toBe("VALIDATION_ERROR");
@@ -198,7 +199,7 @@ describe("POST /api/upload — input validation", () => {
       mode: "cover",
       base64Data: "SGVsbG8=",
       fileUrl: "https://example.com/song.mp3",
-    }));
+    }) as never, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.code).toBe("VALIDATION_ERROR");
@@ -210,7 +211,7 @@ describe("POST /api/upload — input validation", () => {
     const base64Length = Math.ceil(tenMbPlusOneDecoded / 3) * 4;
     const oversizedBase64 = "A".repeat(base64Length);
 
-    const res = await POST(makeRequest({ mode: "cover", base64Data: oversizedBase64 }));
+    const res = await POST(makeRequest({ mode: "cover", base64Data: oversizedBase64 }) as never, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain("10MB");
@@ -220,7 +221,7 @@ describe("POST /api/upload — input validation", () => {
     vi.mocked(resolveUserApiKey).mockResolvedValue(undefined);
     delete process.env.SUNOAPI_KEY;
 
-    const res = await POST(makeRequest(COVER_BODY));
+    const res = await POST(makeRequest(COVER_BODY) as never, seg);
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.code).toBe("VALIDATION_ERROR");
@@ -230,7 +231,7 @@ describe("POST /api/upload — input validation", () => {
 
 describe("POST /api/upload — successful uploads", () => {
   it("creates a pending song on successful cover upload from base64", async () => {
-    const res = await POST(makeRequest(COVER_BODY));
+    const res = await POST(makeRequest(COVER_BODY) as never, seg);
     expect(res.status).toBe(201);
 
     expect(uploadFileBase64).toHaveBeenCalled();
@@ -247,7 +248,7 @@ describe("POST /api/upload — successful uploads", () => {
   });
 
   it("creates a pending song on successful extend upload", async () => {
-    const res = await POST(makeRequest(EXTEND_BODY));
+    const res = await POST(makeRequest(EXTEND_BODY) as never, seg);
     expect(res.status).toBe(201);
 
     expect(uploadAndExtend).toHaveBeenCalled();
@@ -265,14 +266,14 @@ describe("POST /api/upload — successful uploads", () => {
     const res = await POST(makeRequest({
       mode: "cover",
       fileUrl: "https://example.com/song.mp3",
-    }));
+    }) as never, seg);
     expect(res.status).toBe(201);
     expect(uploadFileFromUrl).toHaveBeenCalled();
     expect(uploadFileBase64).not.toHaveBeenCalled();
   });
 
   it("response includes rateLimit status", async () => {
-    const res = await POST(makeRequest(COVER_BODY));
+    const res = await POST(makeRequest(COVER_BODY) as never, seg);
     const data = await res.json();
     expect(data).toHaveProperty("rateLimit");
     expect(data.rateLimit).toHaveProperty("limit");
@@ -285,7 +286,7 @@ describe("POST /api/upload — API error handling", () => {
     const apiError = new SunoApiError(503, "Service Unavailable");
     vi.mocked(uploadFileBase64).mockRejectedValue(apiError);
 
-    const res = await POST(makeRequest(COVER_BODY));
+    const res = await POST(makeRequest(COVER_BODY) as never, seg);
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.error).toContain("temporarily unavailable");
@@ -303,7 +304,7 @@ describe("POST /api/upload — API error handling", () => {
     const apiError = new SunoApiError(429, "Too many requests");
     vi.mocked(uploadFileBase64).mockRejectedValue(apiError);
 
-    const res = await POST(makeRequest(COVER_BODY));
+    const res = await POST(makeRequest(COVER_BODY) as never, seg);
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.error).toContain("busy");
@@ -313,7 +314,7 @@ describe("POST /api/upload — API error handling", () => {
     const apiError = new SunoApiError(400, "Invalid parameters");
     vi.mocked(uploadFileBase64).mockRejectedValue(apiError);
 
-    const res = await POST(makeRequest(COVER_BODY));
+    const res = await POST(makeRequest(COVER_BODY) as never, seg);
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.error).toContain("Invalid parameters");
@@ -322,7 +323,7 @@ describe("POST /api/upload — API error handling", () => {
   it("creates a failed song record on network error", async () => {
     vi.mocked(uploadFileBase64).mockRejectedValue(new TypeError("fetch failed"));
 
-    const res = await POST(makeRequest(COVER_BODY));
+    const res = await POST(makeRequest(COVER_BODY) as never, seg);
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.error).toContain("Could not reach");
@@ -332,7 +333,7 @@ describe("POST /api/upload — API error handling", () => {
     const apiError = new SunoApiError(502, "Bad Gateway");
     vi.mocked(uploadFileBase64).mockRejectedValue(apiError);
 
-    await POST(makeRequest(COVER_BODY));
+    await POST(makeRequest(COVER_BODY) as never, seg);
     expect(logServerError).toHaveBeenCalledWith(
       "upload-api",
       apiError,
@@ -347,7 +348,7 @@ describe("POST /api/upload — API error handling", () => {
       body: "{ not valid json ::::",
     });
 
-    const res = await POST(req);
+    const res = await POST(req as never, seg);
     expect(res.status).toBe(500);
     const data = await res.json();
     expect(data.code).toBe("INTERNAL_ERROR");
@@ -361,7 +362,7 @@ describe("POST /api/upload — API error handling", () => {
       body: "",
     });
 
-    const res = await POST(req);
+    const res = await POST(req as never, seg);
     const data = await res.json();
     expect(data).toHaveProperty("error");
     expect(data).toHaveProperty("code");

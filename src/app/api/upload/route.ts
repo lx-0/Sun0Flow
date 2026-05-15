@@ -12,7 +12,7 @@ import { logServerError } from "@/lib/error-logger";
 
 const MAX_BASE64_SIZE = 10 * 1024 * 1024; // 10MB
 
-const postHandler = authRoute(async (request, { auth }) => {
+export const POST = authRoute(async (request, { auth }) => {
   try {
     const body = await request.json();
     const { mode, base64Data, fileUrl, title, prompt, style, instrumental, continueAt } = body;
@@ -124,7 +124,3 @@ const postHandler = authRoute(async (request, { auth }) => {
     );
   }
 }, { route: "/api/upload" });
-
-export async function POST(request: Request) {
-  return postHandler(request as never, { params: Promise.resolve({}) });
-}
