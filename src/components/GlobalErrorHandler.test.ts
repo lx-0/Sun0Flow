@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBenignError } from "./GlobalErrorHandler";
+import { isBenignError, isChunkLoadError } from "./GlobalErrorHandler";
 
 describe("isBenignError", () => {
   it("returns true for ResizeObserver loop errors", () => {
@@ -30,5 +30,17 @@ describe("isBenignError", () => {
     expect(isBenignError(new Error("TypeError: Cannot read properties of undefined"))).toBe(
       false,
     );
+  });
+});
+
+describe("isChunkLoadError", () => {
+  it("returns true for dynamic import fetch failures", () => {
+    expect(
+      isChunkLoadError(new TypeError("Failed to fetch dynamically imported module")),
+    ).toBe(true);
+  });
+
+  it("returns true for module script import failures", () => {
+    expect(isChunkLoadError(new TypeError("Importing a module script failed"))).toBe(true);
   });
 });

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { resolveUser, requireAdmin } from "@/lib/auth";
 import { getClientIp } from "@/lib/network";
 import { rateLimited } from "@/lib/api-error";
@@ -7,6 +6,8 @@ import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
 import {
   runRoutePipeline,
   type RouteOptions,
+  type RoutePipelineOptions,
+  type RouteSchemas,
   type SegmentData,
 } from "@/lib/route-pipeline";
 export { requireOwned, resultResponse } from "@/lib/route-response";
@@ -50,7 +51,7 @@ function executeWithPipeline<
 >(
   request: NextRequest,
   segmentData: SegmentData<P>,
-  options: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> } | undefined,
+  options: RoutePipelineOptions<B, Q> | undefined,
   logLabel: string,
   logContext: Record<string, unknown>,
   handler: (ctx: PipelineCtx<P, B, Q>) => Promise<Response>,
@@ -78,7 +79,7 @@ export function authRoute<
     request: NextRequest,
     ctx: { auth: AuthContext; params: P; body: B; query: Q }
   ) => Promise<Response>,
-  options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
+  options?: RoutePipelineOptions<B, Q>
 ) {
   return async (
     request: NextRequest,
@@ -117,7 +118,7 @@ export function optionalAuthRoute<
     request: NextRequest,
     ctx: { auth: OptionalAuthContext; params: P; body: B; query: Q }
   ) => Promise<Response>,
-  options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
+  options?: RoutePipelineOptions<B, Q>
 ) {
   return async (
     request: NextRequest,
@@ -149,7 +150,7 @@ export function publicRoute<
     request: NextRequest,
     ctx: { params: P; body: B; query: Q }
   ) => Promise<Response>,
-  options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
+  options?: RoutePipelineOptions<B, Q>
 ) {
   return async (
     request: NextRequest,
@@ -176,7 +177,7 @@ export function adminRoute<
     request: NextRequest,
     ctx: { admin: AdminContext; params: P; body: B; query: Q }
   ) => Promise<Response>,
-  options?: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> }
+  options?: RoutePipelineOptions<B, Q>
 ) {
   return async (
     request: NextRequest,
@@ -205,7 +206,7 @@ export function anonRoute<
     request: NextRequest,
     ctx: { anon: AnonContext; params: P; query: Q }
   ) => Promise<Response>,
-  options: RouteOptions & { rateLimit: RateLimitConfig; query?: z.ZodType<Q> }
+  options: RouteOptions & RouteSchemas<never, Q> & { rateLimit: RateLimitConfig }
 ) {
   return async (
     request: NextRequest,

@@ -36,7 +36,7 @@ export function isBenignError(error: unknown, message?: string): boolean {
  * Returns true when a stale Next.js chunk failed to load, typically after a
  * new deployment while the browser still references old chunk hashes.
  */
-function isChunkLoadError(error: unknown, message?: string): boolean {
+export function isChunkLoadError(error: unknown, message?: string): boolean {
   const msg =
     (error instanceof Error ? error.message : undefined) ?? message ?? "";
   const name = error instanceof Error ? error.name : "";
@@ -45,7 +45,8 @@ function isChunkLoadError(error: unknown, message?: string): boolean {
     name === "ChunkLoadError" ||
     msg.includes("Loading chunk") ||
     msg.includes("Failed to fetch dynamically imported module") ||
-    msg.includes("error loading dynamically imported module")
+    msg.includes("error loading dynamically imported module") ||
+    msg.includes("Importing a module script failed")
   );
 }
 

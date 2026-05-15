@@ -8,6 +8,13 @@ export type RouteOptions = {
   route?: string;
 };
 
+export type RouteSchemas<B, Q> = {
+  body?: z.ZodType<B>;
+  query?: z.ZodType<Q>;
+};
+
+export type RoutePipelineOptions<B, Q> = RouteOptions & RouteSchemas<B, Q>;
+
 export type SegmentData<P> = { params: Promise<P> };
 
 async function parseBody<B>(
@@ -38,7 +45,7 @@ export async function runRoutePipeline<
 >(
   request: NextRequest,
   segmentData: SegmentData<P> | undefined,
-  options: RouteOptions & { body?: z.ZodType<B>; query?: z.ZodType<Q> } | undefined,
+  options: RoutePipelineOptions<B, Q> | undefined,
   logLabel: string,
   logContext: Record<string, unknown>,
   execute: (parsed: { params: P; body: B; query: Q }) => Promise<Response>,
