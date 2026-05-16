@@ -1,20 +1,10 @@
-import { z } from "zod";
 import { NextResponse } from "next/server";
 import { authRoute } from "@/lib/route-handler";
 import { withTiming } from "@/lib/timing";
 import { getRecommendations } from "@/lib/recommendations";
-import { zLimitParam, zCsvParam } from "@/lib/query-params";
+import { recommendationsQuerySchema } from "@/lib/recommendations/request";
 
-const recommendationsQuery = z.object({
-  limit: zLimitParam(20, 50),
-  exclude: zCsvParam,
-});
-
-export const GET = withTiming("/api/recommendations", authRoute<
-  Record<string, never>,
-  undefined,
-  z.infer<typeof recommendationsQuery>
->(
+export const GET = withTiming("/api/recommendations", authRoute(
   async (_request, { auth, query }) => {
     const result = await getRecommendations({
       userId: auth.userId,
@@ -23,5 +13,5 @@ export const GET = withTiming("/api/recommendations", authRoute<
     });
     return NextResponse.json(result);
   },
-  { route: "/api/recommendations", query: recommendationsQuery },
+  { route: "/api/recommendations", query: recommendationsQuerySchema },
 ));

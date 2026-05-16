@@ -3,6 +3,11 @@ import { recordPlayRequestSchema } from "@/lib/analytics-data/request";
 import { recordHistoryRequestSchema } from "@/lib/history/request";
 import { mashupRequestSchema } from "@/lib/mashup/request";
 import { createNotificationRequestSchema } from "@/lib/notifications/request";
+import {
+  recommendationsQuerySchema,
+  similarRecommendationsQuerySchema,
+} from "@/lib/recommendations/request";
+import { publicSongsQuerySchema, songsQuerySchema } from "@/lib/songs/request";
 
 describe("request schemas", () => {
   it("validates analytics play payloads", () => {
@@ -56,5 +61,49 @@ describe("request schemas", () => {
         message: "y",
       }),
     ).toThrow();
+  });
+
+  it("normalizes recommendations query params", () => {
+    expect(recommendationsQuerySchema.parse({ limit: "999", exclude: "a,b" })).toEqual({
+      limit: 50,
+      exclude: ["a", "b"],
+    });
+    expect(similarRecommendationsQuerySchema.parse({ songId: "song-1", limit: "2" })).toEqual({
+      songId: "song-1",
+      limit: 2,
+    });
+    expect(() => similarRecommendationsQuerySchema.parse({ songId: "" })).toThrow();
+  });
+
+  it("normalizes songs query params", () => {
+    expect(
+      songsQuerySchema.parse({
+        q: "  hi  ",
+        tagId: "tag-1",
+        includeVariations: "true",
+        archived: "false",
+      }),
+    ).toMatchObject({
+      search: "hi",
+      tagIds: ["tag-1"],
+      includeVariations: true,
+      archived: false,
+    });
+
+    expect(
+      publicSongsQuerySchema.parse({
+        q: " query ",
+        sort: "invalid",
+        limit: "15",
+        offset: "2",
+      }),
+    ).toEqual({
+      q: "query",
+      genre: undefined,
+      mood: undefined,
+      sort: "newest",
+      limit: 15,
+      offset: 2,
+    });
   });
 });

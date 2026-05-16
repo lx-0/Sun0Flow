@@ -1,20 +1,10 @@
-import { z } from "zod";
 import { NextResponse } from "next/server";
 import { authRoute } from "@/lib/route-handler";
 import { withTiming } from "@/lib/timing";
 import { findSimilarByEmbedding } from "@/lib/recommendations";
-import { zLimitParam } from "@/lib/query-params";
+import { similarRecommendationsQuerySchema } from "@/lib/recommendations/request";
 
-const similarQuery = z.object({
-  songId: z.string().min(1),
-  limit: zLimitParam(5, 20),
-});
-
-export const GET = withTiming("/api/recommendations/similar", authRoute<
-  Record<string, never>,
-  undefined,
-  z.infer<typeof similarQuery>
->(
+export const GET = withTiming("/api/recommendations/similar", authRoute(
   async (_request, { auth, query }) => {
     const result = await findSimilarByEmbedding(
       query.songId,
@@ -26,5 +16,5 @@ export const GET = withTiming("/api/recommendations/similar", authRoute<
     }
     return NextResponse.json(result);
   },
-  { route: "/api/recommendations/similar", query: similarQuery },
+  { route: "/api/recommendations/similar", query: similarRecommendationsQuerySchema },
 ));

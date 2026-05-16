@@ -1,29 +1,12 @@
-import { z } from "zod";
 import { NextResponse } from "next/server";
 import { CacheControl } from "@/lib/cache";
-import { queryPublicSongs, type PublicSongSort } from "@/lib/songs";
+import { queryPublicSongs } from "@/lib/songs";
 import { anonRoute } from "@/lib/route-handler";
-import { zTrimmedParam, zIntParam, zEnumParam } from "@/lib/query-params";
-
-const publicSongsQuery = z.object({
-  q: zTrimmedParam,
-  genre: zTrimmedParam,
-  mood: zTrimmedParam,
-  sort: zEnumParam(["newest", "popular", "trending"] as const, "newest"),
-  limit: zIntParam,
-  offset: zIntParam,
-});
+import { publicSongsQuerySchema, toPublicSongsQuery } from "@/lib/songs/request";
 
 export const GET = anonRoute(
   async (_request, { query }) => {
-    const result = await queryPublicSongs({
-      search: query.q || undefined,
-      genre: query.genre || undefined,
-      mood: query.mood || undefined,
-      sort: query.sort as PublicSongSort,
-      limit: query.limit || undefined,
-      offset: query.offset || undefined,
-    });
+    const result = await queryPublicSongs(toPublicSongsQuery(query));
 
     return NextResponse.json(result, {
       headers: { "Cache-Control": CacheControl.publicShort },
@@ -31,6 +14,6 @@ export const GET = anonRoute(
   },
   {
     rateLimit: { action: "public_songs", limit: 100, windowMs: 60_000 },
-    query: publicSongsQuery,
+    query: publicSongsQuerySchema,
   },
 );
