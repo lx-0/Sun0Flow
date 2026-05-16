@@ -40,7 +40,7 @@ Generate and manage AI music through the SunoFlow MCP server — Suno API behind
 16 tools. **Full parameter tables and examples live in [reference/tools.md](reference/tools.md)** — load it when you need to actually invoke a tool. The index below is just for picking the right one.
 
 | Tool | Cost | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `generate_song` | 10 | Generate a song from a prompt (free-form) or from lyrics + style (custom mode). |
 | `extend_song` | 10 | Continue an existing song from a chosen second. |
 | `generate_sounds` | 10 | Ambient sounds / SFX (V5 only). |

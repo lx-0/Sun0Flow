@@ -3,7 +3,7 @@
 Read-only data accessible via the MCP `resources/read` request — no tool invocation required.
 
 | URI | Kind | Returns |
-|---|---|---|
+| --- | --- | --- |
 | `sunoflow://stats/credits` | static | Credit balance, monthly usage, full cost table |
 | `sunoflow://feed/inspiration` | static | Top 20 pending RSS-feed inspiration items awaiting song-generation approval |
 | `sunoflow://songs/{id}` | template | Single song: metadata, audio URL, lyrics, generation params |
