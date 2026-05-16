@@ -72,8 +72,8 @@ async function createErrorReportEntry(body: z.infer<typeof bodySchema>) {
   });
 }
 
-export const POST = publicRoute<Record<string, never>, z.infer<typeof bodySchema>>(async (_request, { body }) => {
-  const ip = getClientIp(_request);
+export const POST = publicRoute<Record<string, never>, z.infer<typeof bodySchema>>(async (request, { body }) => {
+  const ip = getClientIp(request);
 
   if (isRateLimited(ip)) {
     return NextResponse.json(

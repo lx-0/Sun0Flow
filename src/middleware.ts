@@ -39,6 +39,14 @@ const AUTH_PAGES = ["/login", "/register", "/forgot-password", "/reset-password"
 
 const PASSTHROUGH_PREFIXES = ["/api/", "/s/", "/p/", "/u/", "/songs/", "/embed/"];
 
+const localePrefixes = routing.locales
+  .map((locale) => locale.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|");
+
+const localePrefixPattern = localePrefixes.length > 0
+  ? new RegExp(`^/(?:${localePrefixes})(?=/|$)`)
+  : null;
+
 // ---------------------------------------------------------------------------
 // Shared context — resolved once per request, consumed by each concern
 // ---------------------------------------------------------------------------
@@ -60,7 +68,8 @@ interface MiddlewareContext {
 }
 
 function stripLocalePrefix(pathname: string): string {
-  return pathname.replace(/^\/(en|de|ja)(?=\/|$)/, "") || "/";
+  if (!localePrefixPattern) return pathname || "/";
+  return pathname.replace(localePrefixPattern, "") || "/";
 }
 
 function generateCorrelationId(): string {

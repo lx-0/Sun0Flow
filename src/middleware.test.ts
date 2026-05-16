@@ -17,7 +17,7 @@ vi.mock("next-intl/middleware", async () => {
 
 vi.mock("@/i18n/routing", () => ({
   routing: {
-    locales: ["en", "de", "ja"],
+    locales: ["en", "de", "ja", "fr"],
     defaultLocale: "en",
   },
 }));
@@ -387,5 +387,13 @@ describe("middleware — auth edge cases", () => {
 
     const res = await middleware(makeRequest("http://localhost/de/register"));
     expect(res.status).not.toBe(307);
+  });
+
+  it("authenticated user is redirected away from dynamically configured locale auth pages", async () => {
+    vi.mocked(getToken).mockResolvedValue({ id: "user-1", sub: "user-1" } as never);
+
+    const res = await middleware(makeRequest("http://localhost/fr/login"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/");
   });
 });
