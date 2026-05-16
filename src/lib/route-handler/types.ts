@@ -31,5 +31,5 @@ export type PipelineCtx<P extends Record<string, string>, B, Q> = {
 };
 
 export type PreflightResult<TContext> =
-  | { context: TContext; error?: never }
-  | { context?: never; error: Response };
+  | { ok: true; context: TContext }
+  | { ok: false; error: Response };

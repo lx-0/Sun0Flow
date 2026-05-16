@@ -16,9 +16,10 @@ export async function authPreflight(
   request: NextRequest,
 ): Promise<PreflightResult<AuthContext>> {
   const result = await resolveUser(request);
-  if (result.error) return { error: result.error };
+  if (result.error) return { ok: false, error: result.error };
 
   return {
+    ok: true,
     context: {
       userId: result.userId,
       isApiKey: result.isApiKey,
@@ -33,6 +34,7 @@ export async function optionalAuthPreflight(
   const result = await resolveUser(request);
 
   return {
+    ok: true,
     context: result.error
       ? { userId: null, isApiKey: false, isAdmin: false }
       : {
@@ -45,9 +47,9 @@ export async function optionalAuthPreflight(
 
 export async function adminPreflight(): Promise<PreflightResult<AdminContext>> {
   const { error, user } = await requireAdmin();
-  if (error) return { error };
+  if (error) return { ok: false, error };
 
-  return { context: { adminId: user!.id } };
+  return { ok: true, context: { adminId: user!.id } };
 }
 
 export async function anonPreflight(
@@ -64,11 +66,12 @@ export async function anonPreflight(
 
   if (!acquired) {
     return {
+      ok: false,
       error: rateLimited("Too many requests. Try again later.", undefined, {
         "Retry-After": String(Math.ceil(rateLimit.windowMs / 1000)),
       }),
     };
   }
 
-  return { context: { ip } };
+  return { ok: true, context: { ip } };
 }

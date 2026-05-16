@@ -17,6 +17,7 @@ import type {
   AnonContext,
   AuthContext,
   OptionalAuthContext,
+  PreflightResult,
   RateLimitConfig,
 } from "@/lib/route-handler/types";
 import type { PipelineCtx } from "@/lib/route-handler/types";
@@ -37,7 +38,7 @@ type RouteDescriptor<
   TContext,
   THandlerContext,
 > = {
-  preflight: (request: NextRequest) => Promise<{ context: TContext; error?: Response }>;
+  preflight: (request: NextRequest) => Promise<PreflightResult<TContext>>;
   toHandlerContext: (context: TContext, parsed: PipelineCtx<P, B, Q>) => THandlerContext;
   logLabel: string;
   getLogContext: (context: TContext) => Record<string, unknown>;
@@ -142,7 +143,7 @@ export function publicRoute<
 ) {
   return createPreflightRoute<P, B, Q, null, { params: P; body: B; query: Q }>(
     {
-      preflight: async () => ({ context: null }),
+      preflight: async () => ({ ok: true, context: null }),
       toHandlerContext: (_unused, { params, body, query }) => ({
         params,
         body,
