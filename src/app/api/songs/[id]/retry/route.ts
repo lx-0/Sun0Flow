@@ -8,6 +8,7 @@ import { invalidateByPrefix } from "@/lib/cache";
 import { SUNOAPI_KEY } from "@/lib/env";
 import { broadcast } from "@/lib/event-bus";
 import { userFriendlyError } from "@/lib/generation";
+import { markSongPendingRetry, markSongReadyNoApi } from "@/lib/songs/lifecycle";
 
 export const POST = authRoute<{ id: string }>(
   async (_request, { auth, params }) => {
@@ -49,18 +50,8 @@ export const POST = authRoute<{ id: string }>(
     const hasApiKey = !!(userApiKey || SUNOAPI_KEY);
 
     if (!hasApiKey) {
-      const updated = await prisma.song.update({
-        where: { id: params.id },
-        data: {
-          generationStatus: "ready",
-          errorMessage: null,
-          pollCount: 0,
-          // Un-archive — handleSongFailure set archivedAt when the song failed.
-          // Without clearing it, the row stays hidden from the default library
-          // view even though it is now ready again.
-          archivedAt: null,
-        },
-      });
+      await markSongReadyNoApi(params.id);
+      const updated = await prisma.song.findUnique({ where: { id: params.id } });
       broadcast(auth.userId, {
         type: "generation_update",
         data: { songId: params.id, status: "ready" },
@@ -79,19 +70,8 @@ export const POST = authRoute<{ id: string }>(
         userApiKey,
       );
 
-      const updated = await prisma.song.update({
-        where: { id: params.id },
-        data: {
-          sunoJobId: result.taskId,
-          generationStatus: "pending",
-          errorMessage: null,
-          pollCount: 0,
-          // Un-archive — handleSongFailure set archivedAt when the song failed.
-          // Without clearing it, the row stays hidden from the default library
-          // view even after generation completes.
-          archivedAt: null,
-        },
-      });
+      await markSongPendingRetry(params.id, result.taskId);
+      const updated = await prisma.song.findUnique({ where: { id: params.id } });
 
       invalidateByPrefix(`dashboard-stats:${auth.userId}`);
       broadcast(auth.userId, {

@@ -6,6 +6,7 @@ import { logServerError } from "@/lib/error-logger";
 import { broadcast } from "@/lib/event-bus";
 import { handleSongSuccess, handleSongFailure } from "@/lib/generation";
 import { pollOnce, MAX_POLL_ATTEMPTS } from "@/lib/generation/completion";
+import { markSongFailedSimple } from "@/lib/songs/lifecycle";
 
 export const GET = authRoute<{ id: string }>(
   async (_request, { auth, params }) => {
@@ -21,13 +22,11 @@ export const GET = authRoute<{ id: string }>(
     }
 
     if (!song.sunoJobId) {
-      const updated = await prisma.song.update({
-        where: { id: params.id },
-        data: { generationStatus: "failed", errorMessage: "No Suno task ID", archivedAt: new Date() },
-      });
+      await markSongFailedSimple(params.id, "No Suno task ID");
+      const updated = await prisma.song.findUnique({ where: { id: params.id } });
       broadcast(song.userId, {
         type: "generation_update",
-        data: { songId: params.id, status: "failed", errorMessage: updated.errorMessage },
+        data: { songId: params.id, status: "failed", errorMessage: updated?.errorMessage },
       });
       return NextResponse.json({ song: updated });
     }

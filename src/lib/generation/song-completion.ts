@@ -6,6 +6,7 @@ import { resolveBySongId } from "@/lib/generation-queue";
 import { logger } from "@/lib/logger";
 import { notifyFollowersOfNewSong, notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { buildFailedTransition, readyTransition } from "@/lib/songs/lifecycle";
 import { recordDailyActivity, checkSongMilestones, checkStreakMilestones } from "@/lib/streaks";
 
 const USER_CONTENT_REJECT_PATTERNS = [
@@ -228,13 +229,7 @@ async function persistSongCompletion(
   const updated = await prisma.song.update({
     where: { id: song.id },
     data: {
-      generationStatus: "ready",
-      // Clear archive timestamp set by an earlier failure on this row. Without
-      // this, a song that failed once and was then recovered (retry, stale-
-      // pending sweep, or SSE poll completing post-restart) stays archivedAt
-      // != null and gets filtered out of the default library view.
-      errorMessage: null,
-      archivedAt: null,
+      ...readyTransition,
       sunoAudioId: firstSong.id || undefined,
       audioUrl: firstSong.audioUrl || song.audioUrl,
       audioUrlExpiresAt: firstSong.audioUrl ? cdnUrlExpiresAt : song.audioUrlExpiresAt,
@@ -304,20 +299,10 @@ async function markSongFailed(
   song: SongRecord,
   errorMessage: string,
 ): Promise<void> {
-  // Auto-archive failed songs so they don't pollute the user's library.
-  // Preserve any earlier archivedAt the user may have set manually.
-  const existing = await prisma.song.findUnique({
-    where: { id: song.id },
-    select: { archivedAt: true },
-  });
+  const transition = await buildFailedTransition(song.id, errorMessage);
   await prisma.song.update({
     where: { id: song.id },
-    data: {
-      generationStatus: "failed",
-      pollCount: song.pollCount + 1,
-      errorMessage,
-      archivedAt: existing?.archivedAt ?? new Date(),
-    },
+    data: { ...transition, pollCount: song.pollCount + 1 },
   });
   await resolveBySongId(song.id, { status: "failed", errorMessage });
 }

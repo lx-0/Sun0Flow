@@ -220,16 +220,21 @@ describe("GET /api/songs/[id]/status", () => {
   });
 
   it("marks song as failed when no sunoJobId exists", async () => {
-    vi.mocked(prisma.song.findUnique).mockResolvedValue({
-      ...baseSong,
-      sunoJobId: null,
-    } as never);
-    vi.mocked(prisma.song.update).mockResolvedValue({
+    const pendingRow = { ...baseSong, sunoJobId: null };
+    const failedRow = {
       ...baseSong,
       sunoJobId: null,
       generationStatus: "failed",
       errorMessage: "No Suno task ID",
-    } as never);
+    };
+    // The route fetches the song, lifecycle.markSongFailedSimple re-reads
+    // archivedAt, then the route re-reads the updated row. Sequence the
+    // mocks so the final read returns the failed state.
+    vi.mocked(prisma.song.findUnique)
+      .mockResolvedValueOnce(pendingRow as never)
+      .mockResolvedValueOnce({ archivedAt: null } as never)
+      .mockResolvedValueOnce(failedRow as never);
+    vi.mocked(prisma.song.update).mockResolvedValue(failedRow as never);
 
     const res = await GET(makeRequest(), makeParams());
     const data = await res.json();

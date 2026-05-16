@@ -4,6 +4,7 @@ import { broadcast } from "@/lib/event-bus";
 import { pollToCompletion } from "@/lib/generation/completion";
 import { authRoute } from "@/lib/route-handler";
 import { logServerError } from "@/lib/error-logger";
+import { markSongFailedSimple } from "@/lib/songs/lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -48,10 +49,7 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
       }
 
       if (!song.sunoJobId) {
-        await prisma.song.update({
-          where: { id: jobId },
-          data: { generationStatus: "failed", errorMessage: "No Suno task ID", archivedAt: new Date() },
-        });
+        await markSongFailedSimple(jobId, "No Suno task ID");
         const failData = { songId: jobId, status: "failed", errorMessage: "No Suno task ID" };
         broadcast(song.userId, { type: "generation_update", data: failData });
         sendEvent(controller, "generation_update", failData);
