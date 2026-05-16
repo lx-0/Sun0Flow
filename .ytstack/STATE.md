@@ -65,3 +65,48 @@ Observability follow-up (2026-05-15 evening, 0.1.4):
 ## Active background tasks
 
 - (cleared — last poller `bzzwcz2pc` completed; `5579658` was REMOVED, succeeded by `d55242c` which carries all changes forward)
+
+## 0.2.0 release (2026-05-16)
+
+Stuck-pending incident triage (GlitchTip Issue 3) → multi-fix + architecture pass + skill restructure.
+
+Bug-fix commits (deployed via tag-driven release):
+
+- `6c37979` fix(songs): recover stale-pending songs via final pollOnce instead of blind timeout
+- `14c8142` fix(generation): decouple Suno poll loop from SSE client lifecycle
+- `5102283` fix(tests): repair 4 pre-existing test failures (date-series TZ + 3 env-mock setup)
+- `34b6e0a` fix(history): retry updates local state and polls pending songs to terminal
+- `38fe73a` feat(error-logger): promote indexable IDs from params to Sentry tags
+- `70124e6` fix(error-handling): isolate per-row failures and catch SSE stream throws
+- `92bfce3` fix(library): clear archivedAt on retry + success so recovered songs reappear
+- `d424236` refactor(history): extract retry transport into tested pure helpers
+
+Architecture refactor batch:
+
+- `687de28` refactor(songs): single seam for generationStatus + archivedAt transitions (`src/lib/songs/lifecycle.ts`)
+- `f5d8aa9` refactor(generation): split handleSongSuccess into per-domain adapters (`src/lib/generation/song-ready-events/`)
+- `c598c87` refactor(songs): extract stale-pending recovery from the read path (`src/lib/songs/stale-pending-recovery.ts`)
+- `f86b468` refactor(songs): replace SongListItem polling with generation-tracker subscription (`src/hooks/useTrackPendingSong.ts`)
+- `76f7fb3` refactor(queue): single addItem seam + split updateItem dual-signature
+- `699e819` refactor(notifications): single channel-config seam per NotificationType (`src/lib/notifications/channels.ts`)
+- `d870af1` refactor(error-logger): split client/server logger into separate modules (`src/lib/error-logger/{client,server,extract,index}.ts`)
+
+Skill / docs / version bump:
+
+- `b143ee0` docs(skill): align SunoFlow skill with current MCP server + skill best practices
+- `a8516cc` docs(skill): restructure SunoFlow skill as entrypoint + reference files
+- `1c0329c` docs(skill): fix markdown lint + add variation examples for every tool
+- `63d6a1a` chore: bump version to 0.2.0 across app, plugin, MCP server, and skill
+- `b6605b0` (lx-0/skills): docs(sunoflow): sync marketplace description with restructured SKILL.md
+
+Prod data fix (one-off, not in git):
+
+- 6 stuck-archived "ready" songs unarchived via direct SQL on Railway DB public proxy. See KNOWLEDGE.md → "Historical data fixes".
+
+Tests: 1270 passing / 47 skipped / 0 failed. Typecheck clean throughout.
+
+## Open verification (post-0.2.0)
+
+- **GlitchTip Issue 3 should stop receiving events** under the new release SHA. Verify after Railway deploy lands: `mcp__plugin_yesterday-cloud_glitchtip__list_issues` for project `sunoflow-prod`, filter on `is:unresolved`, confirm no new events for "Generation timed out (stale-pending sweep)" under release > `a777cca`.
+- **SunoFlow plugin update**: run `/plugin update sunoflow` locally; confirm `/plugin info sunoflow` reports `0.2.0` and Claude reads `SKILL.md` (111 lines) on first invoke instead of the old monolithic 345-line version.
+- **Marketplace description**: `/plugin` browse should show the new third-person description after marketplace cache refresh.

@@ -48,3 +48,39 @@ Patterns, rules, and lessons learned while building SunoFlow. Future sessions re
 - **Audio + image caches** live under `AUDIO_CACHE_DIR` / `IMAGE_CACHE_DIR` — must be persistent volumes in production (Railway).
 - **Production deploys are tag-driven** (`v*.*.*` push to `main` triggers `.github/workflows/deploy-production.yml` → Railway). Don't expect deploys on plain merges.
 - **Paperclip company SUNAA tracks issue-level work separately** — see project memory `project_sunoflow_paperclip_company.md`. Don't double-track milestones here AND there for the same scope.
+
+## Architecture (0.2.0 refactor pass)
+
+- **Song lifecycle transitions belong on one seam.** `src/lib/songs/lifecycle.ts` owns the `readyTransition` / `pendingRetryTransition` constants + `buildFailedTransition` helper + `markSong*` full-transition functions. Five sites used to drift independently — adding `archivedAt: null` to four of them but missing the fifth is exactly what caused the "regenerated song hidden from library" bug. Direct `prisma.song.update({ generationStatus: ... })` is now treated as a smell — go through lifecycle.
+- **"Song became ready" is a fan-out event, not a god-handler.** `handleSongSuccess` orchestrates four domain adapters (`broadcastSongReady`, `cacheSongAssets`, `recordSongReadyEngagement`, `notifyAboutReadySong`) via `Promise.all` under a shared `runSideEffect` try/catch. New side-effect = new file in `src/lib/generation/song-ready-events/`. Adding a new "song-ready" effect (e.g. webhook fanout) should land there, not in the orchestrator.
+- **Reads must not write.** `querySongLibrary` used to fire-and-forget `cleanupStalePending` inline — a write hidden inside a read. The function was hard to test (needed `pollOnce`/`handleSongSuccess`/`handleSongFailure` mocks for what should be a pure query) and the recovery trigger was invisible to route-layer readers. Recovery now lives in `src/lib/songs/stale-pending-recovery.ts`; trigger is explicit at `/api/songs/route.ts` via `kickoffStalePendingRecovery`. A future cron endpoint can import `runStalePendingRecovery` directly without the read entanglement.
+- **One client-side polling strategy, not three.** `generation-tracker.ts` is the singleton — SSE preferred, polling fallback, visibility-pause, MAX_POLLS shared across observers. `useTrackPendingSong` is the React-side adapter. `GenerationHistoryView` keeps its own multi-song fresh-data poll because its use case (display intermediate fields like title-as-Suno-reveals) is genuinely different — don't force consolidation when use cases diverge.
+- **`addItem` is the single enqueue seam.** `enqueueFromSpec` used to bypass `MAX_QUEUE_SIZE` because it was the circuit-open path — that gap let unlimited entries pile up while the circuit was open. Merged. `enqueueGeneration` now handles the `QUEUE_FULL` case explicitly by returning `{ status: "denied", response: 503 }`.
+- **`updateItem({id}|{songId,status})` dual-signature was unfinished abstraction.** Split into `updateItemById` + inline `prisma.updateMany` inside `resolveBySongId`. Don't bundle two operations behind one name when callers can't keep them straight.
+- **Notification channels are a typed registry, not parallel partial maps.** `src/lib/notifications/channels.ts` is a `Record<NotificationType, NotificationChannels>` — adding a new notification type without thinking about channels produces a TS error. Email-template choice closes over the channel config (no more global switch statement).
+- **Client logger ≠ server logger.** `src/lib/error-logger/{client,server,extract,index}.ts`. The previous `typeof window === "undefined"` branch in a single `logError` was dead code on the server (no server callers) and obscured the runtime context.
+- **GlitchTip surfaces tags, not `extra`.** The MCP only returns indexed tags via `list_issues` queries. `logServerError` auto-promotes `songId` / `sunoJobId` / `playlistId` / `stemId` / `feedId` (+ `userId` from context) from `params` to Sentry tags. Now you can `list_issues query:"songId:abc"` to find a song's history.
+
+## SSE poll lifecycle
+
+- **Server-side poll loops must not be bound to client-connection lifecycle.** `/api/generate/[jobId]/stream` used to pass `request.signal` into `pollToCompletion` — closing the tab killed the poller without flipping the song to a terminal state. Suno would still complete the generation, but no one on our side noticed. The SSE forwarder is now best-effort (its `sendEvent` may throw if controller closed, which is caught); the poll loop runs independently to completion and `handleSongSuccess`/`handleSongFailure` persist the result regardless of who's listening.
+
+## Skill authoring (sunoflow plugin)
+
+- **Anthropic skill best practices, distilled.** Sources: <https://code.claude.com/docs/en/skills>, <https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices>.
+  - `description` in third person, includes WHAT; `when_to_use` (separate field) carries the trigger phrases. Combined cap 1,536 chars; description hard cap 1,024.
+  - No non-standard frontmatter fields (`license` etc.). `metadata` block is tolerated but unusual.
+  - Progressive disclosure is the load-bearing pattern: `SKILL.md` is an entrypoint with navigation + workflows; per-tool details + examples live in `reference/*.md` loaded on demand. "Under 500 lines" is not a license to keep it monolithic when the bulk is detail-for-one-tool-at-a-time.
+  - References one level deep from `SKILL.md` only — Claude may partial-read deeply nested files.
+  - Tool index in `SKILL.md` should include cost / category columns so Claude can pick a tool without loading the reference file.
+  - Markdown lint: all table separator rows in aligned style (`| --- | --- | --- |`) to match aligned-spacing headers (avoids MD060). Blank line before every list (MD032).
+
+## Plugin marketplace ("latest" pattern)
+
+- **The lx-0/skills marketplace tracks main automatically.** `source: { source: "github", repo: "lx-0/SunoFlow" }` with **no `ref` field** = pull from default branch. Adding `ref: "v0.2.0"` would pin; absence = latest. Don't add a redundant `ref: "main"` — it's already implicit.
+- **Top-level `marketplace.json` is hand-edited; `.compiled/marketplace.json` is generated by `compile.mjs`.** `.claude-plugin/marketplace.json` and `.cursor-plugin/marketplace.json` are symlinks to the compiled output. To update: edit `marketplace.json` → run `node compile.mjs` → commit both.
+- **Plugin cache path encodes the version at install time** (`~/.claude/plugins/cache/lx-0-public-plugins/sunoflow/0.1.0/`). On `/plugin update sunoflow` the cache directory shifts to the new version (`0.2.0`). Old cache path doesn't auto-prune — fine, but explains why "looking at the cache" can mislead about what's currently active.
+
+## Historical data fixes
+
+- **6 stuck-archived rows in prod, unarchived 2026-05-16.** "Glass & Bone" + 5 older songs ("Infinite Rooms", "Patch Notes", 2× "World State", "Mashup") had `generationStatus="ready"` + `archivedAt != null` + `errorMessage IS NULL` + `audioUrl IS NOT NULL` + `pollCount > 0`. WHERE-filter SQL `UPDATE "Song" SET "archivedAt" = NULL WHERE ...` distinguished bug-victims from user-archived (user-archived songs lacked `audioUrl` or had `pollCount=0`). One-off; don't re-run. The 0.2.0 lifecycle fix prevents future occurrences.
