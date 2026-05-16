@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useTrackPendingSong } from "@/hooks/useTrackPendingSong";
 import Link from "next/link";
 import {
   PlayIcon,
@@ -125,50 +126,6 @@ function FailedBadge({ message }: { message?: string | null }) {
       Failed
     </span>
   );
-}
-
-// ─── Polling hook ─────────────────────────────────────────────────────────────
-
-const POLL_INTERVAL_MS = 4000;
-const MAX_POLL_ATTEMPTS = 60;
-
-function usePollSong(song: Song, onUpdate: (updated: Song) => void) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeRef = useRef(true);
-
-  useEffect(() => {
-    activeRef.current = true;
-
-    if (song.generationStatus !== "pending") return;
-
-    let attempts = 0;
-    async function pollWithLimit() {
-      if (!activeRef.current || attempts >= MAX_POLL_ATTEMPTS) return;
-      attempts++;
-      try {
-        const res = await fetch(`/api/songs/${song.id}/status`);
-        if (!res.ok) return;
-        const data = (await res.json()) as { song: Song };
-        if (!activeRef.current) return;
-        if (data.song.generationStatus !== "pending") {
-          onUpdate(data.song);
-          return;
-        }
-      } catch {
-        // ignore
-      }
-      if (activeRef.current) {
-        timerRef.current = setTimeout(pollWithLimit, POLL_INTERVAL_MS);
-      }
-    }
-
-    timerRef.current = setTimeout(pollWithLimit, POLL_INTERVAL_MS);
-
-    return () => {
-      activeRef.current = false;
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [song.id, song.generationStatus, onUpdate]);
 }
 
 // ─── Per-song action menu (three-dot/kebab) ───────────────────────────────────
@@ -529,7 +486,7 @@ export const SongListItem = memo(function SongListItem({
     onUpdate(updated);
   }, [onUpdate, song.generationStatus, toast]);
 
-  usePollSong(song, handleUpdate);
+  useTrackPendingSong(song, handleUpdate);
 
   const isPending = song.generationStatus === "pending";
   const isFailed = song.generationStatus === "failed";
