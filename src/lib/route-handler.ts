@@ -7,6 +7,14 @@ import {
 } from "@/lib/route-pipeline";
 import { createRouteWrapper } from "@/lib/route-handler/wrapper";
 import {
+  createRouteDescriptor,
+  type ParsedRouteContext,
+  type RouteContextWithAuth,
+  type RouteDescriptor,
+  withAuthParsedContext,
+  withParsedContext,
+} from "@/lib/route-handler/descriptor";
+import {
   adminPreflight,
   anonPreflight,
   authPreflight,
@@ -17,10 +25,8 @@ import type {
   AnonContext,
   AuthContext,
   OptionalAuthContext,
-  PreflightResult,
   RateLimitConfig,
 } from "@/lib/route-handler/types";
-import type { PipelineCtx } from "@/lib/route-handler/types";
 
 export { requireOwned, resultResponse } from "@/lib/route-response";
 export type {
@@ -30,74 +36,6 @@ export type {
   OptionalAuthContext,
   RateLimitConfig,
 } from "@/lib/route-handler/types";
-
-type RouteDescriptor<
-  P extends Record<string, string>,
-  B,
-  Q,
-  TContext,
-  THandlerContext,
-> = {
-  preflight: (request: NextRequest) => Promise<PreflightResult<TContext>>;
-  toHandlerContext: (context: TContext, parsed: PipelineCtx<P, B, Q>) => THandlerContext;
-  logLabel: string;
-  getLogContext: (context: TContext) => Record<string, unknown>;
-};
-
-type ParsedRouteContext<P extends Record<string, string>, B, Q> = {
-  params: P;
-  body: B;
-  query: Q;
-};
-
-type RouteContextWithAuth<
-  TAuthContext,
-  P extends Record<string, string>,
-  B,
-  Q,
-> = { auth: TAuthContext } & ParsedRouteContext<P, B, Q>;
-
-function withParsedContext<P extends Record<string, string>, B, Q>(
-  parsed: PipelineCtx<P, B, Q>,
-): ParsedRouteContext<P, B, Q> {
-  return {
-    params: parsed.params,
-    body: parsed.body,
-    query: parsed.query,
-  };
-}
-
-function withAuthParsedContext<
-  K extends "auth" | "admin" | "anon",
-  TAuthContext,
-  P extends Record<string, string>,
-  B,
-  Q,
->(
-  key: K,
-  authContext: TAuthContext,
-  parsed: PipelineCtx<P, B, Q>,
-): Record<K, TAuthContext> & ParsedRouteContext<P, B, Q> {
-  return {
-    [key]: authContext,
-    ...withParsedContext(parsed),
-  } as Record<K, TAuthContext> & ParsedRouteContext<P, B, Q>;
-}
-
-function createRouteDescriptor<
-  P extends Record<string, string>,
-  B,
-  Q,
-  TContext,
-  THandlerContext,
->(
-  preflight: (request: NextRequest) => Promise<PreflightResult<TContext>>,
-  toHandlerContext: (context: TContext, parsed: PipelineCtx<P, B, Q>) => THandlerContext,
-  logLabel: string,
-  getLogContext: (context: TContext) => Record<string, unknown>,
-): RouteDescriptor<P, B, Q, TContext, THandlerContext> {
-  return { preflight, toHandlerContext, logLabel, getLogContext };
-}
 
 function createPreflightRoute<
   P extends Record<string, string>,
