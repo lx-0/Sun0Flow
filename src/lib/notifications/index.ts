@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { broadcast } from "@/lib/event-bus";
 import { invalidateByPrefix, cacheKey } from "@/lib/cache";
 import { sendPushToUser } from "@/lib/push";
-import { sendGenerationCompleteEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
+import { NOTIFICATION_CHANNELS } from "@/lib/notifications/channels";
 import { type NotificationType } from "@/lib/notifications/types";
 
 export type CreateNotificationParams = {
@@ -13,18 +13,6 @@ export type CreateNotificationParams = {
   message: string;
   href?: string | null;
   songId?: string | null;
-};
-
-const PUSH_PREF_FIELD: Partial<
-  Record<NotificationType, "pushGenerationComplete" | "pushNewFollower" | "pushSongComment">
-> = {
-  generation_complete: "pushGenerationComplete",
-  new_follower: "pushNewFollower",
-  song_comment: "pushSongComment",
-};
-
-const EMAIL_PREF_FIELD: Partial<Record<NotificationType, "emailGenerationComplete">> = {
-  generation_complete: "emailGenerationComplete",
 };
 
 export type NotifyUserParams = CreateNotificationParams & {
@@ -68,36 +56,40 @@ export async function createNotification(params: CreateNotificationParams) {
 /**
  * Persist notification + broadcast SSE + send push + send email
  * (each channel gated by the user's preference).
+ *
+ * Channel selection is driven by NOTIFICATION_CHANNELS — adding a new
+ * type's push/email behavior happens there, not here.
  */
 export async function notifyUser(params: NotifyUserParams) {
   const notification = await createNotification(params);
+  const channels = NOTIFICATION_CHANNELS[params.type];
 
-  const pushPref = PUSH_PREF_FIELD[params.type];
-  const emailPref = EMAIL_PREF_FIELD[params.type];
-  const needsPrefs = (params.push !== false && pushPref) || (params.email !== false && emailPref);
+  const wantPush = params.push !== false && !!channels.push;
+  const wantEmail = params.email !== false && !!channels.email;
+  if (!wantPush && !wantEmail) return notification;
 
-  let userPrefs: Record<string, unknown> | null = null;
-  if (needsPrefs) {
-    try {
-      const selectFields: Record<string, boolean> = {};
-      if (pushPref) selectFields[pushPref] = true;
-      if (emailPref) {
-        selectFields[emailPref] = true;
-        selectFields.email = true;
-        selectFields.unsubscribeToken = true;
-      }
-      userPrefs = await prisma.user.findUnique({
-        where: { id: params.userId },
-        select: selectFields,
-      }) as Record<string, unknown> | null;
-    } catch (err) {
-      logger.error({ err, userId: params.userId }, "notifyUser: failed to fetch user preferences");
-    }
+  const selectFields: Record<string, boolean> = {};
+  if (wantPush && channels.push) selectFields[channels.push.prefField] = true;
+  if (wantEmail && channels.email) {
+    selectFields[channels.email.prefField] = true;
+    selectFields.email = true;
+    selectFields.unsubscribeToken = true;
   }
 
-  if (params.push !== false && pushPref) {
-    const shouldPush = userPrefs?.[pushPref] !== false;
-    if (shouldPush) {
+  let userPrefs: Record<string, unknown> | null = null;
+  try {
+    userPrefs = (await prisma.user.findUnique({
+      where: { id: params.userId },
+      select: selectFields,
+    })) as Record<string, unknown> | null;
+  } catch (err) {
+    logger.error({ err, userId: params.userId }, "notifyUser: failed to fetch user preferences");
+    return notification;
+  }
+
+  if (wantPush && channels.push) {
+    const pushAllowed = userPrefs?.[channels.push.prefField] !== false;
+    if (pushAllowed) {
       sendPushToUser(params.userId, {
         title: params.title,
         body: params.message,
@@ -107,38 +99,32 @@ export async function notifyUser(params: NotifyUserParams) {
     }
   }
 
-  if (params.email !== false && emailPref && userPrefs?.email) {
-    const shouldEmail = userPrefs[emailPref] !== false;
-    if (shouldEmail) {
+  if (wantEmail && channels.email && userPrefs?.email) {
+    const emailAllowed = userPrefs[channels.email.prefField] !== false;
+    if (emailAllowed) {
       const email = userPrefs.email as string;
       let unsubToken = userPrefs.unsubscribeToken as string | null;
       if (!unsubToken) {
         unsubToken = crypto.randomUUID();
-        await prisma.user.update({ where: { id: params.userId }, data: { unsubscribeToken: unsubToken } }).catch(() => {});
+        await prisma.user
+          .update({
+            where: { id: params.userId },
+            data: { unsubscribeToken: unsubToken },
+          })
+          .catch(() => {});
       }
-      sendNotificationEmail(params, email, unsubToken).catch((err) =>
-        logger.error({ userId: params.userId, type: params.type, err }, "notifyUser: email send failed")
-      );
+      channels.email
+        .send({ songId: params.songId, title: params.title, message: params.message }, email, unsubToken)
+        .catch((err) =>
+          logger.error(
+            { userId: params.userId, type: params.type, err },
+            "notifyUser: email send failed",
+          ),
+        );
     }
   }
 
   return notification;
-}
-
-async function sendNotificationEmail(
-  params: CreateNotificationParams,
-  email: string,
-  unsubscribeToken: string,
-): Promise<void> {
-  switch (params.type) {
-    case "generation_complete":
-      await sendGenerationCompleteEmail(
-        email,
-        { id: params.songId!, title: params.title },
-        unsubscribeToken,
-      );
-      break;
-  }
 }
 
 // ---------------------------------------------------------------------------
