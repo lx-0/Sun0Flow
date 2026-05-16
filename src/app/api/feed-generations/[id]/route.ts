@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authRoute, requireOwned } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import {
+  buildFeedGenerationPatchData,
+  ensurePendingFeedGeneration,
+} from "@/lib/feed-generations";
 
 const patchBody = z.object({
   status: z.string().optional(),
@@ -18,17 +22,10 @@ export const PATCH = authRoute<{ id: string }, z.infer<typeof patchBody>>(
     );
     if (error) return error;
 
-    if (item.status !== "pending") {
-      return NextResponse.json(
-        { error: "Only pending items can be updated", code: "CONFLICT" },
-        { status: 409 },
-      );
-    }
+    const statusError = ensurePendingFeedGeneration(item, "updated");
+    if (statusError) return statusError;
 
-    const updateData: Record<string, string> = {};
-    if (body.status === "dismissed") updateData.status = "dismissed";
-    if (typeof body.prompt === "string" && body.prompt.trim()) updateData.prompt = body.prompt.trim();
-    if (typeof body.style === "string") updateData.style = body.style;
+    const updateData = buildFeedGenerationPatchData(body);
 
     const updated = await prisma.pendingFeedGeneration.update({
       where: { id: params.id },
