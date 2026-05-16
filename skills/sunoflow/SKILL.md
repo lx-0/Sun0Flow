@@ -1,13 +1,9 @@
 ---
 name: sunoflow
-description: >
-  AI music creation and management via the SunoFlow MCP server.
-  Use when you need to generate songs, lyrics, sound effects, manage playlists,
-  separate stems, create music videos, extract MIDI, convert to WAV, or browse
-  the inspiration feed. Connects to a SunoFlow instance over MCP stdio transport.
-license: MIT
+description: Generates and manages AI music via the SunoFlow MCP server (Suno API behind a credit-managed backend). Covers song + sounds + lyrics generation, style boosting, song extension, stem separation, WAV/MIDI conversion, music-video + cover-art rendering, and playlist management.
+when_to_use: Use when the user asks to write or generate a song or lyrics, extend a track, separate vocals or stems, render a music video or cover art, convert to WAV or MIDI, manage playlists, boost a style prompt, browse the inspiration feed, or check Suno credit balance.
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
   mcp-server: sunoflow-mcp
   transport: stdio
   production-url: https://sunoflow.up.railway.app
@@ -57,7 +53,7 @@ Submit a song generation. Returns a song ID immediately, then 2 audio variations
 | `title` | string | Setting this enables custom mode. Max 80 (V4) / 100 (V4_5+). |
 | `style` | string | Comma-separated style/genre tags. Setting this enables custom mode. |
 | `makeInstrumental` | boolean | Default `false`. |
-| `model` | `V4` \| `V4_5` \| `V5` \| `V5_5` | `V5_5` = latest, best quality. Server default usually `V4`. |
+| `model` | `V4` \| `V4_5` \| `V5` \| `V5_5` | `V5_5` = highest quality. Server picks its configured default when omitted. |
 | `personaId` | string | Voice persona to apply. |
 | `personaModel` | `voice_persona` \| `style_persona` | Type of persona cloning. |
 | `negativeTags` | string | Comma-separated tags to exclude (e.g. `"autotune, screaming"`). |
@@ -296,13 +292,11 @@ Most generative operations cost credits (charged only when using the SunoFlow-ma
 | Vocal separation (`separate_vocals` `separate_vocal`) | 10 |
 | Full stem split (`separate_vocals` `split_stem`) | 50 |
 
-Read-side tools (`list_songs`, `get_song`, `get_credits`), playlist mutations, and download-style operations (`convert_to_wav`, `generate_midi`, `create_music_video`, `generate_cover_image`) do not currently deduct credits.
-
-Check `get_credits` (or read `sunoflow://stats/credits`) before bulk operations.
+Read-side tools (`list_songs`, `get_song`, `get_credits`), playlist mutations, and download-style operations (`convert_to_wav`, `generate_midi`, `create_music_video`, `generate_cover_image`) are free. Use `get_credits` (or read `sunoflow://stats/credits`) before a bulk batch to confirm the cost will fit.
 
 ## Model versions
 
-`generate_song` and `extend_song` accept `model`: `V4`, `V4_5`, `V5`, `V5_5`. `V5_5` is the latest with best quality. **Match the original model when extending a song.** Server default is usually `V4` unless overridden in SunoFlow config.
+`generate_song` and `extend_song` accept `model`: `V4`, `V4_5`, `V5`, `V5_5`. `V5_5` is the highest-quality choice. **Match the original model when extending a song.** When the caller does not specify a model, the server falls back to its configured default — `sunoflow_info` reports the active default if relevant.
 
 `generate_sounds` uses V5 only — the `model` param is not accepted there.
 
@@ -346,6 +340,6 @@ Use custom mode when you have specific lyrics; use free-form mode when you want 
 
 Tools raise `Error("<verb> failed (<code>): <message>")` on Suno-API errors (network/quota/validation). Credit checks fail before the API call with `Error("Insufficient credits: need <n>, have <m>")`. Songs missing `sunoJobId` / `sunoAudioId` (e.g. failed generation) fail post-processing tools with `"Cannot <verb> — song is missing Suno identifiers."`.
 
-## Server info
+## Discovery
 
-The MCP server exposes `sunoflow_info` for runtime discovery — call it first if you need to verify which tools the installed version supports. Current source-of-truth is server `version: "0.1.0"`; this skill description is pinned to `0.2.0` to track doc revisions independently.
+If unsure which tools the deployed server supports (e.g. after an update), call `sunoflow_info` first — it returns the server version + the complete tool list with descriptions sourced from the running registry.
