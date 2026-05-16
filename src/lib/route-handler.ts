@@ -129,7 +129,6 @@ const adminLikeRoute = createContextRouteFactory("admin", {
   logLabel: "admin-route-handler",
   getLogContext: (admin) => ({ userId: admin.adminId }),
 });
-
 export function authRoute<
   P extends Record<string, string> = Record<string, never>,
   B = undefined,
