@@ -4,45 +4,17 @@ import { logger } from "@/lib/logger";
 import { SUNO_WEBHOOK_SECRET } from "@/lib/env";
 import { mapRawSong, taskStatusToSongStatus, isTerminalFailure } from "@/lib/sunoapi/mappers";
 import { handleSongSuccess, handleSongFailure } from "@/lib/generation";
-import type { TaskStatus } from "@/lib/sunoapi/types";
+import { parseSunoWebhookRequest } from "@/lib/webhooks/suno-request";
 
 export const dynamic = "force-dynamic";
 
-interface WebhookPayload {
-  code?: number;
-  msg?: string;
-  data?: {
-    taskId?: string;
-    status?: TaskStatus;
-    errorMessage?: string | null;
-    response?: {
-      sunoData?: Record<string, unknown>[];
-    };
-  };
-}
-
 export async function POST(req: NextRequest) {
-  const token = req.nextUrl.searchParams.get("token");
-  if (!SUNO_WEBHOOK_SECRET || token !== SUNO_WEBHOOK_SECRET) {
-    logger.warn({ hasToken: !!token }, "suno-webhook: invalid or missing token");
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const parsed = await parseSunoWebhookRequest(req, { secret: SUNO_WEBHOOK_SECRET });
+  if (!parsed.ok) {
+    return parsed.response;
   }
 
-  let payload: WebhookPayload;
-  try {
-    payload = (await req.json()) as WebhookPayload;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const taskId = payload.data?.taskId;
-  const status = payload.data?.status;
-
-  if (!taskId || !status) {
-    logger.warn({ payload }, "suno-webhook: missing taskId or status");
-    return NextResponse.json({ error: "Missing taskId or status" }, { status: 400 });
-  }
-
+  const { payload, taskId, status } = parsed;
   logger.info({ taskId, status }, "suno-webhook: received callback");
 
   const song = await prisma.song.findUnique({ where: { sunoJobId: taskId } });
