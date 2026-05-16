@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { badRequest } from "@/lib/api-error";
 import type { NextResponse } from "next/server";
+import { formatZodIssues } from "@/lib/zod-errors";
 
 /**
  * Zod transforms for parsing URLSearchParams values.
@@ -101,11 +102,7 @@ export function parseQueryParams<Q>(
   const raw = Object.fromEntries(searchParams.entries());
   const result = schema.safeParse(raw);
   if (!result.success) {
-    const messages = result.error.issues.map((i) => {
-      const path = i.path.join(".");
-      return path ? `${path}: ${i.message}` : i.message;
-    });
-    return { error: badRequest(messages.join("; ")) };
+    return { error: badRequest(formatZodIssues(result.error.issues)) };
   }
   return { data: result.data };
 }
