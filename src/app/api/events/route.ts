@@ -1,21 +1,20 @@
 import { authRoute } from "@/lib/route-handler";
 import { subscribe, SSEEvent } from "@/lib/event-bus";
+import { createSSEResponse, encodeSSEComment, encodeSSEEvent } from "@/lib/sse";
 
 export const dynamic = "force-dynamic";
 
 export const GET = authRoute(async (request, { auth }) => {
-  const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
 
   const stream = new ReadableStream({
     start(controller) {
       // Send initial keepalive
-      controller.enqueue(encoder.encode(": connected\n\n"));
+      controller.enqueue(encodeSSEComment("connected"));
 
       unsubscribe = subscribe(auth.userId, (event: SSEEvent) => {
         try {
-          const payload = `event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`;
-          controller.enqueue(encoder.encode(payload));
+          controller.enqueue(encodeSSEEvent(event.type, event.data));
         } catch {
           // Client disconnected
         }
@@ -24,7 +23,7 @@ export const GET = authRoute(async (request, { auth }) => {
       // Heartbeat every 30s to keep connection alive
       const heartbeat = setInterval(() => {
         try {
-          controller.enqueue(encoder.encode(": heartbeat\n\n"));
+          controller.enqueue(encodeSSEComment("heartbeat"));
         } catch {
           clearInterval(heartbeat);
         }
@@ -46,11 +45,5 @@ export const GET = authRoute(async (request, { auth }) => {
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    },
-  });
+  return createSSEResponse(stream);
 }, { route: "/api/events" });
