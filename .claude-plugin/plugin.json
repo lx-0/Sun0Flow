@@ -1,6 +1,6 @@
 {
   "name": "sunoflow",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "SunoFlow MCP skill -- AI music creation and management (song generation, lyrics, stem separation, music videos, playlists, exports) via the SunoFlow MCP server. Ships the sunoflow skill; the MCP server itself runs from the SunoFlow repo (stdio transport) against a self-hosted or hosted SunoFlow instance.",
   "author": {
     "name": "lx-0",

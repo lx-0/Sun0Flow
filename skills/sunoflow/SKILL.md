@@ -3,7 +3,7 @@ name: sunoflow
 description: Generates and manages AI music via the SunoFlow MCP server (Suno API behind a credit-managed backend). Covers song + sounds + lyrics generation, style boosting, song extension, stem separation, WAV/MIDI conversion, music-video + cover-art rendering, and playlist management.
 when_to_use: Use when the user asks to write or generate a song or lyrics, extend a track, separate vocals or stems, render a music video or cover art, convert to WAV or MIDI, manage playlists, boost a style prompt, browse the inspiration feed, or check Suno credit balance.
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
   mcp-server: sunoflow-mcp
   transport: stdio
   production-url: https://sunoflow.up.railway.app

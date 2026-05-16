@@ -2,6 +2,25 @@
 
 All notable changes to this project. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the version numbers follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] — 2026-05-16
+
+Post-0.2.0 verification surfaced GlitchTip Issue 5 (PrismaClientKnownRequestError, "Unique constraint failed on the fields: (`sunoJobId`)") — pre-existing concurrent-handler race that the 0.2.0 recovery refactor exposed more frequently because `runStalePendingRecovery` now calls `handleSongSuccess` on songs the old blind-timeout would have left dead.
+
+### Fixed
+
+- **handleSongSuccess race in `createAlternateSongs`** (`5d3b275`). Three pathways can fire `handleSongSuccess` concurrently for the same parent song: the SSE `pollToCompletion` loop, the client `/api/songs/[id]/status` poll, and the stale-pending recovery sweep. When two land within milliseconds, the second's `createAlternateSongs` hits the `@unique` constraint on `Song.sunoJobId` and Prisma throws P2002. Two-layer fix:
+  1. **Single-flight guard at top of `handleSongSuccess`** — skip if `generationStatus === "ready"` AND `sunoAudioId === firstSong.id` (another handler already completed this song with this exact primary clip). Prevents the common ~100ms-gap race; covers most cases without TOCTOU concerns.
+  2. **Idempotent `createAlternateSongs`** — wrap each `prisma.song.create` in try/catch for P2002; on collision, look up the existing alternate by its `@unique` `sunoJobId` and push its shape into the alternates list. Non-P2002 errors still propagate.
+
+### Verification
+
+- **Issue 3 (stale-pending sweep)** marked resolved in GlitchTip with `in_release: 63d6a1a...` (the 0.2.0 deploy SHA). Auto-reopens if a new event arrives.
+- **Issue 5** stays unresolved until a race-class verification window (~7d silence) passes after the `5d3b275` deploy.
+
+### Docs (cross-repo)
+
+- `yesterday-ai/cloud` `6e7ccd5` — extended the `glitchtip-mcp` skill with a "Resolving an issue" section: four-criteria verification workflow (fix SHA identified, deployed, event-rate-scaled silence window, not collateral) plus `update_issue(in_release="...")` pinning so GlitchTip auto-reopens on recurrence. Refined the prior absolute "Don't auto-resolve" anti-pattern.
+
 ## [0.2.0] — 2026-05-16
 
 Substantial bug-fix + architecture pass triggered by a real prod incident (GlitchTip Issue 3, "Generation timed out (stale-pending sweep)"). No breaking API surface — every change is internal architecture or UI behaviour.
@@ -44,5 +63,6 @@ See `roadmap.md`. Headline: silent-generation-failure observability hook (`f60a6
 
 Pre-changelog era. See git log + roadmap.md for granular history.
 
+[0.2.1]: https://github.com/lx-0/SunoFlow/releases/tag/v0.2.1
 [0.2.0]: https://github.com/lx-0/SunoFlow/releases/tag/v0.2.0
 [0.1.4]: https://github.com/lx-0/SunoFlow/releases/tag/v0.1.4

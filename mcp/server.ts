@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   }
 
   const server = new Server(
-    { name: "sunoflow-mcp", version: "0.2.0" },
+    { name: "sunoflow-mcp", version: "0.2.1" },
     { capabilities: { tools: {}, resources: {} } }
   );
 

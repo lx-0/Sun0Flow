@@ -110,3 +110,21 @@ Tests: 1270 passing / 47 skipped / 0 failed. Typecheck clean throughout.
 - **GlitchTip Issue 3 should stop receiving events** under the new release SHA. Verify after Railway deploy lands: `mcp__plugin_yesterday-cloud_glitchtip__list_issues` for project `sunoflow-prod`, filter on `is:unresolved`, confirm no new events for "Generation timed out (stale-pending sweep)" under release > `a777cca`.
 - **SunoFlow plugin update**: run `/plugin update sunoflow` locally; confirm `/plugin info sunoflow` reports `0.2.0` and Claude reads `SKILL.md` (111 lines) on first invoke instead of the old monolithic 345-line version.
 - **Marketplace description**: `/plugin` browse should show the new third-person description after marketplace cache refresh.
+
+## 0.2.1 patch (2026-05-16)
+
+GlitchTip Issue 5 (race-induced P2002 on `Song.sunoJobId`) — surfaced during 0.2.0 verification; pre-existing bug exposed by the recovery refactor. Fixed via single-flight guard + idempotent `createAlternateSongs`.
+
+Commits:
+- `5d3b275` fix(generation): handle concurrent handleSongSuccess races (GlitchTip Issue 5)
+- (next) chore: bump version to 0.2.1
+- (next) docs: 0.2.1 wrapup — CHANGELOG, KNOWLEDGE, STATE, roadmap
+
+Cross-repo:
+- `yesterday-ai/cloud` `6e7ccd5` — extended `glitchtip-mcp` SKILL.md with the "Resolving an issue" verification workflow (four-criteria) so future agents resolve evidence-based.
+
+GlitchTip status:
+- **Issue 3** marked `resolved` in_release `63d6a1a291be4ae28f35d3c6676c33889297a5dd` (0.2.0 deploy SHA). Auto-reopens on new events.
+- **Issue 5** stays `unresolved` until 7d silence window after `5d3b275` deploy.
+
+Tests: 1274 passing / 47 skipped / 0 failed. Typecheck clean.

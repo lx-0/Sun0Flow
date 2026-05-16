@@ -84,3 +84,22 @@ Patterns, rules, and lessons learned while building SunoFlow. Future sessions re
 ## Historical data fixes
 
 - **6 stuck-archived rows in prod, unarchived 2026-05-16.** "Glass & Bone" + 5 older songs ("Infinite Rooms", "Patch Notes", 2× "World State", "Mashup") had `generationStatus="ready"` + `archivedAt != null` + `errorMessage IS NULL` + `audioUrl IS NOT NULL` + `pollCount > 0`. WHERE-filter SQL `UPDATE "Song" SET "archivedAt" = NULL WHERE ...` distinguished bug-victims from user-archived (user-archived songs lacked `audioUrl` or had `pollCount=0`). One-off; don't re-run. The 0.2.0 lifecycle fix prevents future occurrences.
+
+## Concurrent-handler races (Issue 5 lesson)
+
+- **`handleSongSuccess` has three concurrent triggers**: SSE `pollToCompletion` (server-side), client polling via `/api/songs/[id]/status`, and the stale-pending recovery sweep on `/api/songs`. Any two firing within milliseconds for the same parent song will both run `createAlternateSongs`, and the second one's `prisma.song.create` hits the `@unique` constraint on `Song.sunoJobId` → P2002 propagates as a 500.
+- **Two-layer defence** (commit `5d3b275`):
+  1. Single-flight guard at top of `handleSongSuccess` — skip if `generationStatus === "ready"` AND `sunoAudioId === firstSong.id`. Covers the common ~100ms-gap race.
+  2. Idempotent `createAlternateSongs` — catch P2002, look up by the unique `sunoJobId`, return the existing alternate's shape so downstream broadcasts + cache writes still see it.
+- **The single-flight guard is TOCTOU-racy by construction.** It's a fast filter for the common case; the P2002 handler is the real backstop. Don't drop either layer.
+- **Pre-existing bugs surface after architectural refactors.** The old `cleanupStalePending` blindly flipped pending → failed, never calling `handleSongSuccess`. My 0.2.0 `runStalePendingRecovery` re-probes Suno and dispatches → exposed the race more frequently. Lesson: when a refactor enables new code paths, the bug surface for downstream functions widens. Audit downstream invariants (idempotency, race-safety) BEFORE shipping the refactor.
+
+## GlitchTip issue resolution workflow
+
+- **Resolution is evidence-based, not PR-merge-based.** Pushed by the change to `yesterday-ai/cloud/skills/glitchtip-mcp/SKILL.md` (commit `6e7ccd5`). Four conditions must hold before marking an issue resolved:
+  1. Specific fix commit identified (cite SHA in the resolution).
+  2. That commit is the currently deployed release SHA (verify via `railway status` / health endpoint).
+  3. Event-rate-scaled silence window passed: 6h for high-frequency (≥1/hour), 24h for routine (events/day), 7d for race / corner-case (events/week).
+  4. Silence isn't collateral (fewer users, codepath not exercised) — sanity-check related activity.
+- **Always pin `in_release`** when resolving: `update_issue(id, "resolved", in_release="<full-fix-sha>")`. GlitchTip uses this for regression attribution and auto-reopens if a new event lands with the same fingerprint.
+- **`ignored` ≠ `resolved`.** Use `ignored` for deliberate noise (deploy-time chunk-load errors, expected upstream 5xx, dependency churn). Always document the ignore-reason in KNOWLEDGE.md.

@@ -1,6 +1,6 @@
 # SunoFlow Product Roadmap
 
-> Last updated: 2026-05-16 — 0.2.0
+> Last updated: 2026-05-16 — 0.2.1
 > Maintained by: CEO
 
 ## Vision
