@@ -42,7 +42,7 @@ vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: 
 import { prisma } from "@/lib/prisma";
 import { pollOnce, handleSongSuccess, handleSongFailure } from "@/lib/generation";
 import { logServerError } from "@/lib/error-logger";
-import { runStalePendingRecovery } from "./library";
+import { runStalePendingRecovery, kickoffStalePendingRecovery } from "./stale-pending-recovery";
 
 function makeStaleRow(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -173,6 +173,21 @@ describe("runStalePendingRecovery", () => {
     expect(handleSongFailure).toHaveBeenCalledWith(
       expect.objectContaining({ id: "song-1" }),
       "Generation timed out (no Suno task ID)",
+    );
+  });
+});
+
+describe("kickoffStalePendingRecovery", () => {
+  it("does not throw when the underlying recovery rejects — logs instead", async () => {
+    vi.mocked(prisma.song.findMany).mockRejectedValue(new Error("DB unreachable"));
+    // Synchronous call returns void — the rejection is captured in .catch
+    expect(() => kickoffStalePendingRecovery("user-1")).not.toThrow();
+    // Let the microtask queue flush so the .catch handler runs
+    await new Promise((r) => setImmediate(r));
+    expect(logServerError).toHaveBeenCalledWith(
+      "songs-stale-cleanup",
+      expect.any(Error),
+      expect.objectContaining({ userId: "user-1" }),
     );
   });
 });
