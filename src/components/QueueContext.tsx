@@ -24,6 +24,10 @@ import {
   reorderQueueState,
   toggleShuffleQueue,
 } from "@/components/queue/queue-ops";
+import {
+  buildRadioRequestUrl,
+  removeFutureSongFromQueue,
+} from "@/components/queue/radio-ops";
 import { useMediaSession } from "@/components/queue/use-media-session";
 import { usePlaybackRecovery } from "@/components/queue/use-playback-recovery";
 import {
@@ -608,16 +612,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
   const fetchRadioSongs = useCallback(
     async (params: RadioParams, excludeIds: string[]): Promise<QueueSong[]> => {
-      const url = new URL("/api/radio", window.location.origin);
-      if (params.mood) url.searchParams.set("mood", params.mood);
-      if (params.genre) url.searchParams.set("genre", params.genre);
-      if (params.tempoMin != null) url.searchParams.set("tempoMin", String(params.tempoMin));
-      if (params.tempoMax != null) url.searchParams.set("tempoMax", String(params.tempoMax));
-      if (params.seedSongId) url.searchParams.set("seedSongId", params.seedSongId);
-      if (excludeIds.length > 0) url.searchParams.set("excludeIds", excludeIds.join(","));
-      url.searchParams.set("limit", "20");
-
-      const res = await fetch(url.toString());
+      const url = buildRadioRequestUrl(window.location.origin, params, excludeIds);
+      const res = await fetch(url);
       if (!res.ok) return [];
       const data = await res.json();
       return (data.songs ?? []) as QueueSong[];
@@ -655,14 +651,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const radioThumbsDown = useCallback((songId: string) => {
     radioExcludedIds.current.add(songId);
     // Remove the song from the queue if it hasn't been played yet
-    setQueue((prev) => {
-      const idx = currentIndexRef.current;
-      const songIdx = prev.findIndex((s, i) => s.id === songId && i > idx);
-      if (songIdx < 0) return prev;
-      const next = [...prev];
-      next.splice(songIdx, 1);
-      return next;
-    });
+    setQueue((prev) => removeFutureSongFromQueue(prev, currentIndexRef.current, songId));
     // If it's the current song, skip to next
     const q = queueRef.current;
     const idx = currentIndexRef.current;
