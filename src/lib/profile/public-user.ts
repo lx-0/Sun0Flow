@@ -64,7 +64,7 @@ export async function getPublicUserProfileByUsername(
     },
   });
 
-  if (!user) return Err.notFound("User not found");
+  if (!user || !user.username) return Err.notFound("User not found");
 
   const [follow, featuredSong, playStats] = await Promise.all([
     viewerId && viewerId !== user.id

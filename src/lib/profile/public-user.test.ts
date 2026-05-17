@@ -67,6 +67,33 @@ describe("getPublicUserProfileByUsername", () => {
     });
   });
 
+  it("returns not found when located user has null username", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_123",
+      name: "Alice",
+      username: null,
+      image: null,
+      avatarUrl: null,
+      bannerUrl: null,
+      bio: null,
+      featuredSongId: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      _count: { followers: 0, following: 0, songs: 0 },
+    } as never);
+
+    const result = await getPublicUserProfileByUsername("alice", "viewer_1");
+
+    expect(result).toEqual({
+      ok: false,
+      error: "User not found",
+      code: "NOT_FOUND",
+      status: 404,
+    });
+    expect(prisma.follow.findUnique).not.toHaveBeenCalled();
+    expect(prisma.song.findFirst).not.toHaveBeenCalled();
+    expect(prisma.song.aggregate).not.toHaveBeenCalled();
+  });
+
   it("returns profile with follow state and featured song", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: "user_123",
