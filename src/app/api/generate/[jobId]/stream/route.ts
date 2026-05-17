@@ -5,7 +5,8 @@ import { pollToCompletion } from "@/lib/generation/completion";
 import { authRoute } from "@/lib/route-handler";
 import { logServerError } from "@/lib/error-logger";
 import { markSongFailedSimple } from "@/lib/songs/lifecycle";
-import { createSSEResponse, encodeSSEComment, encodeSSEEvent } from "@/lib/sse";
+import { closeSSE, createSSEStream, createSSEResponse, enqueueSSEEvent } from "@/lib/sse";
+import { notFound } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -14,35 +15,23 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
 
   const song = await prisma.song.findUnique({ where: { id: jobId } });
   if (!song || song.userId !== auth.userId) {
-    return new Response(JSON.stringify({ error: "Not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    return notFound("Song not found");
   }
 
-  function sendEvent(
-    controller: ReadableStreamDefaultController,
-    type: string,
-    data: Record<string, unknown>
-  ) {
-    controller.enqueue(encodeSSEEvent(type, data));
-  }
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      controller.enqueue(encodeSSEComment("connected"));
-
+  const stream = createSSEStream({
+    request,
+    async onStart(controller) {
       if (
         song.generationStatus === "ready" ||
         song.generationStatus === "failed"
       ) {
-        sendEvent(controller, "generation_update", {
+        enqueueSSEEvent(controller, "generation_update", {
           songId: jobId,
           status: song.generationStatus,
           title: song.title,
           errorMessage: song.errorMessage,
         });
-        controller.close();
+        closeSSE(controller);
         return;
       }
 
@@ -50,8 +39,8 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
         await markSongFailedSimple(jobId, "No Suno task ID");
         const failData = { songId: jobId, status: "failed", errorMessage: "No Suno task ID" };
         broadcast(song.userId, { type: "generation_update", data: failData });
-        sendEvent(controller, "generation_update", failData);
-        controller.close();
+        enqueueSSEEvent(controller, "generation_update", failData);
+        closeSSE(controller);
         return;
       }
 
@@ -61,7 +50,7 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
       // client disconnects (tab close, navigation) we still want Suno's result
       // to land in the DB — handleSongSuccess / handleSongFailure persist
       // regardless of who's listening. The SSE stream is a best-effort
-      // forwarder; once it closes, sendEvent throws and we stop forwarding,
+      // forwarder; once it closes, enqueueSSEEvent returns false and forwarding stops,
       // but the generator keeps iterating to completion.
       const updates = pollToCompletion({
         songId: jobId,
@@ -86,9 +75,7 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
       try {
         for await (const update of updates) {
           if (!streamOpen) continue;
-          try {
-            sendEvent(controller, "generation_update", { ...update });
-          } catch {
+          if (!enqueueSSEEvent(controller, "generation_update", { ...update })) {
             streamOpen = false;
           }
         }
@@ -103,23 +90,18 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
           params: { songId: jobId, sunoJobId: song.sunoJobId },
         });
         if (streamOpen) {
-          try {
-            sendEvent(controller, "generation_update", {
-              songId: jobId,
-              status: "failed",
-              errorMessage: "Generation stream error — will retry in background",
-            });
-          } catch {
-            // controller already closed
-          }
+          enqueueSSEEvent(controller, "generation_update", {
+            songId: jobId,
+            status: "failed",
+            errorMessage: "Generation stream error — will retry in background",
+          });
         }
       }
 
-      try {
-        controller.close();
-      } catch {
-        // Already closed
-      }
+      closeSSE(controller);
+    },
+    onAbort(controller) {
+      closeSSE(controller);
     },
   });
 
