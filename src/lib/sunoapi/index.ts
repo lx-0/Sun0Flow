@@ -136,48 +136,4 @@ export { fetchFreshUrls } from "./refresh";
 export { mockSongs } from "./mock";
 
 // Convenience namespace
-import { generateSong, extendMusic } from "./create";
-import { uploadAndCover, uploadAndExtend, addVocals, addInstrumental, generateMashup, replaceSection } from "./upload-based";
-import { generateSounds, generateCoverImage } from "./media";
-import { generateLyrics, getTimestampedLyrics } from "./lyrics";
-import { separateVocals, convertToWav, generateMidi, createMusicVideo } from "./audio";
-import { generatePersona, boostStyle } from "./persona";
-import { getTaskStatus, getRemainingCredits } from "./status";
-import { getLyricsDetail, getVocalSeparationDetail, getWavConversionDetail, getMusicVideoDetail, getMidiDetail, getCoverImageDetail } from "./task-detail";
-import { listSongs, getSongById, downloadSong } from "./songs";
-import { uploadFileBase64, uploadFileFromUrl, uploadFileStream } from "./uploads";
-
-export const sunoApi = {
-  generateSong,
-  extendMusic,
-  uploadAndCover,
-  uploadAndExtend,
-  addVocals,
-  addInstrumental,
-  generateMashup,
-  replaceSection,
-  generateSounds,
-  generateCoverImage,
-  generateLyrics,
-  getTimestampedLyrics,
-  separateVocals,
-  convertToWav,
-  generateMidi,
-  createMusicVideo,
-  generatePersona,
-  boostStyle,
-  getTaskStatus,
-  getRemainingCredits,
-  getLyricsDetail,
-  getVocalSeparationDetail,
-  getWavConversionDetail,
-  getMusicVideoDetail,
-  getMidiDetail,
-  getCoverImageDetail,
-  listSongs,
-  getSongById,
-  downloadSong,
-  uploadFileBase64,
-  uploadFileFromUrl,
-  uploadFileStream,
-} as const;
+export { sunoApi } from "./client";

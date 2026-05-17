@@ -41,6 +41,7 @@ import {
   SunoApiError,
   sunoApi,
 } from "./index";
+import { fetchFreshUrls } from "./refresh";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -960,7 +961,7 @@ describe("request timeouts", () => {
 // ─── sunoApi convenience export ───────────────────────────────────────────────
 
 describe("sunoApi singleton", () => {
-  it("exposes all methods", () => {
+  it("exposes the exact public method surface", () => {
     const expectedMethods = [
       "generateSong",
       "extendMusic",
@@ -985,10 +986,24 @@ describe("sunoApi singleton", () => {
       "downloadSong",
       "uploadFileBase64",
       "uploadFileFromUrl",
+      "uploadFileStream",
+      "generateSounds",
+      "generateCoverImage",
+      "getLyricsDetail",
+      "getVocalSeparationDetail",
+      "getWavConversionDetail",
+      "getMusicVideoDetail",
+      "getMidiDetail",
+      "getCoverImageDetail",
+      "fetchFreshUrls",
     ];
 
+    expect(Object.keys(sunoApi).sort()).toEqual(expectedMethods.sort());
+
     for (const method of expectedMethods) {
-      expect(typeof sunoApi[method as keyof typeof sunoApi]).toBe("function");
+      const fn = sunoApi[method as keyof typeof sunoApi];
+      expect(typeof fn).toBe("function");
     }
+    expect(sunoApi.fetchFreshUrls).toBe(fetchFreshUrls);
   });
 });
