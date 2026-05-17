@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { computeETag, CacheControl } from "@/lib/cache";
 import { authRoute, resultResponse } from "@/lib/route-handler";
 import { findUserSong } from "@/lib/songs";
 import { updateSongVisibility } from "@/lib/songs";
+
+const patchBodySchema = z.object({
+  visibility: z.enum(["public", "private"]),
+});
 
 export const GET = authRoute<{ id: string }>(async (request, { auth, params }) => {
   const song = await findUserSong(auth.userId, params.id);
@@ -32,18 +37,14 @@ export const GET = authRoute<{ id: string }>(async (request, { auth, params }) =
   });
 });
 
-export const PATCH = authRoute<{ id: string }>(async (request, { auth, params }) => {
-  const body = await request.json();
-  const { visibility } = body as { visibility?: string };
-
-  if (visibility === undefined) {
-    return NextResponse.json(
-      { error: "No valid fields to update", code: "VALIDATION_ERROR" },
-      { status: 400 },
-    );
-  }
-
+export const PATCH = authRoute<{ id: string }, z.infer<typeof patchBodySchema>>(async (
+  _request,
+  { auth, params, body },
+) => {
   return resultResponse(
-    await updateSongVisibility(params.id, auth.userId, visibility),
+    await updateSongVisibility(params.id, auth.userId, body.visibility),
   );
+}, {
+  route: "/api/songs/[id]",
+  body: patchBodySchema,
 });

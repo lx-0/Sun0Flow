@@ -9,12 +9,25 @@ import {
 import { executeGeneration, respondToGeneration } from "@/lib/generation";
 import { authRoute } from "@/lib/route-handler";
 import { logServerError } from "@/lib/error-logger";
+import { z } from "zod";
 
 const MAX_BASE64_SIZE = 10 * 1024 * 1024; // 10MB
+const uploadBodySchema = z.object({
+  mode: z.string(),
+  base64Data: z.string().optional(),
+  fileUrl: z.string().optional(),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+  style: z.string().optional(),
+  instrumental: z.any().optional(),
+  continueAt: z.any().optional(),
+});
 
-export const POST = authRoute(async (request, { auth }) => {
+export const POST = authRoute<Record<string, never>, z.infer<typeof uploadBodySchema>>(async (
+  _request,
+  { auth, body },
+) => {
   try {
-    const body = await request.json();
     const { mode, base64Data, fileUrl, title, prompt, style, instrumental, continueAt } = body;
 
     if (mode !== "cover" && mode !== "extend") {
@@ -123,4 +136,4 @@ export const POST = authRoute(async (request, { auth }) => {
       { status: 500 }
     );
   }
-}, { route: "/api/upload" });
+}, { route: "/api/upload", body: uploadBodySchema });
