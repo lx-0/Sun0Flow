@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -73,9 +73,10 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const outsideClickRefs = useMemo(() => [panelRef, buttonRef], []);
   const router = useRouter();
 
-  useOutsideClick([panelRef, buttonRef], () => setOpen(false), open);
+  useOutsideClick(outsideClickRefs, () => setOpen(false), open);
 
   // Close on Escape
   useEffect(() => {
