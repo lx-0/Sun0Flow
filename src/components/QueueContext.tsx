@@ -186,6 +186,12 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
     const generation = bumpLoadGeneration();
 
+    // Drop the per-song CDN-fallback flag for the song we're about to play.
+    // Otherwise a single transient proxy error pins the song to direct-CDN
+    // for the rest of the session, even after the proxy recovers (and we
+    // also lose the local file-cache hit on subsequent replays).
+    cdnFallbackRef.current.delete(song.id);
+
     setCurrentIndex(index);
     setCurrentTime(0);
     setDuration(song.duration ?? 0);
@@ -409,6 +415,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       setDuration(playOrder[playIdx].duration ?? 0);
       audio.pause();
       bumpLoadGeneration();
+      cdnFallbackRef.current.delete(playOrder[playIdx].id);
       audio.src = getAudioSrc(playOrder[playIdx]);
       retryPlay(audio);
       trackPlay(playOrder[playIdx].id);

@@ -4,12 +4,15 @@
 // every namespace not in keepCaches — stale /_next/static chunks from
 // prior deploys can never resurface in the PWA.
 // AUDIO_CACHE intentionally stays stable across deploys: its entries are
-// user-saved offline songs, not deploy-coupled bundles.
+// user-saved offline songs, not deploy-coupled bundles. The version suffix
+// is bumped manually when the cache strategy changes incompatibly — e.g.
+// v1 stored 206 partials that could not be served safely for Range
+// requests; v2 stores only full 200 responses.
 const BUILD_ID = new URL(self.location.href).searchParams.get("v") || "dev";
 const CACHE_NAME = `sunoflow-shell-${BUILD_ID}`;
 const STATIC_CACHE = `sunoflow-static-${BUILD_ID}`;
 const API_CACHE = `sunoflow-api-${BUILD_ID}`;
-const AUDIO_CACHE = "sunoflow-audio-v1";
+const AUDIO_CACHE = "sunoflow-audio-v2";
 const OFFLINE_URL = "/offline.html";
 const QUEUE_STORE = "sunoflow-offline-queue";
 
@@ -221,21 +224,38 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 2a. Proxied audio requests: cache-first for explicitly-saved offline songs,
-  //     network-with-cache-fallback otherwise (enables offline playback).
+  // 2a. Proxied audio requests.
+  //
+  // Range-request semantics are incompatible with URL-keyed Cache storage:
+  // `cache.match(request)` ignores the Range header, so a cached partial
+  // response would be served for every subsequent range — songs play the
+  // first chunk and then stall (the symptom reported on iOS PWA).
+  //
+  // Strategy:
+  //   - GET with a Range header: bypass the SW entirely, let the browser
+  //     talk to the server directly. The server's file-cache + edge CDN
+  //     already make this fast.
+  //   - GET without a Range header (rare for audio, used by the explicit
+  //     Save Offline action): cache-first with a full-file 200 response.
+  //   - Only cache 200 responses, never 206. Per spec cache.put rejects
+  //     for 206 anyway, but being explicit avoids the unhandled rejection
+  //     and any WebKit lenience that would corrupt the cache.
   if (isProxiedAudioRequest(url) && request.method === "GET") {
+    if (request.headers.has("range")) {
+      // Let the browser handle this directly. respondWith is not called,
+      // so the request falls through to the network unmediated.
+      return;
+    }
+
     event.respondWith(
       caches.open(AUDIO_CACHE).then(async (cache) => {
         const cachedResponse = await cache.match(request);
         if (cachedResponse) return cachedResponse;
 
-        // Not in cache — fetch from network (will succeed when online)
         try {
           const networkResponse = await fetch(request);
-          if (networkResponse.ok) {
-            // Store for subsequent requests (the explicit Save Offline action
-            // also stores here, so this acts as a warm-up on first play).
-            cache.put(request, networkResponse.clone());
+          if (networkResponse.status === 200) {
+            cache.put(request, networkResponse.clone()).catch(() => {});
           }
           return networkResponse;
         } catch {

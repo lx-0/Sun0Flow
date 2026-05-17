@@ -32,6 +32,12 @@ const PUBLIC_PATHS = [
   "/login", "/register", "/forgot-password", "/reset-password", "/verify-email",
   "/api/auth", "/api/register", "/api/health", "/api/agent-skill", "/api/test/login",
   "/api/songs/public",
+  // Media proxies — the route handlers enforce their own auth/visibility checks
+  // (authRoute / publicRoute). Without bypassing the edge redirect here, the
+  // <audio>/<img> element follows the 307 to /login HTML and treats the HTML
+  // as the media stream — silent breakage on share pages and after a JWT-cookie
+  // eviction in iOS PWAs.
+  "/api/audio/", "/api/images/",
   "/s/", "/p/", "/u/", "/songs/", "/embed/",
 ];
 

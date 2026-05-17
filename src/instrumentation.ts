@@ -31,7 +31,10 @@ export async function register() {
   registerAllJobs();
   await startScheduler();
 
-  const { warmUpAudioCache } = await import("@/lib/cache");
+  // Import the warmup module directly — routing through the @/lib/cache
+  // barrel drags `@/lib/cache/file` (which uses Node-only `fs`/`stream`)
+  // into the edge-runtime bundle of instrumentation.ts and fails the build.
+  const { warmUpAudioCache } = await import("@/lib/cache/warmup");
   const { logger } = await import("@/lib/logger");
   warmUpAudioCache().catch((err) => {
     logger.error({ err }, "cache-warmup: startup warmup failed");

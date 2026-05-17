@@ -152,19 +152,56 @@ export async function proxyAudio(params: AudioProxyParams): Promise<Response> {
   return serveBuf(buf, rangeHeader, cacheControl);
 }
 
+function parseRange(
+  rangeHeader: string | null,
+  size: number,
+): { start: number; end: number } | null {
+  if (!rangeHeader) return null;
+  const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+  if (!match) return null;
+  const start = parseInt(match[1], 10);
+  const end = match[2] ? parseInt(match[2], 10) : size - 1;
+  if (isNaN(start) || isNaN(end) || start > end || end >= size) return null;
+  return { start, end };
+}
+
 function serveCached(
   songId: string,
   rangeHeader: string | null,
   cacheControl: "public" | "private",
 ): Response {
-  const buf = audioCache.get(songId)?.data ?? null;
-  if (!buf) {
+  // Probe size first so we can build correct Content-Range/Length headers
+  // without buffering the whole file into memory.
+  const size = audioCache.getSize(songId);
+  if (size == null) {
     return NextResponse.json(
       { error: "Cache read failed", code: "CACHE_ERROR" },
       { status: 500 },
     );
   }
-  return serveBuf(buf, rangeHeader, cacheControl);
+
+  const range = parseRange(rangeHeader, size);
+  const start = range?.start ?? 0;
+  const end = range?.end ?? size - 1;
+
+  const cached = audioCache.getStream(songId, start, end);
+  if (!cached) {
+    return NextResponse.json(
+      { error: "Cache read failed", code: "CACHE_ERROR" },
+      { status: 500 },
+    );
+  }
+
+  const headers = new Headers();
+  headers.set("Content-Type", cached.contentType);
+  headers.set("Accept-Ranges", "bytes");
+  headers.set("Cache-Control", `${cacheControl}, max-age=3600`);
+  headers.set("Content-Length", String(end - start + 1));
+  if (range) {
+    headers.set("Content-Range", `bytes ${start}-${end}/${size}`);
+    return new Response(cached.stream, { status: 206, headers });
+  }
+  return new Response(cached.stream, { status: 200, headers });
 }
 
 function serveBuf(
@@ -177,16 +214,12 @@ function serveBuf(
   headers.set("Accept-Ranges", "bytes");
   headers.set("Cache-Control", `${cacheControl}, max-age=3600`);
 
-  if (rangeHeader) {
-    const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-    if (match) {
-      const start = parseInt(match[1], 10);
-      const end = match[2] ? parseInt(match[2], 10) : buf.length - 1;
-      const slice = buf.subarray(start, end + 1);
-      headers.set("Content-Length", String(slice.length));
-      headers.set("Content-Range", `bytes ${start}-${end}/${buf.length}`);
-      return new Response(new Uint8Array(slice), { status: 206, headers });
-    }
+  const range = parseRange(rangeHeader, buf.length);
+  if (range) {
+    const slice = buf.subarray(range.start, range.end + 1);
+    headers.set("Content-Length", String(slice.length));
+    headers.set("Content-Range", `bytes ${range.start}-${range.end}/${buf.length}`);
+    return new Response(new Uint8Array(slice), { status: 206, headers });
   }
 
   headers.set("Content-Length", String(buf.length));

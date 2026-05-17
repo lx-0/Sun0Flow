@@ -1,10 +1,42 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, createReadStream, promises as fsp } from "fs";
 import { join } from "path";
+
+// Convert a Node Readable stream to a Web ReadableStream WITHOUT importing
+// `node:stream` (which webpack's edge target cannot resolve, breaking the
+// build via instrumentation.ts → @/lib/cache/warmup → here). Re-implements
+// the small subset of stream.Readable.toWeb() we actually need.
+type NodeReadable = NodeJS.ReadableStream;
+function nodeStreamToWeb(node: NodeReadable): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      node.on("data", (chunk: Buffer | string) => {
+        const u8 =
+          typeof chunk === "string"
+            ? new TextEncoder().encode(chunk)
+            : new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+        controller.enqueue(u8);
+      });
+      node.on("end", () => controller.close());
+      node.on("error", (err) => controller.error(err));
+    },
+    cancel() {
+      // best-effort — destroy if the underlying stream supports it
+      const destroyable = node as { destroy?: (err?: Error) => void };
+      destroyable.destroy?.();
+    },
+  });
+}
 import { logger } from "@/lib/logger";
 
 export interface CachedFile {
   data: Buffer;
   contentType: string;
+}
+
+export interface CachedStream {
+  stream: ReadableStream<Uint8Array>;
+  contentType: string;
+  size: number;
 }
 
 interface FileCacheConfig {
@@ -16,6 +48,16 @@ interface FileCacheConfig {
 
 export interface FileCache {
   get(id: string): CachedFile | null;
+  /**
+   * Stream the cached file (optionally a byte range) without buffering the
+   * whole content into memory or blocking the Node.js event loop. Use this
+   * for audio/video range responses — `get` reads the full file with
+   * `readFileSync` and is unsuitable for hot paths.
+   *
+   * Returns null when the file is absent. Returns size of the FULL file
+   * (not the slice) so callers can build Content-Range correctly.
+   */
+  getStream(id: string, start?: number, end?: number): CachedStream | null;
   getSize(id: string): number | null;
   put(id: string, data: Buffer, contentType?: string): void;
   has(id: string): boolean;
@@ -48,6 +90,11 @@ function createFileCache(config: FileCacheConfig): FileCache {
     return null;
   }
 
+  function contentTypeFor(path: string): string {
+    const ext = path.slice(path.lastIndexOf("."));
+    return config.contentTypes[ext] ?? "application/octet-stream";
+  }
+
   function resolveExtension(contentType?: string): string {
     if (!contentType) return config.extensions[0];
     for (const [ext, mime] of Object.entries(config.contentTypes)) {
@@ -59,12 +106,34 @@ function createFileCache(config: FileCacheConfig): FileCache {
 
   const cache: FileCache = {
     get(id) {
+      // Sync read kept for cold paths (admin tools, tests). Hot paths must
+      // use getStream — readFileSync on a 5 MB audio file stalls the event
+      // loop and serialises every concurrent request behind it.
       const p = findFile(id);
       if (!p) return null;
-      const ext = p.slice(p.lastIndexOf("."));
       return {
         data: readFileSync(p),
-        contentType: config.contentTypes[ext] ?? "application/octet-stream",
+        contentType: contentTypeFor(p),
+      };
+    },
+
+    getStream(id, start, end) {
+      const p = findFile(id);
+      if (!p) return null;
+      let size: number;
+      try {
+        size = statSync(p).size;
+      } catch {
+        return null;
+      }
+      const nodeStream: NodeReadable = createReadStream(p, {
+        start: start ?? 0,
+        end: end ?? size - 1,
+      });
+      return {
+        stream: nodeStreamToWeb(nodeStream),
+        contentType: contentTypeFor(p),
+        size,
       };
     },
 
@@ -78,9 +147,16 @@ function createFileCache(config: FileCacheConfig): FileCache {
       try {
         ensureDir();
         const ext = resolveExtension(contentType);
-        writeFileSync(join(cacheDir, `${safeName(id)}${ext}`), data);
+        const fp = join(cacheDir, `${safeName(id)}${ext}`);
+        // Fire-and-forget async write — keeps the call sync for existing
+        // callers but avoids blocking the event loop on a multi-MB flush.
+        // Errors are logged; no caller reads the file back synchronously
+        // after put, so the brief delay is tolerable.
+        fsp.writeFile(fp, data).catch((err) => {
+          logger.warn({ id, cacheDir, err }, "file-cache: put failed");
+        });
       } catch (err) {
-        logger.warn({ id, cacheDir, err }, "file-cache: put failed");
+        logger.warn({ id, cacheDir, err }, "file-cache: put setup failed");
       }
     },
 
