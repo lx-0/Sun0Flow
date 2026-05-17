@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { publicRoute } from "@/lib/route-handler";
 import { badRequest } from "@/lib/api-error";
+import { createEmailVerifiedData } from "@/lib/auth/tokens";
 
 const verifyEmailBody = z.object({
   token: z.string().trim().min(1, "Token is required"),
@@ -26,10 +27,7 @@ export const POST = publicRoute<Record<string, never>, z.infer<typeof verifyEmai
 
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        emailVerified: new Date(),
-        verificationToken: null,
-      },
+      data: createEmailVerifiedData(),
     });
 
     return NextResponse.json({ message: "Email verified successfully" });

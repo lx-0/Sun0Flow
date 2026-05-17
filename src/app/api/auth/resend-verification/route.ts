@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { authRoute } from "@/lib/route-handler";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { sendVerificationEmail } from "@/lib/email";
 import { notFound, rateLimited } from "@/lib/api-error";
+import { createVerificationToken } from "@/lib/auth/tokens";
 
 export const POST = authRoute(async (_request, { auth }) => {
   const user = await prisma.user.findUnique({
@@ -25,7 +25,7 @@ export const POST = authRoute(async (_request, { auth }) => {
     return rateLimited("Too many requests. Please try again later.");
   }
 
-  const verificationToken = crypto.randomUUID();
+  const verificationToken = createVerificationToken();
 
   await prisma.user.update({
     where: { id: user.id },

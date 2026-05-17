@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { sendVerificationEmail, sendWelcomeEmail } from "@/lib/email";
@@ -7,6 +6,7 @@ import { stripHtml } from "@/lib/sanitize";
 import { ensureFreeSubscription } from "@/lib/billing";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
 import { isAdminEmail } from "@/lib/auth/admin";
+import { createVerificationToken } from "@/lib/auth/tokens";
 
 const REGISTER_LIMIT = 5;
 const REGISTER_WINDOW_MS = 15 * 60 * 1000;
@@ -68,7 +68,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
 
   const passwordHash = await bcrypt.hash(password, 12);
   const shouldAutoVerify = isAdminEmail(email);
-  const verificationToken = shouldAutoVerify ? null : crypto.randomUUID();
+  const verificationToken = shouldAutoVerify ? null : createVerificationToken();
   const sanitizedName = name ? stripHtml(name).trim() || null : null;
 
   const user = await prisma.user.create({

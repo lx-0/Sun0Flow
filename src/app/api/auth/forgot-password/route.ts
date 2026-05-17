@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { publicRoute } from "@/lib/route-handler";
 import { acquireRateLimitSlot } from "@/lib/rate-limit";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { createPasswordResetTokenData } from "@/lib/auth/tokens";
 
 const forgotPasswordBody = z.object({
   email: z.string().trim().min(1, "Email is required"),
@@ -31,15 +31,14 @@ export const POST = publicRoute<Record<string, never>, z.infer<typeof forgotPass
       return successResponse;
     }
 
-    const resetToken = crypto.randomUUID();
-    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const resetTokenData = createPasswordResetTokenData();
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { resetToken, resetTokenExpiry },
+      data: resetTokenData,
     });
 
-    await sendPasswordResetEmail(email, resetToken);
+    await sendPasswordResetEmail(email, resetTokenData.resetToken);
 
     return successResponse;
   },

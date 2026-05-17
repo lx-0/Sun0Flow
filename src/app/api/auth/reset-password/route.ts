@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { publicRoute } from "@/lib/route-handler";
 import { badRequest } from "@/lib/api-error";
+import { clearPasswordResetTokenData } from "@/lib/auth/tokens";
 
 const resetPasswordBody = z.object({
   token: z.string().trim().min(1, "Token is required"),
@@ -31,8 +32,7 @@ export const POST = publicRoute<Record<string, never>, z.infer<typeof resetPassw
       where: { id: user.id },
       data: {
         passwordHash,
-        resetToken: null,
-        resetTokenExpiry: null,
+        ...clearPasswordResetTokenData(),
       },
     });
 
