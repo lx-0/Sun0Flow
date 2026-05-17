@@ -38,7 +38,10 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_REMOTE
     ? undefined
     : {
-        command: `PLAYWRIGHT_TEST=true NODE_ENV=development PORT=${playwrightPort} pnpm dev`,
+        command:
+          process.env.CI
+            ? `test -f .next/BUILD_ID || pnpm build; PLAYWRIGHT_TEST=true NODE_ENV=production PORT=${playwrightPort} pnpm start`
+            : `PLAYWRIGHT_TEST=true NODE_ENV=development PORT=${playwrightPort} pnpm dev`,
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         // Allow 2 minutes for initial server startup + prisma migrations
