@@ -4,7 +4,6 @@ import {
   type RouteOptions,
   type RoutePipelineOptions,
   type RouteSchemas,
-  type PipelineCtx,
   type SegmentData,
 } from "@/lib/route-pipeline";
 import {
@@ -18,6 +17,7 @@ import type {
   AnonContext,
   AuthContext,
   OptionalAuthContext,
+  PipelineCtx,
   RateLimitConfig,
 } from "@/lib/route-handler/types";
 
