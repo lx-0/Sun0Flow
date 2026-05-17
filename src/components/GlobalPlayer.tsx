@@ -25,7 +25,6 @@ import {
   EllipsisVerticalIcon,
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
-import Link from "next/link";
 import { CoverArtImage } from "./CoverArtImage";
 import { useQueue } from "./QueueContext";
 import { UpNextPanel } from "./UpNextPanel";
@@ -35,7 +34,7 @@ import { PlayerWaveform } from "./PlayerWaveform";
 import { EmojiReactionPicker } from "./EmojiReactionPicker";
 import { ReactionTimeline, ReactionItem } from "./ReactionTimeline";
 import { useToast } from "./Toast";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ExpandedPlayer } from "./ExpandedPlayer";
 import {
@@ -109,10 +108,26 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
   const shownReactionIdsRef = useRef<Set<string>>(new Set());
   const popupKeyRef = useRef(0);
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session } = useSession();
   const { toast } = useToast();
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] : null;
+
+  // Cover click: on desktop navigate to song detail, on mobile open drawer.
+  // matchMedia is evaluated at click time so it adapts to viewport changes
+  // without requiring a re-render or relying on CSS-only mutual-exclusion.
+  const handleCoverClick = useCallback(() => {
+    if (!currentSong) return;
+    const isDesktop =
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 768px)").matches;
+    if (isDesktop) {
+      router.push(`/library/${currentSong.id}`);
+    } else {
+      setIsDrawerOpen(true);
+    }
+  }, [currentSong, router]);
 
   // Fetch favorite status when current song changes
   useEffect(() => {
@@ -418,12 +433,13 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-2 px-2 sm:px-3 py-3">
-          {/* Cover art — tap to expand on mobile, link on desktop */}
+          {/* Cover art — single render; click navigates on desktop, opens drawer on mobile */}
           <button
             key={currentSong.id}
-            onClick={() => setIsDrawerOpen(true)}
-            className="relative flex-shrink-0 w-12 h-12 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-violet-500/50 transition-all md:hidden"
-            aria-label="Expand player"
+            onClick={handleCoverClick}
+            className="relative flex-shrink-0 w-12 h-12 md:w-10 md:h-10 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-violet-500/50 transition-all"
+            aria-label="Open song details"
+            title="Open song details"
           >
             {currentSong.imageUrl ? (
               <CoverArtImage
@@ -431,7 +447,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
                 alt={currentSong.title ?? "Song"}
                 fill
                 className="object-cover"
-                sizes="40px"
+                sizes="48px"
                 songId={currentSong.id}
                 fallbackSrc="/icons/icon-512.png"
               />
@@ -439,26 +455,6 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
               <MusicalNoteIcon className="w-5 h-5 text-gray-500" aria-hidden="true" />
             )}
           </button>
-          <Link
-            key={currentSong.id}
-            href={`/library/${currentSong.id}`}
-            className="relative flex-shrink-0 w-10 h-10 rounded-lg bg-gray-800 dark:bg-gray-700 overflow-hidden items-center justify-center hover:ring-2 hover:ring-violet-500/50 transition-all hidden md:flex"
-            title="View song details"
-          >
-            {currentSong.imageUrl ? (
-              <CoverArtImage
-                src={currentSong.imageUrl}
-                alt={currentSong.title ?? "Song"}
-                fill
-                className="object-cover"
-                sizes="40px"
-                songId={currentSong.id}
-                fallbackSrc="/icons/icon-512.png"
-              />
-            ) : (
-              <MusicalNoteIcon className="w-5 h-5 text-gray-500" aria-hidden="true" />
-            )}
-          </Link>
 
           {/* Song info — tap to expand on mobile */}
           <div className="flex-1 min-w-0" onClick={() => setIsDrawerOpen(true)} role="button" tabIndex={0} aria-label="Expand player" onKeyDown={(e) => { if (e.key === "Enter") setIsDrawerOpen(true); }}>
