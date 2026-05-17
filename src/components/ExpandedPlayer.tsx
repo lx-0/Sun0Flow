@@ -93,7 +93,9 @@ export function ExpandedPlayer({
   if (!currentSong) return null;
 
   return (
-    <div className="w-full h-full md:h-auto md:max-h-[90vh] overflow-y-auto flex flex-col">
+    <div className="w-full h-full md:h-auto md:max-h-[90vh] flex flex-col overflow-hidden md:overflow-y-auto">
+      {/* Upper scrollable region — compresses when a panel is open */}
+      <div className="flex-1 min-h-0 overflow-y-auto md:flex-initial md:overflow-visible flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-center px-4 py-2 flex-shrink-0">
         <span className="text-xs text-gray-500 uppercase tracking-wider">Now Playing</span>
@@ -295,6 +297,9 @@ export function ExpandedPlayer({
         )}
       </div>
 
+      </div>
+      {/* /Upper scrollable region */}
+
       {/* Tab buttons for inline panels */}
       <div className="flex items-center justify-center gap-1 px-6 py-2 border-t border-gray-800 flex-shrink-0">
         {currentSong.lyrics && (
@@ -330,7 +335,7 @@ export function ExpandedPlayer({
 
       {/* Inline panel content */}
       {activeTab !== "none" && (
-        <div className="flex-1 overflow-y-auto px-4 pb-safe">
+        <div className="flex-1 min-h-0 overflow-y-auto md:flex-initial md:max-h-[50vh] px-4 pb-safe border-t border-gray-800">
           {activeTab === "lyrics" && currentSong.lyrics && (
             <LyricsPanel
               lyrics={currentSong.lyrics}
