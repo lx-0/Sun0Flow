@@ -341,7 +341,7 @@ describe("POST /api/upload — API error handling", () => {
     );
   });
 
-  it("returns 500 with INTERNAL_ERROR code on malformed JSON body", async () => {
+  it("returns 400 with VALIDATION_ERROR code on malformed JSON body", async () => {
     const req = new Request("http://localhost/api/upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -349,9 +349,9 @@ describe("POST /api/upload — API error handling", () => {
     });
 
     const res = await POST(req as never, seg);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.code).toBe("INTERNAL_ERROR");
+    expect(data.code).toBe("VALIDATION_ERROR");
     expect(data.error).not.toContain("SyntaxError");
   });
 
