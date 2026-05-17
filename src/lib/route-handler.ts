@@ -9,7 +9,6 @@ import { createRouteWrapper } from "@/lib/route-handler/wrapper";
 import {
   createRouteDescriptor,
   type ParsedRouteContext,
-  type RouteContextWithAuth,
   type RouteDescriptor,
   withAuthParsedContext,
   withParsedContext,
@@ -25,6 +24,7 @@ import type {
   AnonContext,
   AuthContext,
   OptionalAuthContext,
+  PreflightResult,
   RateLimitConfig,
 } from "@/lib/route-handler/types";
 
@@ -36,6 +36,13 @@ export type {
   OptionalAuthContext,
   RateLimitConfig,
 } from "@/lib/route-handler/types";
+
+type RouteFactoryConfig<TContext, TPreflightContext = TContext> = {
+  preflight: (request: NextRequest) => Promise<PreflightResult<TPreflightContext>>;
+  mapContext: (context: TPreflightContext) => TContext;
+  logLabel: string;
+  getLogContext: (context: TContext) => Record<string, unknown>;
+};
 
 function createPreflightRoute<
   P extends Record<string, string>,
@@ -61,6 +68,68 @@ function createPreflightRoute<
   );
 }
 
+function createContextRouteFactory<
+  TContext,
+  THandlerKey extends "auth" | "admin" | "anon",
+>(
+  key: THandlerKey,
+  config: RouteFactoryConfig<TContext>,
+) {
+  return function routeFactory<
+    P extends Record<string, string> = Record<string, never>,
+    B = undefined,
+    Q = undefined,
+  >(
+    handler: (
+      request: NextRequest,
+      ctx: Record<THandlerKey, TContext> & ParsedRouteContext<P, B, Q>,
+    ) => Promise<Response>,
+    options?: RoutePipelineOptions<B, Q>,
+  ) {
+    return createPreflightRoute<
+      P,
+      B,
+      Q,
+      TContext,
+      Record<THandlerKey, TContext> & ParsedRouteContext<P, B, Q>
+    >(
+      createRouteDescriptor(
+        async (request) => {
+          const result = await config.preflight(request);
+          if (!result.ok) return result;
+          return { ok: true as const, context: config.mapContext(result.context) };
+        },
+        (context, parsed) => withAuthParsedContext(key, context, parsed),
+        config.logLabel,
+        config.getLogContext,
+      ),
+      handler,
+      options,
+    );
+  };
+}
+
+const authLikeRoute = createContextRouteFactory("auth", {
+  preflight: authPreflight,
+  mapContext: (context) => context,
+  logLabel: "route-handler",
+  getLogContext: (auth) => ({ userId: auth.userId }),
+});
+
+const optionalAuthLikeRoute = createContextRouteFactory("auth", {
+  preflight: optionalAuthPreflight,
+  mapContext: (context) => context,
+  logLabel: "optional-auth-route-handler",
+  getLogContext: (auth) => ({ userId: auth.userId }),
+});
+
+const adminLikeRoute = createContextRouteFactory("admin", {
+  preflight: async () => adminPreflight(),
+  mapContext: (context) => context,
+  logLabel: "admin-route-handler",
+  getLogContext: (admin) => ({ userId: admin.adminId }),
+});
+
 export function authRoute<
   P extends Record<string, string> = Record<string, never>,
   B = undefined,
@@ -72,16 +141,7 @@ export function authRoute<
   ) => Promise<Response>,
   options?: RoutePipelineOptions<B, Q>,
 ) {
-  return createPreflightRoute<P, B, Q, AuthContext, RouteContextWithAuth<AuthContext, P, B, Q>>(
-    createRouteDescriptor(
-      authPreflight,
-      (auth, parsed) => withAuthParsedContext("auth", auth, parsed),
-      "route-handler",
-      (auth) => ({ userId: auth.userId }),
-    ),
-    handler,
-    options,
-  );
+  return authLikeRoute<P, B, Q>(handler, options);
 }
 
 export function optionalAuthRoute<
@@ -95,22 +155,7 @@ export function optionalAuthRoute<
   ) => Promise<Response>,
   options?: RoutePipelineOptions<B, Q>,
 ) {
-  return createPreflightRoute<
-    P,
-    B,
-    Q,
-    OptionalAuthContext,
-    RouteContextWithAuth<OptionalAuthContext, P, B, Q>
-  >(
-    createRouteDescriptor(
-      optionalAuthPreflight,
-      (auth, parsed) => withAuthParsedContext("auth", auth, parsed),
-      "optional-auth-route-handler",
-      (auth) => ({ userId: auth.userId }),
-    ),
-    handler,
-    options,
-  );
+  return optionalAuthLikeRoute<P, B, Q>(handler, options);
 }
 
 export function publicRoute<
@@ -147,16 +192,7 @@ export function adminRoute<
   ) => Promise<Response>,
   options?: RoutePipelineOptions<B, Q>,
 ) {
-  return createPreflightRoute<P, B, Q, AdminContext, { admin: AdminContext } & ParsedRouteContext<P, B, Q>>(
-    createRouteDescriptor(
-      async () => adminPreflight(),
-      (admin, parsed) => withAuthParsedContext("admin", admin, parsed),
-      "admin-route-handler",
-      (admin) => ({ userId: admin.adminId }),
-    ),
-    handler,
-    options,
-  );
+  return adminLikeRoute<P, B, Q>(handler, options);
 }
 
 export function anonRoute<
