@@ -5,6 +5,7 @@ import { pollToCompletion } from "@/lib/generation/completion";
 import { authRoute } from "@/lib/route-handler";
 import { logServerError } from "@/lib/error-logger";
 import { markSongFailedSimple } from "@/lib/songs/lifecycle";
+import { createSSEResponse, encodeSSEComment, encodeSSEEvent } from "@/lib/sse";
 
 export const dynamic = "force-dynamic";
 
@@ -19,20 +20,17 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
     });
   }
 
-  const encoder = new TextEncoder();
-
   function sendEvent(
     controller: ReadableStreamDefaultController,
     type: string,
     data: Record<string, unknown>
   ) {
-    const payload = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-    controller.enqueue(encoder.encode(payload));
+    controller.enqueue(encodeSSEEvent(type, data));
   }
 
   const stream = new ReadableStream({
     async start(controller) {
-      controller.enqueue(encoder.encode(": connected\n\n"));
+      controller.enqueue(encodeSSEComment("connected"));
 
       if (
         song.generationStatus === "ready" ||
@@ -125,11 +123,5 @@ export const GET = authRoute<{ jobId: string }>(async (request, { auth, params }
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    },
-  });
+  return createSSEResponse(stream);
 }, { route: "/api/generate/[jobId]/stream" });

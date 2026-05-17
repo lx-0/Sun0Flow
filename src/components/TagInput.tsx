@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { XMarkIcon } from "@heroicons/react/24/solid";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 interface Tag {
   id: string;
@@ -107,16 +108,7 @@ export function TagInput({ songId, initialTags = [], onTagsChange }: TagInputPro
     setHighlightIndex(-1);
   }, [input, allTags, tags]);
 
-  // Close on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  useOutsideClick(containerRef, () => setShowSuggestions(false));
 
   const updateTags = useCallback((newTags: Tag[]) => {
     setTags(newTags);

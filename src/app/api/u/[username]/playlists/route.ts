@@ -4,22 +4,19 @@ import { publicRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
 import { zPageParam } from "@/lib/query-params";
-import { notFound } from "@/lib/api-error";
+import { errorFromResult } from "@/lib/api-error";
+import { resolveUserIdByUsername } from "@/lib/profile";
 
 const pageQuery = z.object({ page: zPageParam() });
 
 export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof pageQuery>>(
   async (_request, { params, query }) => {
-    const user = await prisma.user.findUnique({
-      where: { username: params.username },
-      select: { id: true },
-    });
-
-    if (!user) return notFound("User not found");
+    const userResult = await resolveUserIdByUsername(params.username);
+    if (!userResult.ok) return errorFromResult(userResult);
 
     const [playlists, total] = await Promise.all([
       prisma.playlist.findMany({
-        where: { userId: user.id, isPublic: true },
+        where: { userId: userResult.data.id, isPublic: true },
         orderBy: { updatedAt: "desc" },
         skip: pageSkip(query.page, DEFAULT_PAGE_SIZE),
         take: DEFAULT_PAGE_SIZE,
@@ -42,7 +39,7 @@ export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof p
         },
       }),
       prisma.playlist.count({
-        where: { userId: user.id, isPublic: true },
+        where: { userId: userResult.data.id, isPublic: true },
       }),
     ]);
 

@@ -45,7 +45,7 @@ export function createRouteWrapper<
     segmentData: SegmentData<P>,
   ): Promise<Response> => {
     const preflightResult = await preflight(request);
-    if (preflightResult.error) return preflightResult.error;
+    if (!preflightResult.ok) return preflightResult.error;
 
     return executeWithPipeline(
       request,

@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { AppShell } from "@/components/AppShell";
-import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon, ArrowDownTrayIcon, UserCircleIcon, Cog6ToothIcon, ShieldCheckIcon, ChartBarIcon, ExclamationTriangleIcon, CommandLineIcon, ClipboardDocumentIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import { TrashIcon, PencilIcon, CheckIcon, XMarkIcon, ArrowDownTrayIcon, UserCircleIcon, Cog6ToothIcon, ShieldCheckIcon, ChartBarIcon, ExclamationTriangleIcon, CommandLineIcon, ClipboardDocumentIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import { canUseFeature, type SubscriptionTier } from "@/lib/feature-gates";
 import { validateProfile } from "@/lib/settings/profile-validation";
 import { STYLE_OPTIONS } from "./constants";

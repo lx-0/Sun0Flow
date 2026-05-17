@@ -28,10 +28,16 @@ async function postJson<TResponse>(url: string, body: Record<string, unknown>): 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  let data: TResponse & ApiError;
+  try {
+    data = (await res.json()) as TResponse & ApiError;
+  } catch {
+    data = {} as TResponse & ApiError;
+  }
   return {
     ok: res.ok,
     status: res.status,
-    data: (await res.json()) as TResponse & ApiError,
+    data,
   };
 }
 

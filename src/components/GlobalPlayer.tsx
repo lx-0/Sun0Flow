@@ -44,6 +44,7 @@ import {
   DrawerHandle,
   DrawerTitle,
 } from "./ui/drawer";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "--:--";
@@ -323,17 +324,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
     }
   }, [currentSong?.id, currentSong?.lyrics]);
 
-  // Close options menu on outside click
-  useEffect(() => {
-    if (!showOptionsMenu) return;
-    function handleClick(e: MouseEvent) {
-      if (optionsMenuRef.current && !optionsMenuRef.current.contains(e.target as Node)) {
-        setShowOptionsMenu(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [showOptionsMenu]);
+  useOutsideClick(optionsMenuRef, () => setShowOptionsMenu(false), showOptionsMenu);
 
   if (!currentSong) return null;
 

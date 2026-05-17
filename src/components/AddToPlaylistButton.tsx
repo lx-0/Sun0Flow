@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { QueueListIcon } from "@heroicons/react/24/outline";
 import { PlusIcon, ChevronDownIcon } from "@heroicons/react/24/solid";
 import { useToast } from "./Toast";
 import { track } from "@/lib/analytics";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 interface PlaylistOption {
   id: string;
@@ -33,17 +34,7 @@ export function AddToPlaylistButton({
   const [adding, setAdding] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener("mousedown", handleClick);
-      return () => document.removeEventListener("mousedown", handleClick);
-    }
-  }, [open]);
+  useOutsideClick(menuRef, () => setOpen(false), open);
 
   async function handleOpen() {
     setOpen((prev) => !prev);

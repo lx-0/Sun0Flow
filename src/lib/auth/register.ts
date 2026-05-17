@@ -6,6 +6,7 @@ import { sendVerificationEmail, sendWelcomeEmail } from "@/lib/email";
 import { stripHtml } from "@/lib/sanitize";
 import { ensureFreeSubscription } from "@/lib/billing";
 import { acquireAnonRateLimitSlot } from "@/lib/rate-limit";
+import { isAdminEmail } from "@/lib/auth/admin";
 
 const REGISTER_LIMIT = 5;
 const REGISTER_WINDOW_MS = 15 * 60 * 1000;
@@ -66,14 +67,23 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
-  const verificationToken = crypto.randomUUID();
+  const shouldAutoVerify = isAdminEmail(email);
+  const verificationToken = shouldAutoVerify ? null : crypto.randomUUID();
   const sanitizedName = name ? stripHtml(name).trim() || null : null;
 
   const user = await prisma.user.create({
-    data: { name: sanitizedName, email, passwordHash, verificationToken },
+    data: {
+      name: sanitizedName,
+      email,
+      passwordHash,
+      verificationToken,
+      emailVerified: shouldAutoVerify ? new Date() : null,
+    },
   });
 
-  await sendVerificationEmail(email, verificationToken);
+  if (verificationToken) {
+    await sendVerificationEmail(email, verificationToken);
+  }
   await sendWelcomeEmail(email, sanitizedName).catch((err) =>
     logger.error({ userId: user.id, err }, "register: failed to send welcome email"),
   );

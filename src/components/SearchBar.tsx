@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { MusicalNoteIcon, QueueListIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 interface SongResult {
   id: string;
@@ -95,21 +96,7 @@ export function SearchBar() {
     return () => document.removeEventListener("sunoflow:focus-search", handleFocusSearch);
   }, []);
 
-  // Close on click outside
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener("mousedown", handleClick);
-      return () => document.removeEventListener("mousedown", handleClick);
-    }
-  }, [open]);
+  useOutsideClick(containerRef, () => setOpen(false), open);
 
   // Debounced search
   useEffect(() => {

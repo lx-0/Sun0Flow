@@ -2,19 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { MILESTONE_META } from "@/lib/streaks";
 import { publicRoute } from "@/lib/route-handler";
-import { notFound } from "@/lib/api-error";
+import { errorFromResult } from "@/lib/api-error";
+import { resolveUserIdByUsername } from "@/lib/profile";
 
 export const GET = publicRoute<{ username: string }>(async (_request, { params }) => {
-  const user = await prisma.user.findUnique({
-    where: { username: params.username },
-    select: { id: true },
-  });
-  if (!user) {
-    return notFound("Not found");
-  }
+  const userResult = await resolveUserIdByUsername(params.username);
+  if (!userResult.ok) return errorFromResult(userResult);
 
   const rows = await prisma.userMilestone.findMany({
-    where: { userId: user.id },
+    where: { userId: userResult.data.id },
     orderBy: { earnedAt: "asc" },
   });
 

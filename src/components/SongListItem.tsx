@@ -34,6 +34,7 @@ import { ShareButton } from "./ShareButton";
 import { AddToPlaylistButton } from "./AddToPlaylistButton";
 import { useRouter } from "next/navigation";
 import { HighlightText } from "./HighlightText";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -163,17 +164,7 @@ function SongRowMenu({
   const { toast } = useToast();
   const router = useRouter();
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener("mousedown", handleClick);
-      return () => document.removeEventListener("mousedown", handleClick);
-    }
-  }, [open]);
+  useOutsideClick(menuRef, () => setOpen(false), open);
 
   const itemClass =
     "w-full text-left px-4 py-3 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-b border-gray-200 dark:border-gray-800 flex items-center gap-2";

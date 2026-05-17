@@ -40,6 +40,7 @@ import { formatBytes } from "@/lib/cache/offline";
 import { SongListItem, type SongListItemProps } from "./SongListItem";
 import { LibraryToolbar } from "./LibraryToolbar";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 import { HighlightText } from "./HighlightText";
 import { songToQueueSong } from "@/lib/song-mappers";
 import { useSongsList, type SongsFilters } from "@/hooks/useSongsList";
@@ -551,18 +552,7 @@ export function LibraryView({
     [songs]
   );
 
-  // Close export menu on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-        setExportMenuOpen(false);
-      }
-    }
-    if (exportMenuOpen) {
-      document.addEventListener("mousedown", handleClick);
-      return () => document.removeEventListener("mousedown", handleClick);
-    }
-  }, [exportMenuOpen]);
+  useOutsideClick(exportMenuRef, () => setExportMenuOpen(false), exportMenuOpen);
 
   // ─── Fetch user tags for filter ───────────────────────────────────────────
   const tagsQuery = useTagsList();
@@ -1044,44 +1034,15 @@ export function LibraryView({
   const batchPlaylistMenuRef = useRef<HTMLDivElement>(null);
   const batchDownloadFormatMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close batch tag menu on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (batchTagMenuRef.current && !batchTagMenuRef.current.contains(e.target as Node)) {
-        setShowBatchTagMenu(false);
-      }
-    }
-    if (showBatchTagMenu) {
-      document.addEventListener("mousedown", handleClick);
-      return () => document.removeEventListener("mousedown", handleClick);
-    }
-  }, [showBatchTagMenu]);
+  useOutsideClick(batchTagMenuRef, () => setShowBatchTagMenu(false), showBatchTagMenu);
 
-  // Close batch playlist menu on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (batchPlaylistMenuRef.current && !batchPlaylistMenuRef.current.contains(e.target as Node)) {
-        setShowBatchPlaylistMenu(false);
-      }
-    }
-    if (showBatchPlaylistMenu) {
-      document.addEventListener("mousedown", handleClick);
-      return () => document.removeEventListener("mousedown", handleClick);
-    }
-  }, [showBatchPlaylistMenu]);
+  useOutsideClick(batchPlaylistMenuRef, () => setShowBatchPlaylistMenu(false), showBatchPlaylistMenu);
 
-  // Close batch download format menu on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (batchDownloadFormatMenuRef.current && !batchDownloadFormatMenuRef.current.contains(e.target as Node)) {
-        setShowBatchDownloadFormatMenu(false);
-      }
-    }
-    if (showBatchDownloadFormatMenu) {
-      document.addEventListener("mousedown", handleClick);
-      return () => document.removeEventListener("mousedown", handleClick);
-    }
-  }, [showBatchDownloadFormatMenu]);
+  useOutsideClick(
+    batchDownloadFormatMenuRef,
+    () => setShowBatchDownloadFormatMenu(false),
+    showBatchDownloadFormatMenu
+  );
 
   async function handleBatchTag(tagId: string) {
     setShowBatchTagMenu(false);

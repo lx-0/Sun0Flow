@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useRef, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   PlayIcon,
@@ -21,6 +21,7 @@ import { useQueue, type QueueSong } from "./QueueContext";
 import { PullToRefreshContainer } from "./PullToRefreshContainer";
 import { CoverArtImage } from "./CoverArtImage";
 import { generateCoverArtVariants } from "@/lib/cover-art-generator";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -87,17 +88,7 @@ function SongCard({ song, isPlaying, onPlayToggle, onFavoriteToggle, onDownload,
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close menu when clicking outside
-  useEffect(() => {
-    if (!menuOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [menuOpen]);
+  useOutsideClick(menuRef, () => setMenuOpen(false), menuOpen);
   const hasAudio = !!song.audioUrl;
   const generatedCoverUrl = generateCoverArtVariants({ songId: song.id, title: song.title, tags: song.tags })[0].dataUrl;
   const coverUrl = song.imageUrl || generatedCoverUrl;

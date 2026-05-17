@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authRoute, requireOwned } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
+import { ensurePendingFeedGeneration } from "@/lib/feed-generations";
 
 export const POST = authRoute<{ id: string }>(
   async (_request, { auth, params }) => {
@@ -11,12 +12,8 @@ export const POST = authRoute<{ id: string }>(
     );
     if (error) return error;
 
-    if (item.status !== "pending") {
-      return NextResponse.json(
-        { error: "Only pending items can be approved", code: "CONFLICT" },
-        { status: 409 },
-      );
-    }
+    const statusError = ensurePendingFeedGeneration(item, "approved");
+    if (statusError) return statusError;
 
     await prisma.pendingFeedGeneration.update({
       where: { id: params.id },

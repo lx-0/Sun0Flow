@@ -9,6 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useToast } from "./Toast";
 import { track } from "@/lib/analytics";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 interface ShareMenuProps {
   /** The URL to share */
@@ -53,17 +54,7 @@ export function ShareMenu({
     setHasNativeShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
   }, []);
 
-  // Close when clicking outside
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  useOutsideClick(menuRef, () => setOpen(false), open);
 
   async function handleNativeShare() {
     setOpen(false);

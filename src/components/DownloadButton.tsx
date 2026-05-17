@@ -10,11 +10,12 @@
  * The last-used format preference is persisted in localStorage.
  */
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { ArrowDownTrayIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { downloadSongFile, detectFormat } from "@/lib/download";
 import { estimateAudioBytes, formatBytes } from "@/lib/audio-metadata";
 import type { AudioFormat, Mp3Quality, WavBitDepth } from "@/lib/audio-metadata";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 export interface DownloadableSong {
   id: string;
@@ -151,17 +152,7 @@ export function DownloadButton({ song, className = "", compact = false }: Downlo
     defaultOption(formatOptions, loadPref())
   );
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  useOutsideClick(menuRef, () => setOpen(false), open);
 
   const doDownload = useCallback(
     async (opt: FormatOption) => {

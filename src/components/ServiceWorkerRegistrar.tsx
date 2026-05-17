@@ -34,13 +34,11 @@ export default function ServiceWorkerRegistrar() {
     // and shouldn't prompt.
     const hadController = !!navigator.serviceWorker.controller;
 
-    let registration: ServiceWorkerRegistration | null = null;
     let updateInterval: ReturnType<typeof setInterval> | null = null;
 
     navigator.serviceWorker
       .register(swUrl)
       .then((reg) => {
-        registration = reg;
         // Poll the server every minute for a new SW. Browsers also re-check on
         // navigation but only after 24h — explicit polling makes updates land
         // for users with long-running PWA sessions.

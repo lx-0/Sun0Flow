@@ -59,6 +59,7 @@ vi.mock("bcryptjs", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
+import { sendVerificationEmail } from "@/lib/email";
 const seg = { params: Promise.resolve({}) };
 
 function makeRequest(body: Record<string, unknown>): NextRequest {
@@ -70,6 +71,8 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  process.env.ADMIN_EMAILS = "";
   vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
   vi.mocked(prisma.user.create).mockResolvedValue({
     id: "user-1",
@@ -89,6 +92,31 @@ describe("POST /api/register", () => {
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.email).toBe("test@example.com");
+    expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto-verifies admin email registrations", async () => {
+    process.env.ADMIN_EMAILS = "admin@example.com";
+    vi.mocked(prisma.user.create).mockResolvedValue({
+      id: "admin-1",
+      email: "admin@example.com",
+      name: "Admin User",
+    } as never);
+
+    const res = await POST(makeRequest({
+      email: "admin@example.com",
+      password: "password123",
+      name: "Admin User",
+    }), seg);
+
+    expect(res.status).toBe(201);
+    expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        emailVerified: expect.any(Date),
+        verificationToken: null,
+      }),
+    }));
+    expect(sendVerificationEmail).not.toHaveBeenCalled();
   });
 
   it("returns 400 when email is missing", async () => {

@@ -5,21 +5,18 @@ import { prisma } from "@/lib/prisma";
 import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
 import { buildDiscoverableFilter } from "@/lib/songs";
 import { zPageParam } from "@/lib/query-params";
-import { notFound } from "@/lib/api-error";
+import { errorFromResult } from "@/lib/api-error";
+import { resolveUserIdByUsername } from "@/lib/profile";
 
 const pageQuery = z.object({ page: zPageParam() });
 
 export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof pageQuery>>(
   async (_request, { params, query }) => {
-    const user = await prisma.user.findUnique({
-      where: { username: params.username },
-      select: { id: true },
-    });
-
-    if (!user) return notFound("User not found");
+    const userResult = await resolveUserIdByUsername(params.username);
+    if (!userResult.ok) return errorFromResult(userResult);
 
     const where = {
-      userId: user.id,
+      userId: userResult.data.id,
       song: buildDiscoverableFilter(),
     };
 

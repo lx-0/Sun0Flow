@@ -21,6 +21,7 @@ import {
   useNotifications,
   type NotificationType,
 } from "./NotificationContext";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,22 +75,7 @@ export function NotificationBell() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
 
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (
-        panelRef.current &&
-        !panelRef.current.contains(e.target as Node) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  useOutsideClick([panelRef, buttonRef], () => setOpen(false), open);
 
   // Close on Escape
   useEffect(() => {

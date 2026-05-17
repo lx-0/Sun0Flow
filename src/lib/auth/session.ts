@@ -110,8 +110,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             select: { tier: true, status: true },
           }),
         ]);
-        token.onboardingCompleted = dbUser?.onboardingCompleted ?? false;
         token.isAdmin = (dbUser?.isAdmin ?? false) || isAdminEmail(dbUser?.email);
+        if (dbUser && token.isAdmin && !dbUser.emailVerified) {
+          const now = new Date();
+          await prisma.user.update({
+            where: { id: user.id as string },
+            data: { emailVerified: now, verificationToken: null },
+          });
+          dbUser.emailVerified = now;
+        }
+        token.onboardingCompleted = dbUser?.onboardingCompleted ?? false;
         token.emailVerified = dbUser?.emailVerified?.toISOString() ?? null;
         token.hasSunoApiKey = Boolean(dbUser?.sunoApiKey);
         token.subscriptionTier = sub?.tier ?? "free";
@@ -128,8 +136,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             select: { tier: true, status: true },
           }),
         ]);
+        const tokenAdmin = (dbUser?.isAdmin ?? false) || isAdminEmail(dbUser?.email);
+        if (dbUser && tokenAdmin && !dbUser.emailVerified) {
+          const now = new Date();
+          await prisma.user.update({
+            where: { id: token.id as string },
+            data: { emailVerified: now, verificationToken: null },
+          });
+          dbUser.emailVerified = now;
+        }
         token.onboardingCompleted = dbUser?.onboardingCompleted ?? false;
-        token.isAdmin = (dbUser?.isAdmin ?? false) || isAdminEmail(dbUser?.email);
+        token.isAdmin = tokenAdmin;
         token.emailVerified = dbUser?.emailVerified?.toISOString() ?? null;
         token.hasSunoApiKey = Boolean(dbUser?.sunoApiKey);
         token.subscriptionTier = sub?.tier ?? "free";
