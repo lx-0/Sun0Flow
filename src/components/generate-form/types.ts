@@ -12,6 +12,13 @@ export interface RateLimitStatus {
   resetAt: string;
 }
 
+export interface CreditInfo {
+  creditsRemaining: number;
+  budget: number;
+  usagePercent: number;
+  isLow: boolean;
+}
+
 export interface PromptTemplate {
   id: string;
   name: string;
@@ -48,6 +55,14 @@ export interface PromptSuggestion {
   stylePrompt: string;
   isInstrumental: boolean;
   source: "personal" | "community" | "curated";
+}
+
+export interface TrendingStyleCombo {
+  id: string;
+  combo: string;
+  label: string;
+  stylePrompt: string;
+  displayScore: string;
 }
 
 export interface RateLimitMeta {

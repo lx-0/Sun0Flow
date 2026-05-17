@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { SparklesIcon, BookmarkIcon, TrashIcon } from "@heroicons/react/24/solid";
@@ -12,23 +12,16 @@ import { track } from "@/lib/analytics";
 import { fetchWithTimeout, clientFetchErrorMessage } from "@/lib/fetch-client";
 import { getPromptValidationError, getRateLimitMeta, reorderPendingQueueIds } from "./generate-form/helpers";
 import {
-  fetchCreditsSummary,
-  fetchGenerationPresets,
-  fetchPersonasList,
-  fetchPromptSuggestions,
-  fetchPromptTemplates,
-  fetchRateLimitStatus,
-  fetchStyleTemplateList,
   deletePreset,
   deletePromptTemplate,
-  fetchTrendingStyleCombos,
   autoFillGenerationFields,
   boostStylePrompt,
   generateLyricsFromPrompt,
   savePreset,
   savePromptTemplate,
 } from "./generate-form/api";
-import type { GenerationPreset, PersonaOption, PromptSuggestion, PromptTemplate, RateLimitStatus, StyleTemplate } from "./generate-form/types";
+import type { GenerationPreset, PromptSuggestion, PromptTemplate } from "./generate-form/types";
+import { useGenerateFormData } from "./generate-form/useGenerateFormData";
 import { GenerationProgress } from "./GenerationProgress";
 import { GenerationQueue } from "./GenerationQueue";
 import { BatchGeneratePanel } from "./BatchGeneratePanel";
@@ -62,14 +55,11 @@ export function GenerateForm() {
   const [lyrics, setLyrics] = useState(searchParams.get("prompt") ?? "");
   const [instrumental, setInstrumental] = useState(searchParams.get("instrumental") === "1");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [rateLimit, setRateLimit] = useState<RateLimitStatus | null>(null);
   const [promptError, setPromptError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Template state
-  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -78,37 +68,31 @@ export function GenerateForm() {
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
   // Preset state
-  const [presets, setPresets] = useState<GenerationPreset[]>([]);
   const [showPresetPicker, setShowPresetPicker] = useState(false);
   const [showPresetSaveDialog, setShowPresetSaveDialog] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [isSavingPreset, setIsSavingPreset] = useState(false);
-
-  // Suggestions state
-  const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
-
-  // Trending combos state
-  const [trendingCombos, setTrendingCombos] = useState<
-    Array<{ id: string; combo: string; label: string; stylePrompt: string; displayScore: string }>
-  >([]);
-
-  // Persona state
-  const [personas, setPersonas] = useState<PersonaOption[]>([]);
   const [selectedPersonaId, setSelectedPersonaId] = useState("");
 
   // Style boost state
   const [isBoosting, setIsBoosting] = useState(false);
 
-  // Style template state
-  const [styleTemplates, setStyleTemplates] = useState<StyleTemplate[]>([]);
-
-  // Credit usage state
-  const [creditInfo, setCreditInfo] = useState<{
-    creditsRemaining: number;
-    budget: number;
-    usagePercent: number;
-    isLow: boolean;
-  } | null>(null);
+  const {
+    rateLimit,
+    setRateLimit,
+    templates,
+    setTemplates,
+    categories,
+    presets,
+    setPresets,
+    suggestions,
+    trendingCombos,
+    personas,
+    styleTemplates,
+    creditInfo,
+    fetchCredits,
+    fetchTemplates,
+  } = useGenerateFormData({ toast });
 
   // Lyrics generator state
   const initialLyricsPrompt = searchParams.get("lyricsprompt") ?? "";
@@ -172,103 +156,6 @@ export function GenerateForm() {
       }
     }
   }, [trackedSongs, onGenerationComplete, trackSong]);
-
-  // Track whether we've already shown the 80% toast this session
-  const shownLimitToast = useRef(false);
-
-  const fetchRateLimit = useCallback(async () => {
-    try {
-      const status = await fetchRateLimitStatus();
-      if (status) {
-        setRateLimit(status);
-        const used = status.limit - status.remaining;
-        const pct = status.limit > 0 ? used / status.limit : 0;
-        if (pct >= 0.8 && status.remaining > 0 && !shownLimitToast.current) {
-          shownLimitToast.current = true;
-          toast(`${status.remaining} generation${status.remaining === 1 ? "" : "s"} remaining this hour`, "info");
-        }
-      }
-    } catch {
-      // Silently fail — quota display is non-critical
-    }
-  }, [toast]);
-
-  const fetchCredits = useCallback(async () => {
-    try {
-      const credits = await fetchCreditsSummary();
-      if (credits) setCreditInfo(credits);
-    } catch {
-      // Non-critical
-    }
-  }, []);
-
-  const fetchPersonas = useCallback(async () => {
-    try {
-      const data = await fetchPersonasList();
-      if (data) setPersonas(data);
-    } catch {
-      // Non-critical
-    }
-  }, []);
-
-  const fetchTemplates = useCallback(async () => {
-    try {
-      const data = await fetchPromptTemplates();
-      if (data) {
-        setTemplates(data.templates);
-        setCategories(data.categories);
-      }
-    } catch {
-      // Non-critical
-    }
-  }, []);
-
-  const fetchPresets = useCallback(async () => {
-    try {
-      const data = await fetchGenerationPresets();
-      if (data) setPresets(data);
-    } catch {
-      // Non-critical
-    }
-  }, []);
-
-  const fetchStyleTemplates = useCallback(async () => {
-    try {
-      const data = await fetchStyleTemplateList();
-      if (data) setStyleTemplates(data);
-    } catch {
-      // Non-critical
-    }
-  }, []);
-
-  const fetchSuggestions = useCallback(async () => {
-    try {
-      const data = await fetchPromptSuggestions();
-      if (data) setSuggestions(data);
-    } catch {
-      // Non-critical
-    }
-  }, []);
-
-  const fetchTrendingCombos = useCallback(async () => {
-    try {
-      const data = await fetchTrendingStyleCombos();
-      if (data) setTrendingCombos(data);
-    } catch {
-      // Non-critical
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchRateLimit();
-    fetchTemplates();
-    fetchPersonas();
-    fetchCredits();
-    fetchPresets();
-    fetchStyleTemplates();
-    fetchSuggestions();
-    fetchTrendingCombos();
-  }, [fetchRateLimit, fetchTemplates, fetchPersonas, fetchCredits, fetchPresets, fetchStyleTemplates, fetchSuggestions, fetchTrendingCombos]);
 
   async function handleBoostStyle() {
     if (isBoosting || !stylePrompt.trim()) return;

@@ -1,18 +1,13 @@
 import type {
+  CreditInfo,
   GenerationPreset,
   PersonaOption,
   PromptSuggestion,
   PromptTemplate,
   RateLimitStatus,
   StyleTemplate,
+  TrendingStyleCombo,
 } from "./types";
-
-type CreditInfo = {
-  creditsRemaining: number;
-  budget: number;
-  usagePercent: number;
-  isLow: boolean;
-};
 
 type ApiError = {
   error?: string;
@@ -101,12 +96,12 @@ export async function fetchPromptSuggestions(): Promise<PromptSuggestion[] | nul
 }
 
 export async function fetchTrendingStyleCombos(): Promise<
-  Array<{ id: string; combo: string; label: string; stylePrompt: string; displayScore: string }> | null
+  TrendingStyleCombo[] | null
 > {
   const res = await fetch("/api/suggestions/trending");
   if (!res.ok) return null;
   const data = await res.json();
-  return (data.trending ?? []) as Array<{ id: string; combo: string; label: string; stylePrompt: string; displayScore: string }>;
+  return (data.trending ?? []) as TrendingStyleCombo[];
 }
 
 export async function deletePromptTemplate(templateId: string): Promise<{ ok: boolean; error?: string }> {
