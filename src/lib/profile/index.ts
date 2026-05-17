@@ -3,4 +3,4 @@ export type { PreferencesUpdateInput } from "./preferences";
 
 export { getProfile, updateProfile, deleteAccount } from "./profile";
 export { getPreferences, updatePreferences, VALID_STYLES } from "./preferences";
-export { resolveUserIdByUsername } from "./public-user";
+export { resolveUserIdByUsername, getPublicUserProfileByUsername } from "./public-user";
