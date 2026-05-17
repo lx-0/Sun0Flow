@@ -4,12 +4,12 @@ import { buildRadioRequestUrl, removeFutureSongFromQueue } from "@/components/qu
 import type { QueueSong, RadioParams } from "@/components/queue/queue-context-types";
 
 function song(id: string): QueueSong {
-  return { id, title: id, audioUrl: `https://example.com/${id}.mp3` };
+  return { id, title: id, audioUrl: `https://example.com/${id}.mp3`, imageUrl: null, duration: null };
 }
 
 describe("buildRadioRequestUrl", () => {
   it("includes only provided filters and limit", () => {
-    const params: RadioParams = { mood: "chill", tempoMin: 90, seedSongId: "seed-1" };
+    const params: RadioParams = { mood: "chill", genre: null, tempoMin: 90, seedSongId: "seed-1" };
     const url = buildRadioRequestUrl("https://app.test", params, ["a", "b"], 10);
     const parsed = new URL(url);
 

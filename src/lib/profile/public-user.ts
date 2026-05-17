@@ -119,7 +119,17 @@ export async function getPublicUserProfileByUsername(
     followingCount: user._count.following,
     publicSongsCount: user._count.songs,
     totalPlays: playStats._sum.playCount ?? 0,
-    featuredSong,
+    featuredSong: featuredSong
+      ? {
+          id: featuredSong.id,
+          title: featuredSong.title ?? "Untitled",
+          imageUrl: featuredSong.imageUrl,
+          audioUrl: featuredSong.audioUrl ?? "",
+          duration: featuredSong.duration,
+          tags: featuredSong.tags ? featuredSong.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+          publicSlug: featuredSong.publicSlug,
+        }
+      : null,
     isFollowing: !!follow,
   });
 }

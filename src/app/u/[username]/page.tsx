@@ -157,7 +157,7 @@ export default async function PublicProfilePage({
     followingCount: user._count.following,
     publicSongsCount: user._count.songs,
     totalPlays: playStats._sum.playCount ?? 0,
-    featuredSong,
+    featuredSong: featuredSong ? normalizeFeaturedSong(featuredSong) : null,
     isFollowing: false, // server render — actual value loaded client-side via API
   };
 
@@ -170,4 +170,23 @@ export default async function PublicProfilePage({
       <PublicProfileView profile={profile} />
     </>
   );
+}
+function normalizeFeaturedSong(song: {
+  id: string;
+  title: string | null;
+  imageUrl: string | null;
+  audioUrl: string | null;
+  duration: number | null;
+  tags: string | null;
+  publicSlug: string | null;
+}) {
+  return {
+    id: song.id,
+    title: song.title ?? "Untitled",
+    imageUrl: song.imageUrl,
+    audioUrl: song.audioUrl,
+    duration: song.duration,
+    tags: song.tags,
+    publicSlug: song.publicSlug,
+  };
 }
