@@ -85,9 +85,16 @@ export const POST = authRoute<Record<string, never>, z.infer<typeof uploadBodySc
       guards: "free",
       description: `Upload ${mode}: ${title?.trim() || "Untitled"}`,
       apiCall: async () => {
-        const uploadResult = base64Data
-          ? await uploadFileBase64(base64Data, userApiKey)
-          : await uploadFileFromUrl(fileUrl, userApiKey);
+        // Narrow via if/else so TS sees fileUrl is defined in the else branch
+        // (the early-return at line 40-44 already validates one of them is set).
+        let uploadResult;
+        if (base64Data) {
+          uploadResult = await uploadFileBase64(base64Data, userApiKey);
+        } else if (fileUrl) {
+          uploadResult = await uploadFileFromUrl(fileUrl, userApiKey);
+        } else {
+          throw new Error("unreachable: base64Data or fileUrl validated above");
+        }
 
         const uploadUrl = uploadResult.fileUrl;
 
