@@ -457,7 +457,12 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
           </button>
 
           {/* Song info — tap to expand on mobile */}
-          <div className="flex-1 min-w-0" onClick={() => setIsDrawerOpen(true)} role="button" tabIndex={0} aria-label="Expand player" onKeyDown={(e) => { if (e.key === "Enter") setIsDrawerOpen(true); }}>
+          <button
+            type="button"
+            className="flex-1 min-w-0 text-left"
+            onClick={() => setIsDrawerOpen(true)}
+            aria-label="Expand player"
+          >
             <div className="flex items-center gap-1.5">
               <span
                 className="text-sm font-medium text-white truncate hover:text-violet-400 transition-colors cursor-pointer"
@@ -490,7 +495,7 @@ export function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed?: boolean 
                 </span>
               )}
             </div>
-          </div>
+          </button>
 
           {/* Emoji reaction toggle — only when playing and authenticated */}
           {isPlaying && !!session?.user && (

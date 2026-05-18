@@ -12,6 +12,7 @@ import Image from "next/image";
 import { useToast } from "./Toast";
 import { useGenerationPoller } from "@/hooks/useGenerationPoller";
 import { GenerationProgress } from "./GenerationProgress";
+import { useDialogFocusTrap } from "@/hooks/useDialogFocusTrap";
 
 type TrackSourceType = "library" | "upload" | "url";
 
@@ -94,6 +95,8 @@ function SongPickerModal({
   const [songs, setSongs] = useState<LibrarySong[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocusTrap(dialogRef, open, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -124,14 +127,22 @@ function SongPickerModal({
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-lg max-h-[70vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="song-picker-title"
+        tabIndex={-1}
+        className="relative w-full max-w-lg max-h-[70vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl flex flex-col"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+          <h3 id="song-picker-title" className="text-sm font-semibold text-gray-900 dark:text-white">
             Pick a song from your library
           </h3>
           <button
             onClick={onClose}
+            aria-label="Close song picker"
             className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             <XMarkIcon className="h-5 w-5 text-gray-500" />
@@ -144,6 +155,7 @@ function SongPickerModal({
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
+              aria-label="Search songs to pick"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search songs..."
@@ -419,9 +431,12 @@ function TrackSelector({
               onClick={() => fileInputRef.current?.click()}
               role="button"
               tabIndex={0}
+              aria-label="Upload audio file"
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ")
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
                   fileInputRef.current?.click();
+                }
               }}
               className={`flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
                 isDragging
