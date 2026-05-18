@@ -2,9 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { publicRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
-import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
 import { buildDiscoverableFilter } from "@/lib/songs";
-import { pageQuery, resolveRouteUsernameOrResponse } from "../route-shared";
+import {
+  pageQuery,
+  pagedResponse,
+  pageSlice,
+  publicProfileSongSelect,
+  resolveRouteUsernameOrResponse,
+} from "../route-shared";
 
 export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof pageQuery>>(
   async (_request, { params, query }) => {
@@ -17,26 +22,15 @@ export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof p
       prisma.song.findMany({
         where,
         orderBy: { createdAt: "desc" },
-        skip: pageSkip(query.page, DEFAULT_PAGE_SIZE),
-        take: DEFAULT_PAGE_SIZE,
-        select: {
-          id: true,
-          title: true,
-          imageUrl: true,
-          audioUrl: true,
-          duration: true,
-          tags: true,
-          publicSlug: true,
-          playCount: true,
-          createdAt: true,
-        },
+        ...pageSlice(query.page),
+        select: publicProfileSongSelect,
       }),
       prisma.song.count({ where }),
     ]);
 
     return NextResponse.json({
       songs,
-      pagination: offsetPagination(query.page, DEFAULT_PAGE_SIZE, total),
+      pagination: pagedResponse(query.page, total),
     });
   },
   { query: pageQuery, route: "/api/u/[username]/songs" }

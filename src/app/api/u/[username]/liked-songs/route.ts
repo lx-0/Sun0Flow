@@ -2,9 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { publicRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
-import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
 import { buildDiscoverableFilter } from "@/lib/songs";
-import { pageQuery, resolveRouteUsernameOrResponse } from "../route-shared";
+import {
+  pageQuery,
+  pagedResponse,
+  pageSlice,
+  publicProfileSongSelect,
+  resolveRouteUsernameOrResponse,
+} from "../route-shared";
 
 export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof pageQuery>>(
   async (_request, { params, query }) => {
@@ -20,21 +25,10 @@ export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof p
       prisma.favorite.findMany({
         where,
         orderBy: { createdAt: "desc" },
-        skip: pageSkip(query.page, DEFAULT_PAGE_SIZE),
-        take: DEFAULT_PAGE_SIZE,
+        ...pageSlice(query.page),
         select: {
           song: {
-            select: {
-              id: true,
-              title: true,
-              imageUrl: true,
-              audioUrl: true,
-              duration: true,
-              tags: true,
-              publicSlug: true,
-              playCount: true,
-              createdAt: true,
-            },
+            select: publicProfileSongSelect,
           },
         },
       }),
@@ -43,7 +37,7 @@ export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof p
 
     return NextResponse.json({
       songs: favorites.map((f) => f.song),
-      pagination: offsetPagination(query.page, DEFAULT_PAGE_SIZE, total),
+      pagination: pagedResponse(query.page, total),
     });
   },
   { query: pageQuery, route: "/api/u/[username]/liked-songs" }

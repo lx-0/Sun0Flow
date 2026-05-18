@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { publicRoute } from "@/lib/route-handler";
 import { prisma } from "@/lib/prisma";
-import { DEFAULT_PAGE_SIZE, offsetPagination, pageSkip } from "@/lib/pagination";
-import { pageQuery, resolveRouteUsernameOrResponse } from "../route-shared";
+import { pageQuery, pagedResponse, pageSlice, resolveRouteUsernameOrResponse } from "../route-shared";
 
 export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof pageQuery>>(
   async (_request, { params, query }) => {
@@ -14,8 +13,7 @@ export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof p
       prisma.playlist.findMany({
         where: { userId: user.userId, isPublic: true },
         orderBy: { updatedAt: "desc" },
-        skip: pageSkip(query.page, DEFAULT_PAGE_SIZE),
-        take: DEFAULT_PAGE_SIZE,
+        ...pageSlice(query.page),
         select: {
           id: true,
           name: true,
@@ -49,7 +47,7 @@ export const GET = publicRoute<{ username: string }, undefined, z.infer<typeof p
         coverImage: pl.songs[0]?.song.imageUrl ?? null,
         createdAt: pl.createdAt,
       })),
-      pagination: offsetPagination(query.page, DEFAULT_PAGE_SIZE, total),
+      pagination: pagedResponse(query.page, total),
     });
   },
   { query: pageQuery, route: "/api/u/[username]/playlists" }
