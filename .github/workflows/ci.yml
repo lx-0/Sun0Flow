@@ -108,11 +108,6 @@ jobs:
           path: bundle-size-report.json
           retention-days: 30
 
-      - name: Rebuild without standalone for E2E
-        run: pnpm build
-        env:
-          E2E_BUILD: "true"
-
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
