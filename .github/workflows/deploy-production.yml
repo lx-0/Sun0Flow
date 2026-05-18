@@ -48,6 +48,12 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: CI build gate for deploy SHA
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash scripts/check-ci-build-gate.sh "${{ inputs.sha || github.sha }}"
+
       - name: Migration safety check
         env:
           SUNOFLOW_DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"

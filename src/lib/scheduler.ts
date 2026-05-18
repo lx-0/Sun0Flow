@@ -81,8 +81,35 @@ export function registerJob(
   handler: () => Promise<unknown> | void
 ): void {
   const state = getState();
-  if (state.jobs.has(name)) return;
-  state.jobs.set(name, { name, expression: cronExpression, handler, running: false });
+  const existing = state.jobs.get(name);
+  if (existing) {
+    if (existing.expression !== cronExpression || existing.handler !== handler) {
+      logger.warn(
+        { job: name },
+        "scheduler: duplicate registration with different config ignored"
+      );
+    }
+    return;
+  }
+
+  const entry: JobEntry = {
+    name,
+    expression: cronExpression,
+    handler,
+    running: false,
+  };
+  state.jobs.set(name, entry);
+
+  // Support late registration in long-lived processes without requiring a restart.
+  if (state.started) {
+    entry.task = schedule(
+      entry.expression,
+      async () => {
+        await runJob(entry);
+      },
+      { timezone: "UTC" }
+    );
+  }
 }
 
 /** Start all registered jobs. Idempotent. */

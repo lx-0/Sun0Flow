@@ -30,6 +30,15 @@ vi.mock("node-cron", () => {
 
 import { registerJob, startScheduler, stopScheduler, getSchedulerStatus } from "@/lib/scheduler";
 import { schedule } from "node-cron";
+import { logger } from "@/lib/logger";
+
+vi.mock("@/lib/logger", () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
 describe("registerJob", () => {
   it("adds a job to the registry", async () => {
@@ -51,6 +60,20 @@ describe("registerJob", () => {
 
     expect(getSchedulerStatus()).toHaveLength(1);
   });
+
+  it("warns on duplicate registration with conflicting config", () => {
+    const handlerA = vi.fn();
+    const handlerB = vi.fn();
+    registerJob("dup-job", "0 * * * *", handlerA);
+    registerJob("dup-job", "5 * * * *", handlerB);
+
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      { job: "dup-job" },
+      "scheduler: duplicate registration with different config ignored"
+    );
+    const [status] = getSchedulerStatus();
+    expect(status.schedule).toBe("0 * * * *");
+  });
 });
 
 describe("startScheduler", () => {
@@ -69,6 +92,15 @@ describe("startScheduler", () => {
     await startScheduler();
 
     expect(schedule).toHaveBeenCalledTimes(1);
+  });
+
+  it("schedules late-registered jobs immediately after start", async () => {
+    registerJob("job-a", "0 1 * * *", vi.fn());
+    await startScheduler();
+    registerJob("job-b", "0 2 * * *", vi.fn());
+
+    expect(schedule).toHaveBeenCalledTimes(2);
+    expect(getSchedulerStatus().map((job) => job.name)).toEqual(["job-a", "job-b"]);
   });
 });
 

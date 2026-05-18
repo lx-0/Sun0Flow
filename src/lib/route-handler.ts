@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  runRoutePipeline,
-} from "@/lib/route-pipeline";
-import {
   adminPreflight,
   anonPreflight,
   authPreflight,
