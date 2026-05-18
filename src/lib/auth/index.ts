@@ -3,6 +3,7 @@ export { registerUser } from "./register";
 export type { RegisterInput, RegisterResult } from "./register";
 
 import { randomBytes, createHash, timingSafeEqual } from "crypto";
+import type { Session } from "next-auth";
 import { auth } from "./session";
 import { isAdminEmail } from "./admin";
 import { prisma } from "@/lib/prisma";
@@ -50,7 +51,7 @@ export type AuthResult =
   | { userId: null; isApiKey: false; isAdmin: false; error: NextResponse<ApiErrorBody> };
 
 export type AdminAuthResult =
-  | { error: null; session: NonNullable<Awaited<ReturnType<typeof auth>>>; user: { id: string; isAdmin: true } }
+  | { error: null; session: Session & { user: NonNullable<Session["user"]> & { id: string } }; user: { id: string; isAdmin: true } }
   | { error: NextResponse<ApiErrorBody>; session: null; user: null };
 
 async function resolveApiKeyUser(request: Request): Promise<string | null> {
@@ -106,6 +107,7 @@ export async function requireAdmin(): Promise<AdminAuthResult> {
   if (!session?.user?.id) {
     return { error: unauthorized(), session: null, user: null };
   }
+  const adminSession = session as Session & { user: NonNullable<Session["user"]> & { id: string } };
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -117,7 +119,7 @@ export async function requireAdmin(): Promise<AdminAuthResult> {
     return { error: forbidden(), session: null, user: null };
   }
 
-  return { error: null, session, user: { id: user.id, isAdmin: true } };
+  return { error: null, session: adminSession, user: { id: user.id, isAdmin: true } };
 }
 
 export async function logAdminAction(adminId: string, action: string, targetId?: string, details?: string) {

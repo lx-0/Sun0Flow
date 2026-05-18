@@ -59,7 +59,7 @@ describe("PATCH /api/songs/[id]/cover-art", () => {
       userId: null,
       isApiKey: false,
       isAdmin: false,
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
     const res = await PATCH(makeRequest({ imageUrl: "https://example.com/img.png" }), { params: Promise.resolve({ id: SONG_ID }) });
     expect(res.status).toBe(401);

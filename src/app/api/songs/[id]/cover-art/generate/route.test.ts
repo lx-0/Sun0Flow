@@ -51,7 +51,7 @@ describe("POST /api/songs/[id]/cover-art/generate", () => {
       userId: null,
       isApiKey: false,
       isAdmin: false,
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
     const res = await POST(makeRequest(), { params: Promise.resolve({ id: SONG_ID }) });
     expect(res.status).toBe(401);

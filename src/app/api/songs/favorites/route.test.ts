@@ -69,7 +69,7 @@ describe("GET /api/songs/favorites", () => {
       userId: null,
       isApiKey: false,
       isAdmin: false,
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
     const res = await GET(makeRequest(), seg);
     expect(res.status).toBe(401);

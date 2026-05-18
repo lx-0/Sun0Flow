@@ -54,7 +54,7 @@ describe("GET /api/songs/[id]/favorite", () => {
       userId: null,
       isApiKey: false,
       isAdmin: false,
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
     const res = await GET(makeRequest("GET"), seg);
     expect(res.status).toBe(401);
@@ -74,7 +74,7 @@ describe("POST /api/songs/[id]/favorite", () => {
       userId: null,
       isApiKey: false,
       isAdmin: false,
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
     const res = await POST(makeRequest("POST"), seg);
     expect(res.status).toBe(401);
@@ -94,7 +94,7 @@ describe("DELETE /api/songs/[id]/favorite", () => {
       userId: null,
       isApiKey: false,
       isAdmin: false,
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
     const res = await DELETE(makeRequest("DELETE"), seg);
     expect(res.status).toBe(401);

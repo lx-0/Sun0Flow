@@ -26,7 +26,7 @@ beforeEach(() => {
 
 describe("authRoute", () => {
   it("returns auth error when resolveUser fails", async () => {
-    const errorResponse = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const errorResponse = NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
     vi.mocked(resolveUser).mockResolvedValue({
       userId: null,
       isApiKey: false,
@@ -152,7 +152,7 @@ describe("optionalAuthRoute", () => {
   });
 
   it("passes null userId when not authenticated instead of returning error", async () => {
-    const errorResponse = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const errorResponse = NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 });
     vi.mocked(resolveUser).mockResolvedValue({
       userId: null,
       isApiKey: false,
@@ -176,7 +176,7 @@ describe("optionalAuthRoute", () => {
       userId: null,
       isApiKey: false,
       isAdmin: false,
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
 
     const handler = optionalAuthRoute(async () => {
@@ -243,7 +243,7 @@ describe("publicRoute", () => {
 
 describe("adminRoute", () => {
   it("returns error when requireAdmin fails", async () => {
-    const errorResponse = NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const errorResponse = NextResponse.json({ error: "Forbidden", code: "FORBIDDEN" }, { status: 403 });
     vi.mocked(requireAdmin).mockResolvedValue({
       error: errorResponse,
       session: null,

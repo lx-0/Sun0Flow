@@ -72,7 +72,7 @@ describe("POST /api/appeals", () => {
       userId: null,
       isApiKey: false,
       isAdmin: false,
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      error: NextResponse.json({ error: "Unauthorized", code: "UNAUTHORIZED" }, { status: 401 }),
     });
 
     const res = await POST(makeRequest({ songId: "song-1", reason: "Please review this moderation decision." }), {
