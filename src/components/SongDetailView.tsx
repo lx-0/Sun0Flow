@@ -180,6 +180,7 @@ export function SongDetailView({
   const [appealReason, setAppealReason] = useState("");
   const [appealSubmitting, setAppealSubmitting] = useState(false);
   const [appealStatus, setAppealStatus] = useState<"none" | "pending" | "approved" | "rejected">("none");
+  const appealDialogRef = useRef<HTMLDivElement>(null);
 
   const handleSubmitAppeal = async () => {
     if (appealReason.trim().length < 10) return;
@@ -273,6 +274,19 @@ export function SongDetailView({
       .catch(() => {});
     return () => { cancelled = true; };
   }, [song.id]);
+
+  useEffect(() => {
+    if (!appealOpen) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAppealOpen(false);
+    };
+    document.addEventListener("keydown", handleEscape);
+    const firstFocusable = appealDialogRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    firstFocusable?.focus();
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [appealOpen]);
 
   async function handleThumbsFeedback(value: "thumbs_up" | "thumbs_down") {
     if (savingThumbs) return;
@@ -747,10 +761,14 @@ export function SongDetailView({
       {appealOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4" onClick={() => setAppealOpen(false)}>
           <div
+            ref={appealDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="appeal-modal-title"
             className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Appeal removal</h2>
+            <h2 id="appeal-modal-title" className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Appeal removal</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               Explain why you believe this song should be restored. Be specific — our team will review your appeal.
             </p>

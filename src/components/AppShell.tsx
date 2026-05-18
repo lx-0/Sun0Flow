@@ -289,6 +289,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 href={href}
                 prefetch={prefetch}
                 aria-current={active ? "page" : undefined}
+                aria-label={label}
                 title={sidebarCollapsed ? label : undefined}
                 {...(dataTour ? { "data-tour": dataTour } : {})}
                 className={`flex items-center rounded-lg text-sm font-medium transition-colors min-h-[44px] ${sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} ${
@@ -312,7 +313,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               const tier = ((session.user as unknown as Record<string, unknown>).subscriptionTier as SubscriptionTier) ?? "free";
               if (tier === "free") return null;
               return (
-                <Link href="/settings/billing" className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                <Link
+                  href="/settings/billing"
+                  aria-label="billing plan"
+                  className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
                   <span className="text-xs text-gray-500 dark:text-gray-400">Plan</span>
                   <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${TIER_BADGE_COLORS[tier]}`}>
                     {TIER_LABELS[tier]}
@@ -324,6 +329,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 href="/admin"
                 aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+                aria-label={t("admin")}
                 title={sidebarCollapsed ? "Admin" : undefined}
                 className={`flex items-center rounded-lg text-sm font-medium transition-colors min-h-[44px] ${sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} ${
                   pathname.startsWith("/admin")
@@ -338,6 +344,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               href="/profile"
               aria-current={pathname === "/profile" ? "page" : undefined}
+              aria-label={tCommon("profile")}
               title={sidebarCollapsed ? tCommon("profile") : undefined}
               className={`flex items-center rounded-lg text-sm font-medium transition-colors min-h-[44px] ${sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} ${
                 pathname === "/profile"
@@ -351,6 +358,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               href="/settings"
               aria-current={pathname === "/settings" ? "page" : undefined}
+              aria-label={t("settings")}
               title={sidebarCollapsed ? t("settings") : undefined}
               className={`flex items-center rounded-lg text-sm font-medium transition-colors min-h-[44px] ${sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} ${
                 pathname === "/settings"
@@ -454,6 +462,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               if (tier === "free") return null;
               return (
                 <Link
+                  aria-label="billing plan"
                   href="/settings/billing"
                   onClick={() => setSidebarOpen(false)}
                   className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -465,11 +474,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })()}
-            <Link
-              href="/profile"
-              onClick={() => setSidebarOpen(false)}
-              aria-current={pathname === "/profile" ? "page" : undefined}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+              <Link
+                href="/profile"
+                onClick={() => setSidebarOpen(false)}
+                aria-current={pathname === "/profile" ? "page" : undefined}
+                aria-label={tCommon("profile")}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
                 pathname === "/profile"
                   ? "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
                   : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
@@ -482,6 +492,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               href="/settings"
               onClick={() => setSidebarOpen(false)}
               aria-current={pathname === "/settings" ? "page" : undefined}
+              aria-label={t("settings")}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
                 pathname === "/settings"
                   ? "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"

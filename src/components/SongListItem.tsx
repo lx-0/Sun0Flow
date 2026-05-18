@@ -494,12 +494,19 @@ export const SongListItem = memo(function SongListItem({
     <div
       role="option"
       tabIndex={0}
-      aria-selected={isActive}
       aria-label={songAriaLabel}
+      onKeyDown={(e) => {
+        if (!hasAudio) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onTogglePlay(song);
+        }
+      }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
+      aria-selected={isActive}
       className={`group bg-white dark:bg-gray-900 border rounded-xl transition-colors ${
         isSelected
           ? "border-violet-500 bg-violet-50 dark:bg-violet-950/30"
