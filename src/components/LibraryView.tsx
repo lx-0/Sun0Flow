@@ -46,7 +46,6 @@ import {
 } from "@/lib/songs/library-client";
 import { SongGridCard } from "./library/song-grid-card";
 import { SwipableSongRow } from "./library/swipable-song-row";
-import type { SongListItemProps } from "./SongListItem";
 import { useDialogFocusTrap } from "@/hooks/useDialogFocusTrap";
 
 // ─── Playlist option type (used for batch operations) ─────────────────────────
