@@ -42,7 +42,7 @@ export interface JobStatus {
 interface JobEntry {
   name: string;
   expression: string;
-  handler: () => Promise<void> | void;
+  handler: () => Promise<unknown> | void;
   task?: ScheduledTask;
   lastRun?: JobRunRecord;
   running: boolean;
@@ -78,7 +78,7 @@ function getState() {
 export function registerJob(
   name: string,
   cronExpression: string,
-  handler: () => Promise<void> | void
+  handler: () => Promise<unknown> | void
 ): void {
   const state = getState();
   if (state.jobs.has(name)) return;
