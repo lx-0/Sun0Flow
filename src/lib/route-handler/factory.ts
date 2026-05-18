@@ -5,17 +5,7 @@ import {
   type RoutePipelineOptions,
   type SegmentData,
 } from "@/lib/route-pipeline";
-import type { PipelineCtx } from "@/lib/route-handler/types";
-
-export type PreflightResult<TContext> =
-  | { ok: true; context: TContext }
-  | { ok: false; error: Response };
-
-export type ParsedRouteContext<P extends Record<string, string>, B, Q> = {
-  params: P;
-  body: B;
-  query: Q;
-};
+import type { PipelineCtx, PreflightResult } from "@/lib/route-handler/types";
 
 export type RouteContextWithKey<
   K extends "auth" | "admin" | "anon",
@@ -23,7 +13,7 @@ export type RouteContextWithKey<
   P extends Record<string, string>,
   B,
   Q,
-> = Record<K, TContext> & ParsedRouteContext<P, B, Q>;
+> = Record<K, TContext> & PipelineCtx<P, B, Q>;
 
 export type RouteDescriptor<
   P extends Record<string, string>,
@@ -43,12 +33,8 @@ export type RouteDescriptor<
 
 export function withParsedContext<P extends Record<string, string>, B, Q>(
   parsed: PipelineCtx<P, B, Q>,
-): ParsedRouteContext<P, B, Q> {
-  return {
-    params: parsed.params,
-    body: parsed.body,
-    query: parsed.query,
-  };
+): PipelineCtx<P, B, Q> {
+  return parsed;
 }
 
 export function withKeyedParsedContext<
@@ -61,11 +47,11 @@ export function withKeyedParsedContext<
   key: K,
   authContext: TAuthContext,
   parsed: PipelineCtx<P, B, Q>,
-): Record<K, TAuthContext> & ParsedRouteContext<P, B, Q> {
+): Record<K, TAuthContext> & PipelineCtx<P, B, Q> {
   return {
     [key]: authContext,
     ...withParsedContext(parsed),
-  } as Record<K, TAuthContext> & ParsedRouteContext<P, B, Q>;
+  } as Record<K, TAuthContext> & PipelineCtx<P, B, Q>;
 }
 
 export function createPreflightRoute<

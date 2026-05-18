@@ -16,9 +16,9 @@ import {
   createPreflightRoute,
   withParsedContext,
   withKeyedParsedContext,
-  type ParsedRouteContext,
   type RouteContextWithKey,
 } from "@/lib/route-handler/factory";
+import type { PipelineCtx } from "@/lib/route-handler/types";
 import type {
   AdminContext,
   AnonContext,
@@ -118,7 +118,7 @@ export function publicRoute<
   ) => Promise<Response>,
   options?: RoutePipelineOptions<B, Q>,
 ) {
-  return createPreflightRoute<P, B, Q, null, ParsedRouteContext<P, B, Q>>(
+  return createPreflightRoute<P, B, Q, null, PipelineCtx<P, B, Q>>(
     {
       preflight: async () => ({ ok: true, context: null }),
       toHandlerContext: (_unused, parsed) => withParsedContext(parsed),
