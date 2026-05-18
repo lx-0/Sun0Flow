@@ -77,6 +77,11 @@ jobs:
 
       - name: Build
         run: pnpm build
+        env:
+          # Build without standalone output so `next start` works for E2E.
+          # next.config.mjs sets output: undefined when PLAYWRIGHT_TEST=true.
+          # The Lighthouse job builds its own standalone artifact separately.
+          PLAYWRIGHT_TEST: "true"
 
       - name: Restore bundle size baseline
         id: restore-bundle-baseline
