@@ -277,8 +277,12 @@ export function AudioUploadForm() {
                   onClick={() => fileInputRef.current?.click()}
                   role="button"
                   tabIndex={0}
+                  aria-label="Upload audio file"
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      fileInputRef.current?.click();
+                    }
                   }}
                   className={`flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
                     isDragging
@@ -333,6 +337,7 @@ export function AudioUploadForm() {
                       type="button"
                       onClick={clearFile}
                       className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                      aria-label="Remove selected file"
                     >
                       <XMarkIcon className="h-4 w-4 text-gray-500" />
                     </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -47,10 +47,9 @@ import {
 import { SongGridCard } from "./library/song-grid-card";
 import { SwipableSongRow } from "./library/swipable-song-row";
 import type { SongListItemProps } from "./SongListItem";
+import { useDialogFocusTrap } from "@/hooks/useDialogFocusTrap";
 
-// Re-export SongListItemProps as SongRowProps for SwipableSongRow compatibility
 type SongRowProps = SongListItemProps;
-
 
 // ─── Playlist option type (used for batch operations) ─────────────────────────
 
@@ -178,6 +177,10 @@ export function LibraryView({
   // Per-song menu action state
   const [pendingMenuDelete, setPendingMenuDelete] = useState<{ song: Song } | null>(null);
   const [menuDeleteLoading, setMenuDeleteLoading] = useState(false);
+  const batchDeleteDialogRef = useRef<HTMLDivElement>(null);
+  const pendingDeleteDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocusTrap(batchDeleteDialogRef, showDeleteConfirm, () => setShowDeleteConfirm(false));
+  useDialogFocusTrap(pendingDeleteDialogRef, Boolean(pendingMenuDelete), () => setPendingMenuDelete(null));
 
   const selectionMode = selectedSongIds.size > 0;
   const isArchiveView = smartFilter === "archived";
@@ -1432,8 +1435,12 @@ export function LibraryView({
 
       {/* Delete / Permanent delete confirmation dialog */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" onKeyDown={(e) => { if (e.key === "Escape") setShowDeleteConfirm(false); }}>
-          <div className="bg-white dark:bg-gray-900 w-full sm:rounded-2xl rounded-t-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 sm:mx-4 sm:max-w-sm">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
+          <div
+            ref={batchDeleteDialogRef}
+            tabIndex={-1}
+            className="bg-white dark:bg-gray-900 w-full sm:rounded-2xl rounded-t-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 sm:mx-4 sm:max-w-sm"
+          >
             <h3 id="delete-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">
               {isArchiveView
                 ? `Permanently delete ${selectedSongIds.size} song${selectedSongIds.size !== 1 ? "s" : ""}?`
@@ -1473,9 +1480,12 @@ export function LibraryView({
           role="dialog"
           aria-modal="true"
           aria-labelledby="menu-delete-dialog-title"
-          onKeyDown={(e) => { if (e.key === "Escape") setPendingMenuDelete(null); }}
         >
-          <div className="bg-white dark:bg-gray-900 w-full sm:rounded-2xl rounded-t-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 sm:mx-4 sm:max-w-sm">
+          <div
+            ref={pendingDeleteDialogRef}
+            tabIndex={-1}
+            className="bg-white dark:bg-gray-900 w-full sm:rounded-2xl rounded-t-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 sm:mx-4 sm:max-w-sm"
+          >
             <h3 id="menu-delete-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">
               Permanently delete &ldquo;{pendingMenuDelete.song.title ?? "this song"}&rdquo;?
             </h3>

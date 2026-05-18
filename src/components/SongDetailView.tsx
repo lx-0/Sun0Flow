@@ -29,6 +29,7 @@ import {
 import { HeartIcon as HeartOutlineIcon, HandThumbUpIcon as HandThumbUpOutlineIcon, HandThumbDownIcon as HandThumbDownOutlineIcon, DocumentDuplicateIcon } from "@heroicons/react/24/outline";
 import { useOfflineCache } from "@/hooks/useOfflineCache";
 import { useSongStems } from "@/hooks/useSongStems";
+import { useDialogFocusTrap } from "@/hooks/useDialogFocusTrap";
 import type { SunoSong } from "@/lib/sunoapi";
 import { getRating, type SongRating } from "@/lib/ratings";
 import { useToast } from "./Toast";
@@ -180,6 +181,8 @@ export function SongDetailView({
   const [appealReason, setAppealReason] = useState("");
   const [appealSubmitting, setAppealSubmitting] = useState(false);
   const [appealStatus, setAppealStatus] = useState<"none" | "pending" | "approved" | "rejected">("none");
+  const appealDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocusTrap(appealDialogRef, appealOpen, () => setAppealOpen(false));
 
   const handleSubmitAppeal = async () => {
     if (appealReason.trim().length < 10) return;
@@ -747,10 +750,15 @@ export function SongDetailView({
       {appealOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4" onClick={() => setAppealOpen(false)}>
           <div
+            ref={appealDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="appeal-modal-title"
+            tabIndex={-1}
             className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Appeal removal</h2>
+            <h2 id="appeal-modal-title" className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Appeal removal</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               Explain why you believe this song should be restored. Be specific — our team will review your appeal.
             </p>
