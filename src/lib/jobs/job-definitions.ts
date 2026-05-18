@@ -7,7 +7,7 @@ import { emailDigestSend } from "@/lib/jobs/email-digest";
 export type JobDefinition = {
   name: string;
   cron: string;
-  run: () => Promise<unknown>;
+  run: () => Promise<void> | void;
 };
 
 async function smartPlaylistRefresh(): Promise<void> {
