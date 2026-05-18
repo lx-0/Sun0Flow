@@ -140,7 +140,6 @@ export function useQueueAudioEvents({
     audio.addEventListener("canplay", onCanPlay);
     audio.addEventListener("error", onError);
 
-    const retryTimer = retryTimerRef.current;
     return () => {
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
@@ -151,7 +150,10 @@ export function useQueueAudioEvents({
       audio.removeEventListener("playing", onPlaying);
       audio.removeEventListener("canplay", onCanPlay);
       audio.removeEventListener("error", onError);
-      if (retryTimer) clearTimeout(retryTimer);
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
       if (pendingCanPlayRef.current) {
         audio.removeEventListener("canplay", pendingCanPlayRef.current);
         pendingCanPlayRef.current = null;
