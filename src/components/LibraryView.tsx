@@ -49,8 +49,6 @@ import { SwipableSongRow } from "./library/swipable-song-row";
 import type { SongListItemProps } from "./SongListItem";
 import { useDialogFocusTrap } from "@/hooks/useDialogFocusTrap";
 
-type SongRowProps = SongListItemProps;
-
 // ─── Playlist option type (used for batch operations) ─────────────────────────
 
 interface PlaylistOption {

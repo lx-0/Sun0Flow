@@ -18,6 +18,7 @@ push or PR to main
 
 Production deploy (separate workflow, manual gate):
   Actions → "Deploy to Production" → Run workflow (or push a v*.*.* tag)
+  → CI build gate for deploy SHA (checks successful `CI`/`QA Checks` run)
   → required-reviewer approval on `production` environment
   → migration safety check (schema validation + destructive SQL guardrail)
   → railway up --service SunoFlow
@@ -30,6 +31,25 @@ The migration safety step fails deploys when:
 - Prisma schema validation fails (`prisma validate`)
 - any migration directory is missing `migration.sql`
 - migration SQL includes destructive operations (`DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, `DELETE FROM`) without an explicit `-- approved-destructive` marker in that migration file
+
+The CI build gate step fails deploys when:
+- the deploy SHA has no completed `CI` workflow run
+- the `CI` workflow conclusion is not `success`
+- the `QA Checks` job (which runs `pnpm build`) is missing or failed
+
+## Deploy Safety Routine Build Check (SUNAA-1378)
+
+For deterministic pass/fail in constrained agent runtimes, do **not** run local `pnpm build` as the deploy safety gate.
+Use the CI-backed gate instead:
+
+```bash
+bash scripts/check-ci-build-gate.sh <sha>
+```
+
+Notes:
+- Omit `<sha>` to check `HEAD`.
+- Requires authenticated `gh` CLI (`gh auth status` should be healthy).
+- This validates the same build path used by production safety (`CI` → `QA Checks`) without host thread-limit false negatives.
 
 ## GitHub Secrets & Variables Required
 
