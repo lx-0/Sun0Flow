@@ -50,9 +50,9 @@ export function GenerateForm() {
   const sourceSongTitle = searchParams.get("sourceSongTitle") ?? null;
 
   const [title, setTitle] = useState(searchParams.get("title") ?? "");
-  const [stylePrompt, setStylePrompt] = useState(searchParams.get("tags") ?? "");
+  const [style, setStyle] = useState(searchParams.get("tags") ?? "");
   const [customMode, setCustomMode] = useState(Boolean(searchParams.get("prompt") && !searchParams.get("tags")));
-  const [lyrics, setLyrics] = useState(searchParams.get("prompt") ?? "");
+  const [prompt, setPrompt] = useState(searchParams.get("prompt") ?? "");
   const [instrumental, setInstrumental] = useState(searchParams.get("instrumental") === "1");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -158,12 +158,12 @@ export function GenerateForm() {
   }, [trackedSongs, onGenerationComplete, trackSong]);
 
   async function handleBoostStyle() {
-    if (isBoosting || !stylePrompt.trim()) return;
+    if (isBoosting || !style.trim()) return;
     setIsBoosting(true);
     try {
-      const data = await boostStylePrompt(stylePrompt.trim());
+      const data = await boostStylePrompt(style.trim());
       if (data.ok && data.result) {
-        setStylePrompt(data.result);
+        setStyle(data.result);
         toast("Style enhanced!", "success");
       } else {
         toast(data.error ?? "Style boost failed", "error");
@@ -195,7 +195,7 @@ export function GenerateForm() {
 
   function handleUseLyrics() {
     if (!generatedLyrics.trim()) return;
-    setLyrics(generatedLyrics);
+    setPrompt(generatedLyrics);
     setCustomMode(true);
     toast("Lyrics applied!", "success");
   }
@@ -207,7 +207,7 @@ export function GenerateForm() {
       const data = await autoFillGenerationFields(autoPrompt.trim());
       if (data.ok) {
         if (data.title) setTitle(data.title);
-        if (data.style) setStylePrompt(data.style);
+        if (data.style) setStyle(data.style);
         if (data.lyricsPrompt) {
           setLyricsPrompt(data.lyricsPrompt);
           setShowLyricsGenerator(true);
@@ -224,8 +224,8 @@ export function GenerateForm() {
   }
 
   function applyTemplate(template: PromptTemplate) {
-    setStylePrompt(template.style ?? "");
-    setLyrics(template.prompt);
+    setStyle(template.style ?? "");
+    setPrompt(template.prompt);
     setInstrumental(template.isInstrumental);
     if (template.style) {
       setCustomMode(false);
@@ -251,8 +251,8 @@ export function GenerateForm() {
       toast("Please enter a template name", "error");
       return;
     }
-    const prompt = customMode ? lyrics : stylePrompt;
-    if (!prompt.trim()) {
+    const submitPrompt = customMode ? prompt : style;
+    if (!submitPrompt.trim()) {
       toast("Fill in the prompt fields before saving", "error");
       return;
     }
@@ -261,8 +261,8 @@ export function GenerateForm() {
     try {
       const result = await savePromptTemplate({
         name: templateName.trim(),
-        prompt: prompt.trim(),
-        style: stylePrompt.trim() || null,
+        prompt: submitPrompt.trim(),
+        style: style.trim() || null,
         category: templateCategory.trim() || null,
         isInstrumental: instrumental,
       });
@@ -286,8 +286,8 @@ export function GenerateForm() {
 
   function applyPreset(preset: GenerationPreset) {
     if (preset.title !== null) setTitle(preset.title ?? "");
-    if (preset.stylePrompt !== null) setStylePrompt(preset.stylePrompt ?? "");
-    if (preset.lyricsPrompt !== null) setLyrics(preset.lyricsPrompt ?? "");
+    if (preset.stylePrompt !== null) setStyle(preset.stylePrompt ?? "");
+    if (preset.lyricsPrompt !== null) setPrompt(preset.lyricsPrompt ?? "");
     setInstrumental(preset.isInstrumental);
     setCustomMode(preset.customMode);
     setShowPresetPicker(false);
@@ -295,7 +295,7 @@ export function GenerateForm() {
   }
 
   function applySuggestion(suggestion: PromptSuggestion) {
-    setStylePrompt(suggestion.stylePrompt);
+    setStyle(suggestion.stylePrompt);
     setInstrumental(suggestion.isInstrumental);
     setCustomMode(false);
     toast(`Applied suggestion`, "success");
@@ -316,7 +316,7 @@ export function GenerateForm() {
       toast("Please enter a preset name", "error");
       return;
     }
-    if (!stylePrompt.trim() && !lyrics.trim()) {
+    if (!style.trim() && !prompt.trim()) {
       toast("Fill in style or lyrics before saving", "error");
       return;
     }
@@ -326,8 +326,8 @@ export function GenerateForm() {
       const result = await savePreset({
         name: presetName.trim(),
         title: title.trim() || null,
-        stylePrompt: stylePrompt.trim() || null,
-        lyricsPrompt: customMode ? lyrics.trim() || null : null,
+        stylePrompt: style.trim() || null,
+        lyricsPrompt: customMode ? prompt.trim() || null : null,
         isInstrumental: instrumental,
         customMode,
       });
@@ -353,8 +353,8 @@ export function GenerateForm() {
     setSubmitError(null);
 
     // Client-side inline validation before hitting the server
-    const promptValue = customMode ? lyrics : stylePrompt;
-    const promptValidationError = getPromptValidationError(promptValue, customMode);
+    const submitPromptValue = customMode ? prompt : style;
+    const promptValidationError = getPromptValidationError(submitPromptValue, customMode);
     if (promptValidationError) {
       setPromptError(promptValidationError);
       return;
@@ -372,9 +372,9 @@ export function GenerateForm() {
     try {
       const selectedPersona = personas.find((p) => p.personaId === selectedPersonaId);
       const body = {
-        prompt: customMode ? lyrics : stylePrompt,
+        prompt: customMode ? prompt : style,
         title: title || undefined,
-        tags: stylePrompt || undefined,
+        tags: style || undefined,
         makeInstrumental: instrumental,
         personaId: selectedPersona?.personaId || undefined,
         parentSongId: sourceSongId || undefined,
@@ -456,7 +456,7 @@ export function GenerateForm() {
   }
 
   async function handleAddToQueue() {
-    const prompt = customMode ? lyrics : stylePrompt;
+    const submitPrompt = customMode ? prompt : style;
     if (!prompt?.trim()) {
       toast("A prompt is required", "error");
       return;
@@ -464,9 +464,9 @@ export function GenerateForm() {
 
     const selectedPersona = personas.find((p) => p.personaId === selectedPersonaId);
     const { item, error: queueError } = await addToQueue({
-      prompt: prompt.trim(),
+      prompt: submitPrompt.trim(),
       title: title || undefined,
-      tags: stylePrompt || undefined,
+      tags: style || undefined,
       makeInstrumental: instrumental,
       personaId: selectedPersona?.personaId || undefined,
     });
@@ -569,8 +569,8 @@ export function GenerateForm() {
             type="button"
             onClick={() => {
               setTitle("");
-              setStylePrompt("");
-              setLyrics("");
+              setStyle("");
+              setPrompt("");
               setInstrumental(false);
             }}
             className="text-violet-500 hover:text-violet-700 dark:hover:text-violet-300 transition-colors flex-shrink-0"
@@ -914,7 +914,7 @@ export function GenerateForm() {
               <button
                 key={combo.id}
                 type="button"
-                onClick={() => setStylePrompt(combo.stylePrompt)}
+                onClick={() => setStyle(combo.stylePrompt)}
                 title={`${combo.combo} — rated ${combo.displayScore}`}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded-full hover:border-violet-400 dark:hover:border-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors"
               >
@@ -951,7 +951,7 @@ export function GenerateForm() {
         {showAutoGenerate && (
           <div className="mt-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Describe what you want and we&apos;ll suggest a title, style, and lyrics prompt all at once.
+              Describe what you want and we&apos;ll suggest a title, style, and prompt prompt all at once.
             </p>
             <div className="flex gap-2">
               <input
@@ -1017,8 +1017,8 @@ export function GenerateForm() {
             <input
               id="stylePrompt"
               type="text"
-              value={stylePrompt}
-              onChange={(e) => { setStylePrompt(e.target.value); if (promptError && !customMode) setPromptError(null); }}
+              value={style}
+              onChange={(e) => { setStyle(e.target.value); if (promptError && !customMode) setPromptError(null); }}
               placeholder="e.g. upbeat lo-fi hip-hop, melancholic indie folk…"
               required={!customMode}
               disabled={isSubmitting}
@@ -1033,7 +1033,7 @@ export function GenerateForm() {
             <button
               type="button"
               onClick={handleBoostStyle}
-              disabled={isBoosting || !stylePrompt.trim() || isSubmitting}
+              disabled={isBoosting || !style.trim() || isSubmitting}
               aria-label={isBoosting ? "Enhancing style description with AI" : "Enhance style description with AI"}
               className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/30 disabled:opacity-50 transition-colors whitespace-nowrap"
             >
@@ -1059,7 +1059,7 @@ export function GenerateForm() {
                   onChange={(e) => {
                     const tmpl = styleTemplates.find((t) => t.id === e.target.value);
                     if (tmpl) {
-                      setStylePrompt(tmpl.tags);
+                      setStyle(tmpl.tags);
                       if (promptError && !customMode) setPromptError(null);
                     }
                   }}
@@ -1187,7 +1187,7 @@ export function GenerateForm() {
                     onClick={handleUseLyrics}
                     className="w-full px-4 py-2.5 text-sm font-medium text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/30 border border-violet-300 dark:border-violet-700 rounded-xl hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors"
                   >
-                    Use these lyrics
+                    Use these prompt
                   </button>
                 </div>
               )}
@@ -1195,7 +1195,7 @@ export function GenerateForm() {
           )}
         </div>
 
-        {/* Custom lyrics toggle */}
+        {/* Custom prompt toggle */}
         <div className="flex items-center justify-between bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-3">
           <span id="custom-lyrics-label" className="text-sm font-medium text-gray-700 dark:text-gray-300">Custom lyrics</span>
           <button
@@ -1225,8 +1225,8 @@ export function GenerateForm() {
             </label>
             <textarea
               id="lyrics"
-              value={lyrics}
-              onChange={(e) => { setLyrics(e.target.value); if (promptError && customMode) setPromptError(null); }}
+              value={prompt}
+              onChange={(e) => { setPrompt(e.target.value); if (promptError && customMode) setPromptError(null); }}
               placeholder="[Verse 1]&#10;Your lyrics here…&#10;&#10;[Chorus]&#10;…"
               rows={8}
               required={customMode}
@@ -1325,9 +1325,9 @@ export function GenerateForm() {
 
         {/* Batch Generate Variations */}
         <BatchGeneratePanel
-          basePrompt={customMode ? lyrics : stylePrompt}
+          basePrompt={customMode ? prompt : style}
           baseTitle={title}
-          baseStyle={stylePrompt}
+          baseStyle={style}
           isInstrumental={instrumental}
           onBatchStarted={(batchId, songIds) => {
             for (const songId of songIds) {
