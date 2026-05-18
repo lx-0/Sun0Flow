@@ -1,24 +1,18 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
 import { internalError } from "@/lib/api-error";
 import { logServerError } from "@/lib/error-logger";
+import type { PipelineCtx } from "@/lib/route-handler/types";
+import type { RoutePipelineOptions, SegmentData } from "@/lib/route-pipeline/types";
 import {
   parseValidatedBody,
   parseValidatedQuery,
 } from "@/lib/route-pipeline/parsers";
-
-export type RouteOptions = {
-  route?: string;
-};
-
-export type RouteSchemas<B, Q> = {
-  body?: z.ZodType<B>;
-  query?: z.ZodType<Q>;
-};
-
-export type RoutePipelineOptions<B, Q> = RouteOptions & RouteSchemas<B, Q>;
-
-export type SegmentData<P> = { params: Promise<P> };
+export type {
+  RouteOptions,
+  RoutePipelineOptions,
+  RouteSchemas,
+  SegmentData,
+} from "@/lib/route-pipeline/types";
 
 export async function runRoutePipeline<
   P extends Record<string, string>,
@@ -30,7 +24,7 @@ export async function runRoutePipeline<
   options: RoutePipelineOptions<B, Q> | undefined,
   logLabel: string,
   logContext: Record<string, unknown>,
-  execute: (parsed: { params: P; body: B; query: Q }) => Promise<Response>,
+  execute: (parsed: PipelineCtx<P, B, Q>) => Promise<Response>,
 ): Promise<Response> {
   try {
     const params = segmentData?.params

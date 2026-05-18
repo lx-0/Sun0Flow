@@ -50,7 +50,8 @@ if [[ -z "${PLAYWRIGHT_PORT:-}" ]]; then
 fi
 
 export PLAYWRIGHT_PORT
-export BASE_URL="${BASE_URL:-http://localhost:$PLAYWRIGHT_PORT}"
+export PLAYWRIGHT_HOST="${PLAYWRIGHT_HOST:-127.0.0.1}"
+export BASE_URL="${BASE_URL:-http://$PLAYWRIGHT_HOST:$PLAYWRIGHT_PORT}"
 export AUTH_URL="${AUTH_URL:-$BASE_URL}"
 export PLAYWRIGHT_TEST="true"
 

@@ -1,3 +1,9 @@
+export type PipelineCtx<P extends Record<string, string>, B, Q> = {
+  params: P;
+  body: B;
+  query: Q;
+};
+
 export type AuthContext = {
   userId: string;
   isApiKey: boolean;
@@ -22,12 +28,6 @@ export type RateLimitConfig = {
   action: string;
   limit: number;
   windowMs: number;
-};
-
-export type PipelineCtx<P extends Record<string, string>, B, Q> = {
-  params: P;
-  body: B;
-  query: Q;
 };
 
 export type PreflightResult<TContext> =

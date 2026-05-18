@@ -1,11 +1,13 @@
 import { NextRequest } from "next/server";
 import {
   runRoutePipeline,
-  type RouteOptions,
-  type RoutePipelineOptions,
-  type SegmentData,
 } from "@/lib/route-pipeline";
 import type { PipelineCtx, PreflightResult } from "@/lib/route-handler/types";
+import type {
+  RouteOptions,
+  RoutePipelineOptions,
+  SegmentData,
+} from "@/lib/route-pipeline/types";
 
 export type RouteContextWithKey<
   K extends "auth" | "admin" | "anon",
