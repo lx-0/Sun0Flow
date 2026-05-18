@@ -5,19 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { PublicSongView } from "@/app/s/[slug]/PublicSongView";
 import { cached, cacheKey, CacheTTL } from "@/lib/cache";
 import { getVariantFamily } from "@/lib/songs";
+import { safeJsonLd } from "@/lib/json-ld";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sunoflow.app";
-
-/**
- * Safely serialize data for use in a <script type="application/ld+json"> tag.
- * Replacing <, >, and & with Unicode escapes prevents XSS via script injection.
- */
-function safeJsonLd(data: unknown): string {
-  return JSON.stringify(data)
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026");
-}
 
 /** ISR: revalidate public song pages every 60 seconds */
 export const revalidate = 60;

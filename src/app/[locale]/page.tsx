@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { LandingPage } from "@/components/LandingPage";
+import { safeJsonLd } from "@/lib/json-ld";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sunoflow.app";
 
@@ -25,13 +26,6 @@ export const metadata: Metadata = {
       "Generate, manage, and share AI-crafted music. SunoFlow brings your library, inspiration feeds, and creative tools into one seamless workspace.",
   },
 };
-
-function safeJsonLd(data: unknown): string {
-  return JSON.stringify(data)
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026");
-}
 
 const websiteJsonLd = {
   "@context": "https://schema.org",
