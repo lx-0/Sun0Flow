@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { handleBillingEvent } from "@/lib/billing";
 import { createStripeWebhookRoute } from "@/lib/billing/webhook-route";
+import { webhookAck } from "@/lib/webhooks/ack";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,7 @@ export const POST = createStripeWebhookRoute({
     const message = err instanceof Error ? err.message : "Unknown error";
     return `Webhook signature verification failed: ${message}`;
   },
-  onDuplicate: () => {
-    return NextResponse.json({ received: true, duplicate: true });
-  },
+  onDuplicate: () => webhookAck({ duplicate: true }),
   onHandleEvent: async (event) => {
     logger.info({ eventId: event.id, type: event.type }, "Stripe webhook received");
     await handleBillingEvent(event);

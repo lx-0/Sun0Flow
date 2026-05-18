@@ -3,12 +3,13 @@ import { logger } from "@/lib/logger";
 import { logServerError } from "@/lib/error-logger";
 import { handleBillingEvent } from "@/lib/billing";
 import { createStripeWebhookRoute } from "@/lib/billing/webhook-route";
+import { webhookAck } from "@/lib/webhooks/ack";
 
 export const POST = createStripeWebhookRoute({
   routeTag: "/api/billing/webhook",
   onDuplicate: (event) => {
     logger.info({ eventId: event.id }, "billing-webhook: duplicate event, skipping");
-    return NextResponse.json({ received: true });
+    return webhookAck();
   },
   onHandleEvent: handleBillingEvent,
   onError: (error, event) => {
