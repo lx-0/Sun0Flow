@@ -6,12 +6,17 @@ module.exports = {
       // require a running server with seeded session cookies, which is a
       // separate workflow concern).
       url: [
-        "http://localhost:3000/en",          // landing page
-        "http://localhost:3000/en/login",    // login page
-        "http://localhost:3000/en/pricing",  // pricing page
+        "http://127.0.0.1:3000/en",          // landing page
+        "http://127.0.0.1:3000/en/login",    // login page
+        "http://127.0.0.1:3000/en/pricing",  // pricing page
       ],
       numberOfRuns: 3,
       settings: {
+        // Force IPv4 so Chrome connects to the same address the standalone
+        // server binds to (HOSTNAME=127.0.0.1). Without this, Chrome resolves
+        // "localhost" to ::1 on some GitHub Actions runners while Node.js
+        // binds only to 127.0.0.1 → ERR_CONNECTION_REFUSED in headless Chrome.
+        chromeFlags: "--no-sandbox --disable-dev-shm-usage",
         // Use desktop preset for consistent results; adjust to "mobile" if
         // targeting mobile Lighthouse scores.
         preset: "desktop",

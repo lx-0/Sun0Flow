@@ -196,10 +196,12 @@ jobs:
 
       - name: Start Next.js server
         run: |
-          node .next/standalone/server.js &
+          # Bind to 127.0.0.1 so both curl and Chromium use IPv4 (some CI
+          # runners resolve "localhost" to ::1 while Chrome uses 127.0.0.1).
+          HOSTNAME=127.0.0.1 node .next/standalone/server.js &
           # Poll until the server is ready (up to 60s)
           for i in $(seq 1 60); do
-            curl -sf http://localhost:3000 && break || sleep 1
+            curl -sf http://127.0.0.1:3000 && break || sleep 1
           done
 
       - name: Run Lighthouse CI
