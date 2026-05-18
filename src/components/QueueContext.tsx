@@ -35,6 +35,7 @@ import {
 } from "@/components/queue/playback-state";
 import { usePlaybackTracking } from "@/components/queue/use-playback-tracking";
 import { usePlaybackSync } from "@/components/queue/use-playback-sync";
+import { useQueueAudioEvents } from "@/components/queue/use-queue-audio-events";
 
 export type { QueueSong, RepeatMode, RadioParams } from "@/components/queue/queue-context-types";
 
@@ -110,7 +111,6 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const skipNextRef = useRef<() => void>(() => {});
   const skipPrevRef = useRef<() => void>(() => {});
   const hasUserGestureRef = useRef(false);
-  const retryPlayRef = useRef<(audio: HTMLAudioElement, retriesLeft?: number, delay?: number) => void>(() => {});
 
   // Monotonic counter incremented on every transition that changes the
   // currently-loaded audio source. Async paths (CDN-error refresh,
@@ -147,11 +147,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   // rejections (AbortError when a new load interrupts play). Source/network
   // errors are handled by the <audio> "error" event, not here.
   const retryPlay = useCallback((audio: HTMLAudioElement, retriesLeft = 3, delay = 300) => {
-    if (audioRef.current !== audio) return;
-    if (retryTimerRef.current) {
-      clearTimeout(retryTimerRef.current);
-      retryTimerRef.current = null;
-    }
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     if (!hasUserGestureRef.current) {
       pendingPlayRef.current = true;
       return;
@@ -164,15 +160,12 @@ export function QueueProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (err.name === "AbortError" && retriesLeft > 0) {
-          retryTimerRef.current = setTimeout(() => {
-            retryPlayRef.current(audio, retriesLeft - 1, delay * 2);
-          }, delay);
+          retryTimerRef.current = setTimeout(() => retryPlay(audio, retriesLeft - 1, delay * 2), delay);
           return;
         }
         pendingPlayRef.current = true;
       });
   }, []);
-  retryPlayRef.current = retryPlay;
 
   scheduleSyncRef.current = scheduleSync;
 
@@ -282,133 +275,26 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
   resolveAndPlayRef.current = resolveAndPlay;
 
-  // ─── Init audio element ───────────────────────────────────────────────────
-  useEffect(() => {
-    audioRef.current = new Audio();
-    const audio = audioRef.current;
-
-    const onPlay = () => {
-      setIsPlaying(true);
-      pendingPlayRef.current = false;
-      audio.autoplay = false;
-    };
-    const onPause = () => {
-      // When a song ends, the browser fires pause before ended. Skip updating
-      // state here so the media session stays "playing" and mobile OS keeps the
-      // audio session alive during the transition to the next track.
-      if (audio.ended) return;
-
-      setIsPlaying(false);
-      const q = queueRef.current;
-      const idx = currentIndexRef.current;
-      const currentSong = idx >= 0 ? q[idx] : null;
-      if (currentSong) {
-        scheduleSyncRef.current?.(currentSong.id, audio.currentTime, q);
-      }
-    };
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const onDurationChange = () => setDuration(audio.duration);
-    const onWaiting = () => setIsBuffering(true);
-    const onPlaying = () => setIsBuffering(false);
-    const onCanPlay = () => setIsBuffering(false);
-    const onError = () => {
-      const q = queueRef.current;
-      const idx = currentIndexRef.current;
-      const currentSong = idx >= 0 ? q[idx] : null;
-
-      // One-shot fallback: ask the server to refresh the URL, then retry once.
-      // If this also fails, give up — no further retries to avoid 429 cascades.
-      if (currentSong && !cdnFallbackRef.current.has(currentSong.id)) {
-        cdnFallbackRef.current.add(currentSong.id);
-        const generation = loadGenerationRef.current;
-        fetch(`/api/songs/${currentSong.id}/play`, { method: "POST" })
-          .then((res) => (res.ok ? res.json() : Promise.reject()))
-          .then((data) => {
-            // Bail if the user has moved to a different song while we waited.
-            if (loadGenerationRef.current !== generation) return;
-            if (!data?.audioUrl) {
-              setIsBuffering(false);
-              setIsPlaying(false);
-              return;
-            }
-            audio.src = data.audioUrl;
-            audio.play().catch(() => {
-              setIsBuffering(false);
-              setIsPlaying(false);
-            });
-          })
-          .catch(() => {
-            if (loadGenerationRef.current !== generation) return;
-            setIsBuffering(false);
-            setIsPlaying(false);
-          });
-        return;
-      }
-
-      setIsBuffering(false);
-      setIsPlaying(false);
-    };
-    const onEnded = () => {
-      const q = queueRef.current;
-      const idx = currentIndexRef.current;
-      const rep = repeatRef.current;
-
-      if (rep === "repeat-one") {
-        audio.currentTime = 0;
-        retryPlay(audio);
-        return;
-      }
-
-      if (idx < q.length - 1) {
-        // Advance to next
-        const next = idx + 1;
-        resolveAndPlayRef.current?.(q[next], next);
-
-        // Radio auto-refill: when fewer than 3 songs remain, fetch more
-        if (radioStateRef.current && q.length - next <= 3) {
-          radioRefillRef.current?.();
-        }
-      } else if (radioStateRef.current) {
-        // Radio mode — fetch a new batch when queue is exhausted
-        radioRefillRef.current?.();
-      } else if (rep === "repeat-all" && q.length > 0) {
-        // Wrap to start — allow a new random version pick
-        resolveAndPlayRef.current?.(q[0], 0);
-      } else {
-        // End of queue
-        setIsPlaying(false);
-      }
-    };
-
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("durationchange", onDurationChange);
-    audio.addEventListener("ended", onEnded);
-    audio.addEventListener("waiting", onWaiting);
-    audio.addEventListener("playing", onPlaying);
-    audio.addEventListener("canplay", onCanPlay);
-    audio.addEventListener("error", onError);
-
-    return () => {
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("durationchange", onDurationChange);
-      audio.removeEventListener("ended", onEnded);
-      audio.removeEventListener("waiting", onWaiting);
-      audio.removeEventListener("playing", onPlaying);
-      audio.removeEventListener("canplay", onCanPlay);
-      audio.removeEventListener("error", onError);
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-      retryTimerRef.current = null;
-      if (pendingCanPlayRef.current) {
-        audio.removeEventListener("canplay", pendingCanPlayRef.current);
-        pendingCanPlayRef.current = null;
-      }
-      audio.pause();
-    };
-  }, [retryPlay]);
+  useQueueAudioEvents({
+    audioRef,
+    queueRef,
+    currentIndexRef,
+    repeatRef,
+    radioStateRef,
+    radioRefillRef,
+    resolveAndPlayRef,
+    retryPlay,
+    scheduleSyncRef,
+    cdnFallbackRef,
+    loadGenerationRef,
+    pendingCanPlayRef,
+    retryTimerRef,
+    pendingPlayRef,
+    setIsPlaying,
+    setIsBuffering,
+    setCurrentTime,
+    setDuration,
+  });
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
