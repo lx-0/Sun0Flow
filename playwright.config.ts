@@ -1,8 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const playwrightPort = Number(process.env.PLAYWRIGHT_PORT ?? "3200");
-const baseURL = process.env.BASE_URL ?? `http://localhost:${playwrightPort}`;
+const baseHost = process.env.PLAYWRIGHT_HOST ?? "127.0.0.1";
+const baseURL = process.env.BASE_URL ?? `http://${baseHost}:${playwrightPort}`;
 const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+const ciWebServerCommand =
+  `PLAYWRIGHT_TEST=true NODE_ENV=production PORT=${playwrightPort} HOSTNAME=${baseHost} node .next/standalone/server.js`;
+const localWebServerCommand =
+  `PLAYWRIGHT_TEST=true NODE_ENV=development PORT=${playwrightPort} HOSTNAME=${baseHost} pnpm dev`;
 
 export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
@@ -38,11 +43,7 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_REMOTE
     ? undefined
     : {
-        // CI is more stable against the built app than next dev (fewer transient
-        // restarts/connection refusals during long E2E runs).
-        command: process.env.CI
-          ? `PLAYWRIGHT_TEST=true NODE_ENV=production PORT=${playwrightPort} node .next/standalone/server.js`
-          : `PLAYWRIGHT_TEST=true NODE_ENV=development PORT=${playwrightPort} pnpm dev`,
+        command: process.env.CI ? ciWebServerCommand : localWebServerCommand,
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         // Allow 2 minutes for initial server startup + prisma migrations

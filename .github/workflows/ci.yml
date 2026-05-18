@@ -108,13 +108,18 @@ jobs:
           path: bundle-size-report.json
           retention-days: 30
 
+      - name: Prepare standalone build for E2E
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
       - name: E2E tests
         run: pnpm test:e2e
         env:
-          AUTH_URL: http://localhost:3200
+          AUTH_URL: http://127.0.0.1:3200
           PLAYWRIGHT_TEST: "true"
 
       - name: Upload Playwright report
