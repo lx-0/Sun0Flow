@@ -7,7 +7,7 @@ import { auth } from "./session";
 import { isAdminEmail } from "./admin";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { unauthorized } from "@/lib/api-error";
+import { forbidden, unauthorized, type ApiErrorBody } from "@/lib/api-error";
 
 // ── API key crypto ──────────────────────────────────────────────────────────
 
@@ -47,7 +47,11 @@ export function verifyApiKey(key: string, storedHash: string): boolean {
 
 export type AuthResult =
   | { userId: string; isApiKey: boolean; isAdmin: boolean; error: null }
-  | { userId: null; isApiKey: false; isAdmin: false; error: NextResponse };
+  | { userId: null; isApiKey: false; isAdmin: false; error: NextResponse<ApiErrorBody> };
+
+export type AdminAuthResult =
+  | { error: null; session: NonNullable<Awaited<ReturnType<typeof auth>>>; user: { id: string; isAdmin: true } }
+  | { error: NextResponse<ApiErrorBody>; session: null; user: null };
 
 async function resolveApiKeyUser(request: Request): Promise<string | null> {
   const authHeader = request.headers.get("authorization");
@@ -97,10 +101,10 @@ export async function resolveUser(request: Request): Promise<AuthResult> {
   };
 }
 
-export async function requireAdmin() {
+export async function requireAdmin(): Promise<AdminAuthResult> {
   const session = await auth();
   if (!session?.user?.id) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }), session: null, user: null };
+    return { error: unauthorized(), session: null, user: null };
   }
 
   const user = await prisma.user.findUnique({
@@ -110,7 +114,7 @@ export async function requireAdmin() {
 
   const adminGranted = Boolean(user?.isAdmin) || isAdminEmail(user?.email);
   if (!user || !adminGranted) {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }), session: null, user: null };
+    return { error: forbidden(), session: null, user: null };
   }
 
   return { error: null, session, user: { id: user.id, isAdmin: true } };

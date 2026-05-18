@@ -99,6 +99,7 @@ describe("resolveUser", () => {
     expect(result.isAdmin).toBe(false);
     expect(result.error).toBeDefined();
     expect(result.error?.status).toBe(401);
+    await expect(result.error?.json()).resolves.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   it("ignores non-sk Bearer tokens for API key auth", async () => {
@@ -129,6 +130,7 @@ describe("requireAdmin", () => {
 
     expect(result.error).not.toBeNull();
     expect(result.error?.status).toBe(401);
+    await expect(result.error?.json()).resolves.toMatchObject({ code: "UNAUTHORIZED" });
     expect(result.session).toBeNull();
     expect(result.user).toBeNull();
   });
@@ -141,6 +143,7 @@ describe("requireAdmin", () => {
 
     expect(result.error).not.toBeNull();
     expect(result.error?.status).toBe(403);
+    await expect(result.error?.json()).resolves.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("returns session and user when admin", async () => {
