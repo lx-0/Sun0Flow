@@ -4,11 +4,7 @@ import { logger } from "@/lib/logger";
 import { countActiveUsers } from "@/lib/active-users";
 import { emailDigestSend } from "@/lib/jobs/email-digest";
 
-export type JobDefinition = {
-  name: string;
-  cron: string;
-  run: () => Promise<unknown> | void;
-};
+import type { JobDefinition } from "@/lib/jobs/types";
 
 async function smartPlaylistRefresh(): Promise<void> {
   const { refreshed, skipped } = await refreshStalePlaylists();
