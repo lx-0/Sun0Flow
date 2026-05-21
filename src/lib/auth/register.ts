@@ -19,6 +19,7 @@ export interface RegisterInput {
   ip: string;
   inviteCode?: string;
   skipRateLimit?: boolean;
+  skipInviteGate?: boolean;
 }
 
 export type RegisterResult =
@@ -26,7 +27,7 @@ export type RegisterResult =
   | { ok: false; error: string; code: string; status: number; rateLimitStatus?: { limit: number; remaining: number; resetAt: string } };
 
 export async function registerUser(input: RegisterInput): Promise<RegisterResult> {
-  const { name, email, password, ip, inviteCode, skipRateLimit } = input;
+  const { name, email, password, ip, inviteCode, skipRateLimit, skipInviteGate } = input;
 
   if (!skipRateLimit) {
     const { acquired, status: rlStatus } = await acquireAnonRateLimitSlot(
@@ -72,7 +73,7 @@ export async function registerUser(input: RegisterInput): Promise<RegisterResult
   // Admin emails bypass the gate so the operator can always bootstrap.
   const isAdmin = isAdminEmail(email);
   let inviteCodeId: string | null = null;
-  if (!isAdmin) {
+  if (!isAdmin && !skipInviteGate) {
     const invite = await validateInviteCode(inviteCode);
     if (!invite.ok) {
       return invite.reason === "missing"

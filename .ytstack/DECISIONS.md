@@ -274,3 +274,34 @@ C) Feature-Flags nur fuer Hot-File-Touches (M002, M006) + 301-Redirects + Hard-C
 **Reason:** Konkret: M002 (Generate-Refactor, Hot-File 44 commits, god-object) braucht zwingend Feature-Flag mit 5%→50%→100% rollout. M003 (frontend tab-hub) profitiert von Flag fuer 1-Wochen-Soak. M004 (URL-renamings) wird per 301-Redirect migriert, neue /authoring Hub bekommt eigenes Flag. M005 (delete-only), M006/M007 (engineering-pass, behavior-equivalent) brauchen KEIN Flag -- gehen durch Test-Coverage + Verification-PR-Checklist. **301-Redirects sind permanent** (LOW maintenance cost, schuetzt Bookmarks + Shortcuts + Embed-URLs). Details in `.ytstack/M001-MIGRATION-STRATEGY.md`.
 
 **Reference:** `.ytstack/M001-MIGRATION-STRATEGY.md`, IA-MAP §8.
+
+
+## 2026-05-21: Production custom domain — `sunoflow.app` apex-primary on Railway via INWX
+
+**Context:** Acquired `sunoflow.app` (registrar INWX). Needed to point it at the Railway-hosted production service (previously only reachable at `sunoflow.up.railway.app`). User wants the bare apex (`sunoflow.app`) as the canonical URL — explicitly *not* `www`, and explicitly no provider switch away from INWX.
+
+**Options considered:**
+A) Use `www.sunoflow.app` as primary + 301 the apex to www (works with a plain CNAME — apex CNAME is forbidden by RFC 1034).
+B) Move nameservers to Cloudflare for CNAME-flattening so the apex CNAME Railway asks for works directly.
+C) Stay on INWX, serve the apex directly via an INWX **ALIAS** record (INWX supports ALIAS, which is legal at the zone apex), `www` via a normal CNAME.
+
+**Chose:** **C**
+
+**Reason:** User rejected both a www-redirect (A — "www is ugly", apex must be the real URL) and a provider switch (B — no Cloudflare). INWX natively supports ALIAS records, which solve apex-CNAME directly without leaving INWX. Final DNS at INWX: `ALIAS @ → <railway-apex-target>`, `CNAME www → <railway-www-target>`, plus two ownership-verify TXTs (`_railway-verify` for apex, `_railway-verify.www` for www — Railway issues a distinct target + verify per domain). `AUTH_URL` set to `https://sunoflow.app` (canonical for NextAuth callbacks/cookies; www login may cookie-mismatch, acceptable since apex is primary). **Critical gotcha:** the Railway custom-domain target port must be **8080**, not the Dockerfile's `EXPOSE/ENV PORT 3000` — see KNOWLEDGE.md → "Railway custom-domain target port is 8080, not the Dockerfile port".
+
+**Reference:** KNOWLEDGE.md → Gotchas; memory `reference_railway_runtime_port_8080.md`.
+
+## 2026-05-21: RSS feed enrichment — follow article links on truncation signal, not on inline length
+
+**Context:** The Inspire feature feeds RSS items to the song generator. For tagesschau-style German news feeds, items arrived with a literal `[ mehr ]` artifact and only a ~200-char summary instead of the article body. Root cause: `<content:encoded>` (preferred over `<description>`) is, for these feeds, `image + the same summary + a "[<a>mehr</a>]" read-more link` — not the article. The earlier link-following fix (SUNAA-542) gated backfill on `inlineLength < 200`, which the dressed-up summary cleared, so the link was never followed and the marker leaked into the generator prompt. Recurring complaint across multiple tickets.
+
+**Options considered:**
+A) Lazy enrichment — fetch the full article only at "Generate from this" click, for the one selected item. Cheap (1 fetch), but cards/digest/auto-generate still show summaries.
+B) Eager enrichment — follow links for all displayed feed items at fetch time. Heavier (up to 20 fetches/feed), but every consumer (Inspire cards, Today's Picks, auto-generate) gets full text.
+C) Both — eager with higher cap plus lazy fallback at click.
+
+**Chose:** **B**, with a truncation-driven trigger and hard resource bounds.
+
+**Reason:** User wants full article text everywhere it's consumed, not just at click. The decisive design rule: **inline content length is not a proxy for "is this the full article"** — a marker-bearing summary can exceed any length threshold. Enrichment now triggers on `RssItem.truncated` (a read-more marker / trailing-ellipsis detected during parse) **OR** `inlineLength < threshold`, never length alone. Markers are stripped at the parse layer (`hasReadMoreMarker` / `stripReadMoreMarker`) so even un-enrichable items (e.g. tagesschau `/video/*` pages with no `<article>` body) fall back to a clean, marker-free summary. Eager-all is made safe by per-feed concurrency cap (6) and a hard 9 s enrichment time budget raced against the batch loop, so the feed response never hangs — slow articles simply keep their summary. Fix sits at the `fetchFeed` seam so all consumers benefit.
+
+**Reference:** `src/lib/rss/{parse,index,types}.ts`; commit `b040ee6` / `0.2.3`; KNOWLEDGE.md → Gotchas ("German news RSS `<content:encoded>` is NOT the article body").

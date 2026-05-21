@@ -2,6 +2,18 @@
 
 All notable changes to this project. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the version numbers follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] — 2026-05-21
+
+Inspire feed fed the song generator truncated RSS summaries with a literal `[ mehr ]` artifact instead of real article text.
+
+### Fixed
+
+- **Inspire "Generate from this" used the RSS summary, not the article — and leaked a `[ mehr ]` marker into the prompt** (`b040ee6`). Root cause: the parser preferred `<content:encoded>` over `<description>`, but for tagesschau-style German news feeds `content:encoded` is *not* the article body — it is `<image> + the same summary as <description> + a "[<a>mehr</a>]" read-more link`. After `stripTags`, the read-more anchor survived as the literal `[ mehr ]` and the "content" was just a ~200-char summary. The prior link-following fix (SUNAA-542) gated article backfill on `inlineLength < 200`, but the dressed-up summary cleared that bar, so the link was never followed. Reproduced live against the real tagesschau feed (`content:encoded` ending in `...zu gelangen.[mehr]`).
+  - `src/lib/rss/parse.ts` — `hasReadMoreMarker` / `stripReadMoreMarker` detect and strip bracketed read-more markers (`[mehr]` / `[weiterlesen]` / `[read more]`) and trailing-ellipsis truncation, without touching the bare word "mehr" or a mid-sentence "…".
+  - `src/lib/rss/index.ts` — article backfill now triggers on `truncated || inlineLength < threshold` (never length alone); `RssItem.truncated` flag set during parse; per-feed cap raised 5 → 20 to cover every displayed item; outbound fetches bounded by concurrency (6) and a hard 9 s time budget so the feed response never hangs and slow articles keep their (marker-stripped) summary.
+  - Fix lives at the `fetchFeed` seam, so the Inspire page, Today's Picks / digest, and the auto-generate job all get full article text automatically.
+- **Verification:** 98 unit tests + new `fetchFeed` integration tests; live against tagesschau **and** Spiegel — 0 marker artifacts, real articles backfilled, video-only items fall back to clean captions, ~1 s per feed.
+
 ## [0.2.2] — 2026-05-18
 
 UI + infra fixes around the global player and Railway deploys (white-screen on first mobile visit, dual cover in the player bar, latent build-blocking TS narrowing), the audio-cache volume being 46% empty because alternate songs never reached disk, and a four-front fix for iOS PWA playback instability (songs play briefly then stall, some never start).

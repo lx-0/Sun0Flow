@@ -22,6 +22,7 @@ export const POST = publicRoute(
       inviteCode: body.inviteCode,
       ip,
       skipRateLimit: process.env.PLAYWRIGHT_TEST === "true",
+      skipInviteGate: process.env.PLAYWRIGHT_TEST === "true",
     });
 
     if (!result.ok) {

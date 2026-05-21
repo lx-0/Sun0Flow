@@ -26,8 +26,9 @@ test.describe("Register", () => {
     await page.goto("/register");
 
     await expect(page.locator("h1")).toContainText("SunoFlow");
-    await expect(page.getByText("Create your account")).toBeVisible();
+    await expect(page.getByText("invite-only during beta")).toBeVisible();
 
+    await page.getByLabel("Invite code").fill("E2E-TEST");
     await page.getByLabel("Name").fill("New User");
     await page.getByLabel("Email").fill(uniqueEmail);
     await page.getByLabel("Password").fill("ValidPass123!");
@@ -56,6 +57,7 @@ test.describe("Register", () => {
 
     // Try to register with the same email
     await page.goto("/register");
+    await page.getByLabel("Invite code").fill("E2E-TEST");
     await page.getByLabel("Name").fill("Duplicate User");
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill("AnotherPass1!");
